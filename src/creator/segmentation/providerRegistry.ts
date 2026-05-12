@@ -1,13 +1,23 @@
 import { mediapipeSelfieProvider } from "./mediaPipeSelfieProvider";
-import { transformersModnetProvider } from "./transformersModnetProvider";
-import type { SegmentationProvider, SegmentationProviderId } from "./types";
+import { transformersBackgroundRemovalProvider } from "./transformersBackgroundRemovalProvider";
+import type { SegmentationProvider, SegmentationProviderId, SegmentationProviderOptions } from "./types";
 
 export const DEFAULT_SEGMENTATION_PROVIDER_ID: SegmentationProviderId = "mediapipe-selfie";
 
 export const SEGMENTATION_PROVIDERS: SegmentationProvider[] = [
   mediapipeSelfieProvider,
-  transformersModnetProvider,
+  transformersBackgroundRemovalProvider,
 ];
+
+export const DEFAULT_SEGMENTATION_OPTIONS: SegmentationProviderOptions = {
+  "mediapipe-selfie": {
+    maskLow: 0.18,
+    maskHigh: 0.72,
+  },
+  "transformers-background-removal": {
+    modelId: "onnx-community/ormbg-ONNX",
+  },
+};
 
 export function getSegmentationProvider(id: string | undefined): SegmentationProvider {
   return (

@@ -5,11 +5,20 @@ import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 import { canvasToPngBlob, normalizeCanvas, videoToSourceCanvas } from "../creator/imageProcessing";
 import {
   DEFAULT_SEGMENTATION_PROVIDER_ID,
+  DEFAULT_SEGMENTATION_OPTIONS,
   getSegmentationProvider,
   isSegmentationProviderId,
   SEGMENTATION_PROVIDERS,
 } from "../creator/segmentation/providerRegistry";
-import type { SegmentationProvider, SegmentationProviderId, SegmentationProviderState } from "../creator/segmentation/types";
+import { TRANSFORMERS_MODELS } from "../creator/segmentation/transformersBackgroundRemovalProvider";
+import type {
+  MediaPipeSegmentationOptions,
+  SegmentationProvider,
+  SegmentationProviderId,
+  SegmentationProviderOptions,
+  SegmentationProviderState,
+  TransformersModelId,
+} from "../creator/segmentation/types";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
 import { deleteFighter, getSetting, listLoadedFighters, saveFighterDraft, setSetting } from "../storage/db";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
@@ -24,8 +33,46 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
 };
 
 const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
+const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
+
+function normalizeSegmentationOptions(value: unknown): SegmentationProviderOptions {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_SEGMENTATION_OPTIONS;
+  }
+  const saved = value as Partial<SegmentationProviderOptions>;
+  const savedMediaPipe = saved["mediapipe-selfie"];
+  const savedTransformers = saved["transformers-background-removal"];
+  const modelId = savedTransformers?.modelId;
+  const transformersModelId: TransformersModelId = isTransformersModelId(modelId)
+    ? modelId
+    : DEFAULT_SEGMENTATION_OPTIONS["transformers-background-removal"].modelId;
+
+  return {
+    "mediapipe-selfie": {
+      maskLow:
+        typeof savedMediaPipe?.maskLow === "number"
+          ? clamp(savedMediaPipe.maskLow, 0.05, 0.65)
+          : DEFAULT_SEGMENTATION_OPTIONS["mediapipe-selfie"].maskLow,
+      maskHigh:
+        typeof savedMediaPipe?.maskHigh === "number"
+          ? clamp(savedMediaPipe.maskHigh, 0.25, 0.95)
+          : DEFAULT_SEGMENTATION_OPTIONS["mediapipe-selfie"].maskHigh,
+    },
+    "transformers-background-removal": {
+      modelId: transformersModelId,
+    },
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function isTransformersModelId(value: unknown): value is TransformersModelId {
+  return typeof value === "string" && TRANSFORMERS_MODELS.some((model) => model.id === value);
+}
 
 export function App() {
   const [view, setView] = useState<View>("menu");
@@ -158,6 +205,8 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
   const [cameraStatus, setCameraStatus] = useState("Camera is off.");
   const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
+  const [segmentationOptions, setSegmentationOptions] =
+    useState<SegmentationProviderOptions>(DEFAULT_SEGMENTATION_OPTIONS);
   const [providerStatus, setProviderStatus] = useState<SegmentationProviderState>("idle");
   const [providerError, setProviderError] = useState("");
   const [isCapturing, setIsCapturing] = useState(false);
@@ -165,6 +214,7 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
   const [countdown, setCountdown] = useState(0);
   const [saving, setSaving] = useState(false);
   const selectedProvider = useMemo(() => getSegmentationProvider(providerId), [providerId]);
+  const selectedOptions = segmentationOptions[providerId];
   const captureBusy = isCapturing || countdown > 0;
 
   useEffect(() => {
@@ -185,23 +235,30 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
 
   useEffect(() => {
     let cancelled = false;
-    void getSetting<unknown>(SEGMENTATION_PROVIDER_SETTING_KEY, DEFAULT_SEGMENTATION_PROVIDER_ID).then((savedProviderId) => {
-      if (!cancelled && isSegmentationProviderId(savedProviderId)) {
+    void Promise.all([
+      getSetting<unknown>(SEGMENTATION_PROVIDER_SETTING_KEY, DEFAULT_SEGMENTATION_PROVIDER_ID),
+      getSetting<unknown>(SEGMENTATION_OPTIONS_SETTING_KEY, DEFAULT_SEGMENTATION_OPTIONS),
+    ]).then(([savedProviderId, savedOptions]) => {
+      if (cancelled) {
+        return;
+      }
+      if (isSegmentationProviderId(savedProviderId)) {
         setProviderId(savedProviderId);
       }
+      setSegmentationOptions(normalizeSegmentationOptions(savedOptions));
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const loadProvider = useCallback(async (provider: SegmentationProvider) => {
+  const loadProvider = useCallback(async (provider: SegmentationProvider, options: SegmentationProviderOptions[SegmentationProviderId]) => {
     const loadId = providerLoadIdRef.current + 1;
     providerLoadIdRef.current = loadId;
     setProviderStatus("loading");
     setProviderError("");
     try {
-      await provider.load();
+      await provider.load(options);
       if (providerLoadIdRef.current === loadId) {
         setProviderStatus("ready");
       }
@@ -220,7 +277,37 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
     setProviderError("");
     void setSetting(SEGMENTATION_PROVIDER_SETTING_KEY, nextProvider.id);
     if (streamRef.current) {
-      void loadProvider(nextProvider);
+      void loadProvider(nextProvider, segmentationOptions[nextProvider.id]);
+    }
+  };
+
+  const updateMediaPipeOptions = (patch: Partial<MediaPipeSegmentationOptions>) => {
+    setSegmentationOptions((current) => {
+      const next: SegmentationProviderOptions = {
+        ...current,
+        "mediapipe-selfie": {
+          ...current["mediapipe-selfie"],
+          ...patch,
+        },
+      };
+      void setSetting(SEGMENTATION_OPTIONS_SETTING_KEY, next);
+      return next;
+    });
+  };
+
+  const selectTransformersModel = (modelId: TransformersModelId) => {
+    const nextOptions: SegmentationProviderOptions = {
+      ...segmentationOptions,
+      "transformers-background-removal": {
+        modelId,
+      },
+    };
+    setSegmentationOptions(nextOptions);
+    setProviderStatus(providerId === "transformers-background-removal" ? "idle" : providerStatus);
+    setProviderError("");
+    void setSetting(SEGMENTATION_OPTIONS_SETTING_KEY, nextOptions);
+    if (providerId === "transformers-background-removal" && streamRef.current) {
+      void loadProvider(selectedProvider, nextOptions["transformers-background-removal"]);
     }
   };
 
@@ -232,7 +319,7 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
         videoRef.current.srcObject = stream;
       }
       setCameraStatus("Camera ready.");
-      await loadProvider(selectedProvider);
+      await loadProvider(selectedProvider, selectedOptions);
     } catch (error) {
       setCameraStatus(error instanceof Error ? `Camera unavailable: ${error.message}` : "Camera unavailable.");
     }
@@ -272,7 +359,7 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
     setIsCapturing(true);
     try {
       const source = videoToSourceCanvas(video);
-      const cutout = await selectedProvider.segment(source);
+      const cutout = await selectedProvider.segment(source, selectedOptions);
       const canvas = normalizeCanvas(cutout);
       const blob = await canvasToPngBlob(canvas);
       const url = URL.createObjectURL(blob);
@@ -382,6 +469,65 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
           </div>
           <p className="helper-text">{selectedProvider.description}</p>
         </div>
+
+        {providerId === "mediapipe-selfie" && (
+          <div className="provider-control" aria-label="MediaPipe mask controls">
+            <span className="field-label-text">Mask tuning</span>
+            <label className="range-field">
+              <span>Foreground edge</span>
+              <input
+                type="range"
+                min="0.05"
+                max="0.65"
+                step="0.01"
+                value={segmentationOptions["mediapipe-selfie"].maskLow}
+                onChange={(event) => updateMediaPipeOptions({ maskLow: Number(event.target.value) })}
+                disabled={captureBusy}
+              />
+              <strong>{segmentationOptions["mediapipe-selfie"].maskLow.toFixed(2)}</strong>
+            </label>
+            <label className="range-field">
+              <span>Background cutoff</span>
+              <input
+                type="range"
+                min="0.25"
+                max="0.95"
+                step="0.01"
+                value={segmentationOptions["mediapipe-selfie"].maskHigh}
+                onChange={(event) => updateMediaPipeOptions({ maskHigh: Number(event.target.value) })}
+                disabled={captureBusy}
+              />
+              <strong>{segmentationOptions["mediapipe-selfie"].maskHigh.toFixed(2)}</strong>
+            </label>
+          </div>
+        )}
+
+        {providerId === "transformers-background-removal" && (
+          <div className="provider-control" aria-label="Transformers.js model">
+            <span className="field-label-text">Model</span>
+            <div className="segmented-control">
+              {TRANSFORMERS_MODELS.map((model) => (
+                <button
+                  className={segmentationOptions["transformers-background-removal"].modelId === model.id ? "segment-option active" : "segment-option"}
+                  key={model.id}
+                  type="button"
+                  onClick={() => selectTransformersModel(model.id)}
+                  disabled={captureBusy}
+                  title={model.description}
+                >
+                  {model.label}
+                </button>
+              ))}
+            </div>
+            <p className="helper-text">
+              {
+                TRANSFORMERS_MODELS.find(
+                  (model) => model.id === segmentationOptions["transformers-background-removal"].modelId,
+                )?.description
+              }
+            </p>
+          </div>
+        )}
 
         <div className="pose-grid" aria-label="Required poses">
           {FIGHTER_POSES.map((pose) => (

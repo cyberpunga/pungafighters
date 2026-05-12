@@ -26,7 +26,8 @@ Open the local Vite URL shown in the terminal.
 - Phaser 3 battle runtime embedded inside React.
 - Local same-device 1v1 battle with deterministic health, timer, rounds, hitboxes, and keyboard controls.
 - Webcam capture through `getUserMedia`.
-- On-device cutout providers: MediaPipe Selfie Segmenter by default, plus an optional Transformers.js MODNet portrait-matting engine.
+- On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
+- Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
 

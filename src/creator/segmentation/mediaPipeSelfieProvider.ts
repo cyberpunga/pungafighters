@@ -1,5 +1,5 @@
 import { FilesetResolver, ImageSegmenter } from "@mediapipe/tasks-vision";
-import type { SegmentationProvider } from "./types";
+import type { AnySegmentationProviderOptions, MediaPipeSegmentationOptions, SegmentationProvider } from "./types";
 
 const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const MODEL_URL =
@@ -25,14 +25,14 @@ export const mediapipeSelfieProvider: SegmentationProvider = {
     );
     segmenter = await segmenterPromise;
   },
-  segment: async (source) => {
+  segment: async (source, options) => {
     if (!segmenter) {
-      await mediapipeSelfieProvider.load();
+      await mediapipeSelfieProvider.load(DEFAULT_MEDIAPIPE_OPTIONS);
     }
     if (!segmenter) {
       throw new Error("MediaPipe segmentation is not ready.");
     }
-    return segmentWithMediaPipe(source, segmenter);
+    return segmentWithMediaPipe(source, segmenter, normalizeOptions(options));
   },
   dispose: () => {
     segmenter?.close();
@@ -41,7 +41,23 @@ export const mediapipeSelfieProvider: SegmentationProvider = {
   },
 };
 
-function segmentWithMediaPipe(source: HTMLCanvasElement, imageSegmenter: ImageSegmenter): HTMLCanvasElement {
+const DEFAULT_MEDIAPIPE_OPTIONS: MediaPipeSegmentationOptions = {
+  maskLow: 0.18,
+  maskHigh: 0.72,
+};
+
+function normalizeOptions(options: AnySegmentationProviderOptions | undefined): MediaPipeSegmentationOptions {
+  if (!options || !("maskLow" in options) || !("maskHigh" in options)) {
+    return DEFAULT_MEDIAPIPE_OPTIONS;
+  }
+  return options;
+}
+
+function segmentWithMediaPipe(
+  source: HTMLCanvasElement,
+  imageSegmenter: ImageSegmenter,
+  options: MediaPipeSegmentationOptions,
+): HTMLCanvasElement {
   const sourceCtx = source.getContext("2d", { willReadFrequently: true });
   if (!sourceCtx) {
     throw new Error("Could not read the camera frame.");
@@ -58,7 +74,7 @@ function segmentWithMediaPipe(source: HTMLCanvasElement, imageSegmenter: ImageSe
   }
 
   for (let index = 0; index < mask.length; index += 1) {
-    const confidence = smoothMask(mask[index]);
+    const confidence = smoothMask(mask[index], options);
     imageData.data[index * 4 + 3] = Math.round(confidence * 255);
   }
 
@@ -77,9 +93,9 @@ function findForegroundIndex(labels: string[], maskCount: number): number {
   return maskCount > 1 ? maskCount - 1 : 0;
 }
 
-function smoothMask(value: number): number {
-  const low = 0.18;
-  const high = 0.72;
+function smoothMask(value: number, options: MediaPipeSegmentationOptions): number {
+  const low = Math.min(options.maskLow, options.maskHigh - 0.01);
+  const high = Math.max(options.maskHigh, low + 0.01);
   const normalized = Math.max(0, Math.min(1, (value - low) / (high - low)));
   return normalized * normalized * (3 - 2 * normalized);
 }

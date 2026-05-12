@@ -36,6 +36,7 @@
 - When adding assets or generated media, prefer local placeholders or user-generated content.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
+- Keep provider-specific controls near the provider implementation and pass them through the shared `SegmentationProvider` options shape.
 - Use TypeScript types for new interfaces and keep `pnpm lint` clean.
 
 ## Verification
