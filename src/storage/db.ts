@@ -129,6 +129,17 @@ export async function deleteFighter(id: string) {
   await tx.done;
 }
 
+export async function getSetting<T>(key: string, fallback: T): Promise<T> {
+  const db = await getDb();
+  const value = await db.get("settings", key);
+  return value === undefined ? fallback : (value as T);
+}
+
+export async function setSetting<T>(key: string, value: T): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", value, key);
+}
+
 async function loadFighterAssets(fighter: FighterProfile): Promise<LoadedFighter> {
   const db = await getDb();
   const framePairs = await Promise.all(

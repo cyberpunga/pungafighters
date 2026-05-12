@@ -34,11 +34,11 @@ export function normalizeCanvas(source: CanvasImageSource): HTMLCanvasElement {
   return canvas;
 }
 
-export function drawVideoFrame(video: HTMLVideoElement): HTMLCanvasElement {
+export function videoToSourceCanvas(video: HTMLVideoElement): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth || 640;
   canvas.height = video.videoHeight || 480;
   const ctx = canvas.getContext("2d");
   ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-  return normalizeCanvas(canvas);
+  return canvas;
 }

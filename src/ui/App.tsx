@@ -2,10 +2,16 @@ import { Camera, Gamepad2, Settings, Trash2, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BattleConfig, FighterPose, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
-import { canvasToPngBlob, drawVideoFrame } from "../creator/imageProcessing";
-import { loadImageSegmenter, segmentVideoToCanvas } from "../creator/segmenter";
+import { canvasToPngBlob, normalizeCanvas, videoToSourceCanvas } from "../creator/imageProcessing";
+import {
+  DEFAULT_SEGMENTATION_PROVIDER_ID,
+  getSegmentationProvider,
+  isSegmentationProviderId,
+  SEGMENTATION_PROVIDERS,
+} from "../creator/segmentation/providerRegistry";
+import type { SegmentationProvider, SegmentationProviderId, SegmentationProviderState } from "../creator/segmentation/types";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
-import { deleteFighter, listLoadedFighters, saveFighterDraft } from "../storage/db";
+import { deleteFighter, getSetting, listLoadedFighters, saveFighterDraft, setSetting } from "../storage/db";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import { createBattleGame, type BattleGameHandle } from "../phaser/bridge/createBattleGame";
 
@@ -16,6 +22,10 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
   timerSeconds: 60,
   stageId: "dojo-v1",
 };
+
+const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
+const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
+type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
 
 export function App() {
   const [view, setView] = useState<View>("menu");
@@ -137,23 +147,82 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
+  const framesRef = useRef<Partial<Record<FighterPose, { blob: Blob; url: string }>>>({});
+  const providerLoadIdRef = useRef(0);
+  const countdownTimeoutRef = useRef<number | undefined>();
+  const countdownActiveRef = useRef(false);
   const [name, setName] = useState("New Fighter");
   const [activePose, setActivePose] = useState<FighterPose>("idle");
   const [frames, setFrames] = useState<Partial<Record<FighterPose, { blob: Blob; url: string }>>>({});
   const [voiceBlobs, setVoiceBlobs] = useState<Partial<Record<VoiceClipType, Blob>>>({});
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
   const [cameraStatus, setCameraStatus] = useState("Camera is off.");
-  const [segmenterStatus, setSegmenterStatus] = useState("Segmentation model has not loaded.");
-  const [segmenter, setSegmenter] = useState<Awaited<ReturnType<typeof loadImageSegmenter>> | undefined>();
+  const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
+  const [providerStatus, setProviderStatus] = useState<SegmentationProviderState>("idle");
+  const [providerError, setProviderError] = useState("");
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureDelay, setCaptureDelay] = useState<CaptureDelay>(5);
+  const [countdown, setCountdown] = useState(0);
   const [saving, setSaving] = useState(false);
+  const selectedProvider = useMemo(() => getSegmentationProvider(providerId), [providerId]);
+  const captureBusy = isCapturing || countdown > 0;
+
+  useEffect(() => {
+    framesRef.current = frames;
+  }, [frames]);
 
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       recorderRef.current?.cancel();
-      Object.values(frames).forEach((frame) => frame && URL.revokeObjectURL(frame.url));
+      countdownActiveRef.current = false;
+      if (countdownTimeoutRef.current) {
+        window.clearTimeout(countdownTimeoutRef.current);
+      }
+      Object.values(framesRef.current).forEach((frame) => frame && URL.revokeObjectURL(frame.url));
     };
-  }, [frames]);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getSetting<unknown>(SEGMENTATION_PROVIDER_SETTING_KEY, DEFAULT_SEGMENTATION_PROVIDER_ID).then((savedProviderId) => {
+      if (!cancelled && isSegmentationProviderId(savedProviderId)) {
+        setProviderId(savedProviderId);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadProvider = useCallback(async (provider: SegmentationProvider) => {
+    const loadId = providerLoadIdRef.current + 1;
+    providerLoadIdRef.current = loadId;
+    setProviderStatus("loading");
+    setProviderError("");
+    try {
+      await provider.load();
+      if (providerLoadIdRef.current === loadId) {
+        setProviderStatus("ready");
+      }
+    } catch (error) {
+      if (providerLoadIdRef.current === loadId) {
+        setProviderStatus("error");
+        setProviderError(error instanceof Error ? error.message : "Segmentation provider failed to load.");
+      }
+    }
+  }, []);
+
+  const selectProvider = (nextProviderId: SegmentationProviderId) => {
+    const nextProvider = getSegmentationProvider(nextProviderId);
+    setProviderId(nextProvider.id);
+    setProviderStatus("idle");
+    setProviderError("");
+    void setSetting(SEGMENTATION_PROVIDER_SETTING_KEY, nextProvider.id);
+    if (streamRef.current) {
+      void loadProvider(nextProvider);
+    }
+  };
 
   const startCamera = async () => {
     try {
@@ -163,14 +232,7 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
         videoRef.current.srcObject = stream;
       }
       setCameraStatus("Camera ready.");
-      try {
-        setSegmenterStatus("Loading segmentation model...");
-        const loaded = await loadImageSegmenter();
-        setSegmenter(loaded);
-        setSegmenterStatus("Auto segmentation ready.");
-      } catch (error) {
-        setSegmenterStatus(error instanceof Error ? `Segmentation unavailable: ${error.message}` : "Segmentation unavailable.");
-      }
+      await loadProvider(selectedProvider);
     } catch (error) {
       setCameraStatus(error instanceof Error ? `Camera unavailable: ${error.message}` : "Camera unavailable.");
     }
@@ -182,17 +244,59 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
       setCameraStatus("Start the camera before capturing.");
       return;
     }
-    const canvas = segmenter ? await segmentVideoToCanvas(video, segmenter) : drawVideoFrame(video);
-    const blob = await canvasToPngBlob(canvas);
-    const url = URL.createObjectURL(blob);
-    setFrames((current) => {
-      const previous = current[activePose];
-      if (previous) {
-        URL.revokeObjectURL(previous.url);
+    if (providerStatus !== "ready") {
+      setCameraStatus(providerStatus === "error" ? "Segmentation failed to load, so cutout capture is unavailable." : "Wait for segmentation before capturing.");
+      return;
+    }
+    if (countdownActiveRef.current || isCapturing) {
+      return;
+    }
+
+    if (captureDelay > 0) {
+      countdownActiveRef.current = true;
+      setCountdown(captureDelay);
+      setCameraStatus(`Capturing ${activePose} in ${captureDelay} seconds.`);
+      for (let remaining = captureDelay - 1; remaining >= 0; remaining -= 1) {
+        await waitOneSecond();
+        if (!countdownActiveRef.current) {
+          return;
+        }
+        setCountdown(remaining);
+        if (remaining > 0) {
+          setCameraStatus(`Capturing ${activePose} in ${remaining} seconds.`);
+        }
       }
-      return { ...current, [activePose]: { blob, url } };
-    });
+      countdownActiveRef.current = false;
+    }
+
+    setIsCapturing(true);
+    try {
+      const source = videoToSourceCanvas(video);
+      const cutout = await selectedProvider.segment(source);
+      const canvas = normalizeCanvas(cutout);
+      const blob = await canvasToPngBlob(canvas);
+      const url = URL.createObjectURL(blob);
+      setFrames((current) => {
+        const previous = current[activePose];
+        if (previous) {
+          URL.revokeObjectURL(previous.url);
+        }
+        return { ...current, [activePose]: { blob, url } };
+      });
+      setCameraStatus(`${activePose} cutout captured with ${selectedProvider.label}.`);
+    } catch (error) {
+      setCameraStatus(error instanceof Error ? error.message : "Could not create a transparent cutout.");
+    } finally {
+      countdownActiveRef.current = false;
+      setCountdown(0);
+      setIsCapturing(false);
+    }
   };
+
+  const waitOneSecond = () =>
+    new Promise<void>((resolve) => {
+      countdownTimeoutRef.current = window.setTimeout(resolve, 1000);
+    });
 
   const saveFighter = async () => {
     const complete = FIGHTER_POSES.every((pose) => frames[pose]);
@@ -234,8 +338,22 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
             <Camera size={18} />
             Camera
           </button>
-          <button className="primary-button" type="button" onClick={capturePose}>
-            Capture {activePose}
+          <div className="capture-delay-control" aria-label="Capture delay">
+            {CAPTURE_DELAYS.map((delay) => (
+              <button
+                className={captureDelay === delay ? "delay-option active" : "delay-option"}
+                key={delay}
+                type="button"
+                onClick={() => setCaptureDelay(delay)}
+                disabled={captureBusy}
+                title={delay === 0 ? "Capture immediately" : `Capture after ${delay} seconds`}
+              >
+                {delay === 0 ? "Now" : `${delay}s`}
+              </button>
+            ))}
+          </div>
+          <button className="primary-button" type="button" onClick={capturePose} disabled={providerStatus !== "ready" || captureBusy}>
+            {countdown > 0 ? `${countdown}` : isCapturing ? "Cutting..." : `Capture ${activePose}`}
           </button>
         </div>
       </div>
@@ -246,10 +364,35 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} />
         </label>
 
+        <div className="provider-control" aria-label="Segmentation provider">
+          <span className="field-label-text">Cutout engine</span>
+          <div className="segmented-control">
+            {SEGMENTATION_PROVIDERS.map((provider) => (
+              <button
+                className={provider.id === providerId ? "segment-option active" : "segment-option"}
+                key={provider.id}
+                type="button"
+                onClick={() => selectProvider(provider.id)}
+                disabled={captureBusy}
+                title={provider.description}
+              >
+                {provider.label}
+              </button>
+            ))}
+          </div>
+          <p className="helper-text">{selectedProvider.description}</p>
+        </div>
+
         <div className="pose-grid" aria-label="Required poses">
           {FIGHTER_POSES.map((pose) => (
-            <button className={activePose === pose ? "pose-tile active" : "pose-tile"} key={pose} type="button" onClick={() => setActivePose(pose)}>
-              {frames[pose] ? <img src={frames[pose]!.url} alt="" /> : <span>{pose}</span>}
+            <button className={activePose === pose ? "pose-tile active" : "pose-tile"} key={pose} type="button" onClick={() => setActivePose(pose)} disabled={captureBusy}>
+              {frames[pose] ? (
+                <span className="cutout-preview">
+                  <img src={frames[pose]!.url} alt="" />
+                </span>
+              ) : (
+                <span>{pose}</span>
+              )}
             </button>
           ))}
         </div>
@@ -264,7 +407,12 @@ function CreatorView(props: { onSaved: () => Promise<void> }) {
         </div>
 
         <p className="helper-text">{cameraStatus}</p>
-        <p className="helper-text">{segmenterStatus}</p>
+        <p className="helper-text">
+          {providerStatus === "idle" && `${selectedProvider.label} is not loaded.`}
+          {providerStatus === "loading" && `Loading ${selectedProvider.label}...`}
+          {providerStatus === "ready" && `${selectedProvider.label} ready.`}
+          {providerStatus === "error" && `Segmentation unavailable: ${providerError}`}
+        </p>
 
         <button className="primary-button full-width" type="button" onClick={() => void saveFighter()} disabled={saving}>
           {saving ? "Saving..." : "Save fighter"}

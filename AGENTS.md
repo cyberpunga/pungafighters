@@ -20,6 +20,7 @@
 - `src/types/`: shared public interfaces.
 - `src/storage/`: IndexedDB access and local persistence.
 - `src/creator/`: capture, segmentation, image normalization, and audio recording helpers.
+- `src/creator/segmentation/`: pluggable cutout providers. Keep new engines behind the `SegmentationProvider` interface.
 - `src/game/simulation/`: deterministic gameplay state and systems.
 - `src/game/input/`: action names and keyboard mappings.
 - `src/game/content/`: default fighters and authored content.
@@ -33,6 +34,8 @@
 - Use DOM for text-heavy UI and controls.
 - Keep center playfield readable during battle.
 - When adding assets or generated media, prefer local placeholders or user-generated content.
+- Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
+- Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
 - Use TypeScript types for new interfaces and keep `pnpm lint` clean.
 
 ## Verification
