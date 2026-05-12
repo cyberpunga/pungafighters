@@ -1,14 +1,24 @@
 import Phaser from "phaser";
-import type { BattleConfig, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
+import type { BattleConfig, FighterPose, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
 import { createBattleState, restartMatch, stepBattle, type BattleState } from "../../game/simulation/battle";
+import {
+  createFighterRenderState,
+  updateFighterRenderState,
+  type FighterRenderState,
+  type FighterRenderTransform,
+} from "../render/fighterAnimation";
 
 interface FighterView {
   sprite: Phaser.GameObjects.Image;
+  previousSprite: Phaser.GameObjects.Image;
+  renderState: FighterRenderState;
   name: Phaser.GameObjects.Text;
   health: Phaser.GameObjects.Rectangle;
   rounds: Phaser.GameObjects.Text;
 }
+
+const FIGHTER_DISPLAY_SIZE = 190;
 
 export class BattleScene extends Phaser.Scene {
   private state: BattleState;
@@ -135,8 +145,19 @@ export class BattleScene extends Phaser.Scene {
 
   private createFighterView(slot: PlayerSlot, hudX: number, hudY: number): FighterView {
     const runtime = this.state.fighters[slot];
-    const sprite = this.add.image(runtime.x, runtime.y, `${slot}-idle`).setOrigin(0.5, 0.9).setDisplaySize(190, 190);
+    const previousSprite = this.add
+      .image(runtime.x, runtime.y, `${slot}-idle`)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
+      .setAlpha(0)
+      .setDepth(1);
+    const sprite = this.add
+      .image(runtime.x, runtime.y, `${slot}-idle`)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
+      .setDepth(2);
     if (slot === "p2") {
+      previousSprite.setFlipX(true);
       sprite.setFlipX(true);
     }
     const name = this.add.text(hudX, hudY, runtime.name, {
@@ -152,7 +173,7 @@ export class BattleScene extends Phaser.Scene {
       fontSize: "14px",
       color: "#d9d2b6",
     }).setOrigin(slot === "p1" ? 0 : 1, 0);
-    return { sprite, name, health, rounds };
+    return { sprite, previousSprite, renderState: createFighterRenderState(runtime, slot === "p1" ? 0 : 0.7), name, health, rounds };
   }
 
   private readInputs() {
@@ -170,17 +191,21 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    const deltaSeconds = this.game.loop.delta / 1000;
+
     (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
       const runtime = this.state.fighters[slot];
       const view = this.views![slot];
-      const pose = runtime.pose === "victory" ? "victory" : runtime.pose;
-      const texture = `${slot}-${pose}`;
-      if (this.textures.exists(texture) && view.sprite.texture.key !== texture) {
-        view.sprite.setTexture(texture);
+      const frame = updateFighterRenderState(view.renderState, runtime, deltaSeconds, this.state.groundY);
+      const texture = this.getFighterTexture(slot, view.renderState.currentPose);
+      this.applyFighterImage(view.sprite, texture, frame.current, runtime.facing, frame.currentAlpha);
+
+      if (frame.previous && view.renderState.previousPose) {
+        const previousTexture = this.getFighterTexture(slot, view.renderState.previousPose);
+        this.applyFighterImage(view.previousSprite, previousTexture, frame.previous, runtime.facing, frame.previousAlpha);
+      } else {
+        view.previousSprite.setAlpha(0);
       }
-      view.sprite.setPosition(runtime.x, runtime.y);
-      view.sprite.setFlipX(runtime.facing === -1);
-      view.sprite.setAlpha(runtime.blocking ? 0.76 : 1);
       view.health.displayWidth = 300 * (runtime.health / 100);
       view.name.setText(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
@@ -189,19 +214,101 @@ export class BattleScene extends Phaser.Scene {
     if (this.state.lastHit && this.state.lastHit.at !== this.lastHitAt) {
       this.lastHitAt = this.state.lastHit.at;
       this.cameras.main.shake(90, 0.004);
-      const defender = this.state.fighters[this.state.lastHit.defender];
-      this.add.text(defender.x, defender.y - 155, `-${this.state.lastHit.damage}`, {
-        fontFamily: "Arial Black, Arial, sans-serif",
-        fontSize: "22px",
-        color: "#f8f4df",
-        stroke: "#1b1724",
-        strokeThickness: 5,
-      }).setOrigin(0.5);
+      this.createHitEffects();
     }
 
     this.timerText?.setText(String(Math.ceil(this.state.timer)));
     this.messageText?.setText(this.state.message);
     this.messageText?.setAlpha(this.state.message ? 1 : 0);
     this.restartHint?.setAlpha(this.state.status === "matchOver" ? 1 : 0);
+  }
+
+  private getFighterTexture(slot: PlayerSlot, pose: FighterPose) {
+    const texture = `${slot}-${pose}`;
+    return this.textures.exists(texture) ? texture : `${slot}-idle`;
+  }
+
+  private applyFighterImage(
+    sprite: Phaser.GameObjects.Image,
+    texture: string,
+    transform: FighterRenderTransform,
+    facing: 1 | -1,
+    alphaMultiplier: number,
+  ) {
+    if (sprite.texture.key !== texture) {
+      sprite.setTexture(texture);
+    }
+    sprite.setPosition(transform.x, transform.y);
+    sprite.setFlipX(facing === -1);
+    sprite.setDisplaySize(FIGHTER_DISPLAY_SIZE * transform.scaleX, FIGHTER_DISPLAY_SIZE * transform.scaleY);
+    sprite.setRotation(transform.rotation);
+    sprite.setAlpha(transform.alpha * alphaMultiplier);
+    if (transform.tint) {
+      sprite.setTint(transform.tint);
+    } else {
+      sprite.clearTint();
+    }
+  }
+
+  private createHitEffects() {
+    if (!this.state.lastHit || !this.views) {
+      return;
+    }
+
+    const hit = this.state.lastHit;
+    const defender = this.state.fighters[hit.defender];
+    const attacker = this.state.fighters[hit.attacker];
+    const attackerView = this.views[hit.attacker];
+    const hitColor = hit.damage >= 18 ? 0xf7b267 : 0xf8f4df;
+
+    const damageText = this.add
+      .text(defender.x, defender.y - 155, `-${hit.damage}`, {
+        fontFamily: "Arial Black, Arial, sans-serif",
+        fontSize: "22px",
+        color: "#f8f4df",
+        stroke: "#1b1724",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(8);
+    this.tweens.add({
+      targets: damageText,
+      y: damageText.y - 32,
+      alpha: 0,
+      scale: 1.18,
+      duration: 520,
+      ease: "Cubic.easeOut",
+      onComplete: () => damageText.destroy(),
+    });
+
+    const impact = this.add.circle(defender.x - defender.facing * 34, defender.y - 92, 18, hitColor, 0.65).setDepth(4);
+    this.tweens.add({
+      targets: impact,
+      alpha: 0,
+      scale: 2.8,
+      duration: 180,
+      ease: "Cubic.easeOut",
+      onComplete: () => impact.destroy(),
+    });
+
+    if (hit.damage >= 12) {
+      const afterimage = this.add
+        .image(attacker.x - attacker.facing * 22, attacker.y, attackerView.sprite.texture.key)
+        .setOrigin(0.5, 0.9)
+        .setDisplaySize(attackerView.sprite.displayWidth, attackerView.sprite.displayHeight)
+        .setFlipX(attacker.facing === -1)
+        .setRotation(attackerView.sprite.rotation)
+        .setAlpha(0.34)
+        .setTint(0xf7b267)
+        .setDepth(1);
+      this.tweens.add({
+        targets: afterimage,
+        x: afterimage.x - attacker.facing * 34,
+        alpha: 0,
+        duration: 220,
+        ease: "Cubic.easeOut",
+        onComplete: () => afterimage.destroy(),
+      });
+    }
   }
 }
