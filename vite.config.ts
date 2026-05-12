@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  base: mode === "github-pages" ? "/pungafighters/" : "/",
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 1600,
@@ -21,4 +22,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

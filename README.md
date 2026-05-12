@@ -17,6 +17,7 @@ Open the local Vite URL shown in the terminal.
 
 - `pnpm dev` starts the local dev server.
 - `pnpm build` type-checks and creates a production build.
+- `pnpm build:pages` type-checks and builds for GitHub Pages at `/pungafighters/`.
 - `pnpm preview` serves the production build locally.
 - `pnpm lint` runs the TypeScript type check.
 
@@ -56,6 +57,10 @@ Player 2:
 - Audio recording requires `MediaRecorder` support.
 - Segmentation model assets are loaded by the browser at runtime from MediaPipe, Hugging Face, and ONNX runtime asset URLs.
 - The Transformers.js provider has a heavier first load than MediaPipe and may use WebGPU when the browser supports it.
+
+## Deployment
+
+GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafighters/` under the `cyberpun.ga` organization domain. Local development still runs from `/`; the Pages build uses `pnpm build:pages` to set the Vite base path.
 
 ## Privacy
 

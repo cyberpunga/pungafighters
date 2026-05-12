@@ -48,4 +48,6 @@ pnpm lint
 pnpm build
 ```
 
+Use `pnpm build:pages` when changing deployment, routing, public asset paths, or Vite config. GitHub Pages serves this project from `/pungafighters/`; keep normal local dev rooted at `/`.
+
 For creator changes, test webcam permission accepted, denied, and segmentation failure paths when possible. For battle changes, test default-vs-default and custom-vs-default matches.
