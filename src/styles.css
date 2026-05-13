@@ -32,7 +32,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -319,6 +320,20 @@ button:disabled {
   border-radius: 8px;
 }
 
+.field-label textarea {
+  width: 100%;
+  min-height: 130px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  background: #111018;
+  color: var(--text);
+  padding: 12px;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .field-label-text {
   color: var(--muted);
   font-size: 13px;
@@ -424,6 +439,11 @@ button:disabled {
   margin-bottom: 22px;
 }
 
+.duel-header .action-row {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .duel-header h2,
 .settings-view h2 {
   font-size: clamp(36px, 5vw, 64px);
@@ -506,6 +526,92 @@ button:disabled {
   display: block;
 }
 
+.online-view {
+  margin: clamp(16px, 3vw, 32px);
+  display: grid;
+  gap: 22px;
+}
+
+.online-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.online-header h2 {
+  margin: 0;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.online-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.65fr) minmax(320px, 1fr);
+  gap: 18px;
+}
+
+.online-panel {
+  border: 1px solid var(--line);
+  background: rgba(29, 26, 40, 0.82);
+  border-radius: 8px;
+  padding: clamp(16px, 2vw, 22px);
+}
+
+.online-fighter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.online-fighter img {
+  width: 108px;
+  height: 108px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.online-fighter div {
+  display: grid;
+  gap: 4px;
+}
+
+.online-fighter span,
+.connection-status {
+  color: var(--muted);
+}
+
+.online-fighter strong {
+  font-size: 22px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  line-height: 1.4;
+}
+
+.invite-steps {
+  display: grid;
+  gap: 14px;
+}
+
+.code-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: start;
+}
+
+.code-box textarea {
+  min-height: 152px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -521,13 +627,23 @@ button:disabled {
 @media (max-width: 860px) {
   .menu-stage,
   .creator-grid,
+  .online-grid,
   .select-columns,
   .settings-grid {
     grid-template-columns: 1fr;
   }
 
+  .online-header,
   .status-strip {
+    align-items: start;
     position: static;
+  }
+
+  .online-header {
+    flex-direction: column;
+  }
+
+  .status-strip {
     padding: 0 clamp(28px, 5vw, 64px) 24px;
   }
 

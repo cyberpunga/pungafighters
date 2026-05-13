@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { BattleConfig, LoadedFighter } from "../../types/game";
-import { BattleScene } from "../scenes/BattleScene";
+import type { NetworkInputController } from "../../game/network/networkInputController";
+import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
 
 export interface BattleGameHandle {
   game: Phaser.Game;
@@ -12,8 +13,15 @@ export function createBattleGame(input: {
   config: BattleConfig;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
   onExit: () => void;
+  mode?: BattleSceneOptions["mode"];
+  localSlot?: BattleSceneOptions["localSlot"];
+  networkController?: NetworkInputController;
 }): BattleGameHandle {
-  const scene = new BattleScene(input.config, input.fighters, input.onExit);
+  const scene = new BattleScene(input.config, input.fighters, input.onExit, {
+    mode: input.mode,
+    localSlot: input.localSlot,
+    networkController: input.networkController,
+  });
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: input.parent,

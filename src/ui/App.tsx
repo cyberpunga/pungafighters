@@ -1,15 +1,25 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { BattleConfig, LoadedFighter } from "../types/game";
+import type { BattleConfig, LoadedFighter, PlayerSlot } from "../types/game";
+import type { NetworkInputController } from "../game/network/networkInputController";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import { deleteFighter, listLoadedFighters } from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import { FighterSelectView } from "./FighterSelectView";
 import { MenuView } from "./MenuView";
+import { OnlineMatchView } from "./OnlineMatchView";
 import { SettingsView } from "./SettingsView";
 
-type View = "menu" | "creator" | "select" | "settings" | "battle";
+type View = "menu" | "creator" | "select" | "settings" | "online" | "battle";
+type OnlineRole = "host" | "guest";
+
+interface OnlineBattle {
+  config: BattleConfig;
+  fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  localSlot: PlayerSlot;
+  controller: NetworkInputController;
+}
 
 const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTwoFighterId"> = {
   roundCount: 3,
@@ -25,6 +35,8 @@ export function App() {
     p2: DEFAULT_FIGHTER_IDS[1],
   });
   const [loading, setLoading] = useState(true);
+  const [onlineRole, setOnlineRole] = useState<OnlineRole>("host");
+  const [onlineBattle, setOnlineBattle] = useState<OnlineBattle | undefined>();
 
   const refreshFighters = useCallback(async () => {
     setLoading(true);
@@ -46,6 +58,10 @@ export function App() {
     const p2 = fighters.find((fighter) => fighter.id === selected.p2);
     return p1 && p2 ? { p1, p2 } : undefined;
   }, [fighters, selected]);
+  const onlineLocalFighter = useMemo(
+    () => fighters.find((fighter) => fighter.id === selected[onlineRole === "host" ? "p1" : "p2"]) ?? fighters[0],
+    [fighters, onlineRole, selected],
+  );
 
   return (
     <main className="app-shell">
@@ -62,11 +78,57 @@ export function App() {
             await deleteFighter(id);
             await refreshFighters();
           }}
-          onFight={() => battleFighters && setView("battle")}
+          onFight={() => {
+            setOnlineBattle(undefined);
+            if (battleFighters) {
+              setView("battle");
+            }
+          }}
+          onHostOnline={() => {
+            setOnlineRole("host");
+            setView("online");
+          }}
+          onJoinOnline={() => {
+            setOnlineRole("guest");
+            setView("online");
+          }}
+        />
+      )}
+      {view === "online" && onlineLocalFighter && (
+        <OnlineMatchView
+          role={onlineRole}
+          localFighter={onlineLocalFighter}
+          onCancel={() => setView("select")}
+          onReady={(match) => {
+            setOnlineBattle({
+              config: {
+                ...DEFAULT_BATTLE_CONFIG,
+                playerOneFighterId: match.fighters.p1.id,
+                playerTwoFighterId: match.fighters.p2.id,
+              },
+              fighters: match.fighters,
+              localSlot: match.localSlot,
+              controller: match.controller,
+            });
+            setView("battle");
+          }}
         />
       )}
       {view === "settings" && <SettingsView />}
-      {view === "battle" && battleFighters && (
+      {view === "battle" && onlineBattle && (
+        <BattleView
+          mode="online"
+          localSlot={onlineBattle.localSlot}
+          networkController={onlineBattle.controller}
+          config={onlineBattle.config}
+          fighters={onlineBattle.fighters}
+          onExit={() => {
+            setOnlineBattle(undefined);
+            setView("select");
+          }}
+        />
+      )}
+      {view === "battle" && !onlineBattle && battleFighters && (
         <BattleView
           config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: selected.p1, playerTwoFighterId: selected.p2 }}
           fighters={battleFighters}

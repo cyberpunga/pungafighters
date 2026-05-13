@@ -4,7 +4,7 @@
 
 - Build an original homage named **Punga Fighters**.
 - Do not use protected Photo Dojo, Nintendo, DSi, or other third-party branding or assets.
-- Keep the prototype local-first: no backend, accounts, online play, sharing, or export/import unless explicitly requested.
+- Keep the prototype local-first: no backend, accounts, public matchmaking, sharing, or export/import unless explicitly requested.
 - Preserve the core fantasy: camera-created cutout fighters in a simple local 1v1 arena.
 
 ## Architecture
@@ -12,6 +12,7 @@
 - React owns menus, creator/editor UI, settings, and DOM overlays.
 - Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
+- WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, audio blobs, and settings.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
 
@@ -24,12 +25,14 @@
 - `src/game/simulation/`: deterministic gameplay state and systems.
 - `src/game/input/`: action names and keyboard mappings.
 - `src/game/content/`: default fighters and authored content.
+- `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
 
 ## Engineering Rules
 
 - Keep gameplay state serializable and independent from Phaser objects.
+- Keep online combat lockstep-friendly: fixed ticks, frame-indexed inputs, deterministic event ids, and no renderer-owned gameplay rules.
 - Keep Phaser render objects disposable; never treat sprites or tweens as source-of-truth state.
 - Use DOM for text-heavy UI and controls.
 - Keep center playfield readable during battle.
@@ -45,9 +48,10 @@ Run these before handing off meaningful changes:
 
 ```bash
 pnpm lint
+pnpm test
 pnpm build
 ```
 
 Use `pnpm build:pages` when changing deployment, routing, public asset paths, or Vite config. GitHub Pages serves this project from `/pungafighters/`; keep normal local dev rooted at `/`.
 
-For creator changes, test webcam permission accepted, denied, and segmentation failure paths when possible. For battle changes, test default-vs-default and custom-vs-default matches.
+For creator changes, test webcam permission accepted, denied, and segmentation failure paths when possible. For battle changes, test default-vs-default, custom-vs-default, and online two-tab invite matches when possible.

@@ -1,8 +1,16 @@
 import { useEffect, useRef } from "react";
-import type { BattleConfig, LoadedFighter } from "../types/game";
+import type { BattleConfig, LoadedFighter, PlayerSlot } from "../types/game";
+import type { NetworkInputController } from "../game/network/networkInputController";
 import { createBattleGame, type BattleGameHandle } from "../phaser/bridge/createBattleGame";
 
-export function BattleView(props: { config: BattleConfig; fighters: { p1: LoadedFighter; p2: LoadedFighter }; onExit: () => void }) {
+export function BattleView(props: {
+  config: BattleConfig;
+  fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  onExit: () => void;
+  mode?: "local" | "online";
+  localSlot?: PlayerSlot;
+  networkController?: NetworkInputController;
+}) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<BattleGameHandle | null>(null);
 
@@ -15,6 +23,9 @@ export function BattleView(props: { config: BattleConfig; fighters: { p1: Loaded
       config: props.config,
       fighters: props.fighters,
       onExit: props.onExit,
+      mode: props.mode,
+      localSlot: props.localSlot,
+      networkController: props.networkController,
     });
     return () => {
       gameRef.current?.destroy();

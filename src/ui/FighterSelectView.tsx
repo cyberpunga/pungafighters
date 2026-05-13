@@ -1,4 +1,4 @@
-import { Gamepad2, Trash2 } from "lucide-react";
+import { Gamepad2, RadioTower, Trash2 } from "lucide-react";
 import type { LoadedFighter } from "../types/game";
 
 export function FighterSelectView(props: {
@@ -7,6 +7,8 @@ export function FighterSelectView(props: {
   onSelected: (next: { p1: string; p2: string }) => void;
   onDelete: (id: string) => Promise<void>;
   onFight: () => void;
+  onHostOnline: () => void;
+  onJoinOnline: () => void;
 }) {
   return (
     <section className="select-view">
@@ -15,10 +17,20 @@ export function FighterSelectView(props: {
           <p className="eyebrow">Choose your corners</p>
           <h2>Fighter Select</h2>
         </div>
-        <button className="primary-button" type="button" onClick={props.onFight}>
-          <Gamepad2 size={18} />
-          Start Battle
-        </button>
+        <div className="action-row">
+          <button className="secondary-button" type="button" onClick={props.onHostOnline}>
+            <RadioTower size={18} />
+            Host Online
+          </button>
+          <button className="secondary-button" type="button" onClick={props.onJoinOnline}>
+            <RadioTower size={18} />
+            Join Online
+          </button>
+          <button className="primary-button" type="button" onClick={props.onFight}>
+            <Gamepad2 size={18} />
+            Start Battle
+          </button>
+        </div>
       </div>
       <div className="select-columns">
         <FighterColumn

@@ -1,6 +1,6 @@
 # Punga Fighters
 
-Punga Fighters is an original browser fighting-game prototype inspired by camera-first character creators. Players capture webcam poses, segment themselves from the background in-browser, save a fighter locally, and battle in same-device 1v1 matches.
+Punga Fighters is an original browser fighting-game prototype inspired by camera-first character creators. Players capture webcam poses, segment themselves from the background in-browser, save a fighter locally, and battle in same-device or invite-code WebRTC 1v1 matches.
 
 This is not a Photo Dojo clone and does not use Nintendo branding, names, or assets.
 
@@ -20,12 +20,14 @@ Open the local Vite URL shown in the terminal.
 - `pnpm build:pages` type-checks and builds for GitHub Pages at `/pungafighters/`.
 - `pnpm preview` serves the production build locally.
 - `pnpm lint` runs the TypeScript type check.
+- `pnpm test` runs focused Vitest coverage.
 
 ## MVP Features
 
 - React shell for menus, fighter creator, fighter select, settings, and battle mount.
 - Phaser 3 battle runtime embedded inside React.
 - Local same-device 1v1 battle with deterministic health, timer, rounds, hitboxes, and keyboard controls.
+- WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
@@ -50,9 +52,16 @@ Player 2:
 - `2`: kick
 - `3`: special
 
+Online guests can also use Player 1 controls while playing from the Player 2 corner.
+
+## Online Matches
+
+Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no backend, accounts, matchmaking, GunDB relay, or TURN server; some restrictive networks may fail to connect.
+
 ## Browser Requirements
 
 - Modern Chromium, Firefox, or Safari.
+- WebRTC DataChannel support for online invite matches.
 - Webcam capture requires HTTPS or `localhost`.
 - Audio recording requires `MediaRecorder` support.
 - Segmentation model assets are loaded by the browser at runtime from MediaPipe, Hugging Face, and ONNX runtime asset URLs.
@@ -64,4 +73,4 @@ GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafi
 
 ## Privacy
 
-Punga Fighters is local-first. Captured images, generated cutouts, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. No backend or account system exists in this prototype.
+Punga Fighters is local-first. Captured images, generated cutouts, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. Online invite matches send the selected fighter assets directly to the opponent for that match and do not save remote fighters locally. No backend or account system exists in this prototype.

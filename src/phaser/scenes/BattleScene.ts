@@ -1,7 +1,16 @@
 import Phaser from "phaser";
 import type { BattleConfig, FighterPose, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
-import { createBattleState, restartMatch, stepBattle, type BattleState } from "../../game/simulation/battle";
+import {
+  BATTLE_TICK_SECONDS,
+  createBattleState,
+  getBattleChecksum,
+  restartMatch,
+  stepBattleFrame,
+  type BattleState,
+} from "../../game/simulation/battle";
+import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
+import type { NetworkInputController } from "../../game/network/networkInputController";
 import {
   createFighterRenderState,
   updateFighterRenderState,
@@ -18,6 +27,12 @@ interface FighterView {
   rounds: Phaser.GameObjects.Text;
 }
 
+export interface BattleSceneOptions {
+  mode?: "local" | "online";
+  localSlot?: PlayerSlot;
+  networkController?: NetworkInputController;
+}
+
 const FIGHTER_DISPLAY_SIZE = 190;
 
 export class BattleScene extends Phaser.Scene {
@@ -25,13 +40,20 @@ export class BattleScene extends Phaser.Scene {
   private readonly configData: BattleConfig;
   private readonly fighters: { p1: LoadedFighter; p2: LoadedFighter };
   private readonly onExit: () => void;
-  private inputs: PlayerInputSnapshot = { p1: createEmptyActions(), p2: createEmptyActions() };
+  private readonly mode: "local" | "online";
+  private readonly localSlot: PlayerSlot;
+  private readonly networkController?: NetworkInputController;
   private views?: Record<PlayerSlot, FighterView>;
   private timerText?: Phaser.GameObjects.Text;
   private messageText?: Phaser.GameObjects.Text;
   private restartHint?: Phaser.GameObjects.Text;
   private pressedCodes = new Set<string>();
   private lastHitAt = 0;
+  private accumulator = 0;
+  private onlineStatus?: string;
+  private haltedMessage?: string;
+  private readonly checksumHistory = new Map<number, string>();
+  private readonly pendingRemoteChecksums = new Map<number, string>();
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     this.captureKey(event);
     this.pressedCodes.add(event.code);
@@ -41,11 +63,14 @@ export class BattleScene extends Phaser.Scene {
     this.pressedCodes.delete(event.code);
   };
 
-  constructor(config: BattleConfig, fighters: { p1: LoadedFighter; p2: LoadedFighter }, onExit: () => void) {
+  constructor(config: BattleConfig, fighters: { p1: LoadedFighter; p2: LoadedFighter }, onExit: () => void, options: BattleSceneOptions = {}) {
     super("BattleScene");
     this.configData = config;
     this.fighters = fighters;
     this.onExit = onExit;
+    this.mode = options.mode ?? "local";
+    this.localSlot = options.localSlot ?? "p1";
+    this.networkController = options.networkController;
     this.state = createBattleState(config, {
       p1: { id: fighters.p1.id, name: fighters.p1.name },
       p2: { id: fighters.p2.id, name: fighters.p2.name },
@@ -84,16 +109,21 @@ export class BattleScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
-    this.readInputs();
+    this.processNetworkEvents();
     if (this.pressedCodes.has("Enter") && this.state.status === "matchOver") {
       this.state = restartMatch(this.state);
+      this.resetSyncState();
+      this.networkController?.requestRestart(this.state.frame);
     }
     if (this.pressedCodes.has("Escape")) {
+      this.networkController?.sendExit("Opponent returned to menu.");
       this.onExit();
       return;
     }
 
-    this.state = stepBattle(this.state, this.inputs, delta / 1000);
+    if (!this.haltedMessage) {
+      this.stepFixedFrames(delta / 1000);
+    }
     this.renderState();
   }
 
@@ -131,6 +161,7 @@ export class BattleScene extends Phaser.Scene {
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     this.pressedCodes.clear();
+    this.networkController?.destroy();
   }
 
   private captureKey(event: KeyboardEvent) {
@@ -176,14 +207,113 @@ export class BattleScene extends Phaser.Scene {
     return { sprite, previousSprite, renderState: createFighterRenderState(runtime, slot === "p1" ? 0 : 0.7), name, health, rounds };
   }
 
-  private readInputs() {
+  private stepFixedFrames(deltaSeconds: number) {
+    this.accumulator += Math.min(deltaSeconds, 0.1);
+    let steps = 0;
+    while (this.accumulator >= BATTLE_TICK_SECONDS && steps < 6) {
+      const inputs = this.mode === "online" ? this.readNetworkInputsForFrame() : this.readLocalInputs();
+      if (!inputs) {
+        break;
+      }
+      this.state = stepBattleFrame(this.state, inputs);
+      this.afterSimulationFrame();
+      this.accumulator -= BATTLE_TICK_SECONDS;
+      steps += 1;
+    }
+  }
+
+  private readLocalInputs(): PlayerInputSnapshot {
+    const inputs: PlayerInputSnapshot = { p1: createEmptyActions(), p2: createEmptyActions() };
     (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
-      const next = createEmptyActions();
-      Object.entries(KEYBOARD_BINDINGS[slot]).forEach(([code, action]) => {
-        next[action] = this.pressedCodes.has(code);
-      });
-      this.inputs[slot] = next;
+      inputs[slot] = this.readActionsForSlot(slot);
     });
+    return inputs;
+  }
+
+  private readNetworkInputsForFrame(): PlayerInputSnapshot | undefined {
+    if (!this.networkController) {
+      return this.readLocalInputs();
+    }
+    const localInput = this.readActionsForSlot(this.localSlot);
+    this.networkController.queueLocalInput(this.state.frame, localInput);
+    const inputs = this.networkController.getInputsForFrame(this.state.frame);
+    if (!inputs) {
+      const missingFrame = this.networkController.getMissingFrame(this.state.frame) ?? this.state.frame;
+      this.onlineStatus = `Syncing frame ${missingFrame}`;
+      return undefined;
+    }
+    this.onlineStatus = undefined;
+    return inputs;
+  }
+
+  private readActionsForSlot(slot: PlayerSlot) {
+    const next = createEmptyActions();
+    this.applyKeyboardBindings(next, slot);
+    if (this.mode === "online" && slot === "p2") {
+      this.applyKeyboardBindings(next, "p1");
+    }
+    return next;
+  }
+
+  private applyKeyboardBindings(actions: ReturnType<typeof createEmptyActions>, slot: PlayerSlot) {
+    Object.entries(KEYBOARD_BINDINGS[slot]).forEach(([code, action]) => {
+      actions[action] ||= this.pressedCodes.has(code);
+    });
+  }
+
+  private afterSimulationFrame() {
+    if (this.mode !== "online" || !this.networkController || this.state.frame % NETPLAY_CHECKSUM_INTERVAL !== 0) {
+      return;
+    }
+    const checksum = getBattleChecksum(this.state);
+    this.checksumHistory.set(this.state.frame, checksum);
+    this.networkController.sendChecksum(this.state.frame, checksum);
+    const pending = this.pendingRemoteChecksums.get(this.state.frame);
+    if (pending) {
+      this.pendingRemoteChecksums.delete(this.state.frame);
+      this.compareRemoteChecksum(this.state.frame, pending);
+    }
+  }
+
+  private processNetworkEvents() {
+    if (!this.networkController) {
+      return;
+    }
+    this.networkController.pollEvents().forEach((event) => {
+      if (event.type === "checksum") {
+        this.compareRemoteChecksum(event.frame, event.checksum);
+      } else if (event.type === "restart") {
+        this.state = restartMatch(this.state);
+        this.resetSyncState();
+      } else if (event.type === "exit") {
+        this.haltedMessage = event.reason || "Opponent left the match.";
+      } else if (event.type === "error") {
+        this.haltedMessage = event.message;
+      } else if (event.type === "closed") {
+        this.haltedMessage = "Connection closed.";
+      }
+    });
+  }
+
+  private compareRemoteChecksum(frame: number, checksum: string) {
+    const localChecksum = this.checksumHistory.get(frame);
+    if (!localChecksum) {
+      this.pendingRemoteChecksums.set(frame, checksum);
+      return;
+    }
+    if (localChecksum !== checksum) {
+      this.haltedMessage = "Sync error. Match stopped.";
+      this.networkController?.sendError("Sync error. Match stopped.");
+    }
+  }
+
+  private resetSyncState() {
+    this.accumulator = 0;
+    this.onlineStatus = undefined;
+    this.haltedMessage = undefined;
+    this.checksumHistory.clear();
+    this.pendingRemoteChecksums.clear();
+    this.networkController?.resetSync();
   }
 
   private renderState() {
@@ -218,8 +348,9 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.timerText?.setText(String(Math.ceil(this.state.timer)));
-    this.messageText?.setText(this.state.message);
-    this.messageText?.setAlpha(this.state.message ? 1 : 0);
+    const message = this.haltedMessage || this.onlineStatus || this.state.message;
+    this.messageText?.setText(message);
+    this.messageText?.setAlpha(message ? 1 : 0);
     this.restartHint?.setAlpha(this.state.status === "matchOver" ? 1 : 0);
   }
 

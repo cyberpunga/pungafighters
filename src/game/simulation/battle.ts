@@ -9,6 +9,9 @@ const MOVE_SPEED = 250;
 const JUMP_SPEED = -650;
 const GRAVITY = 1800;
 
+export const BATTLE_TICK_RATE = 60;
+export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
+
 type AttackKind = "punch" | "kick" | "special";
 
 interface AttackDef {
@@ -75,6 +78,7 @@ export interface FighterRuntime {
 }
 
 export interface BattleState {
+  frame: number;
   status: "countdown" | "running" | "roundOver" | "matchOver";
   arenaWidth: number;
   groundY: number;
@@ -94,6 +98,7 @@ export function createBattleState(
   fighters: Record<PlayerSlot, { id: string; name: string }>,
 ): BattleState {
   return {
+    frame: 0,
     status: "countdown",
     arenaWidth: ARENA_WIDTH,
     groundY: GROUND_Y,
@@ -110,8 +115,17 @@ export function createBattleState(
 }
 
 export function stepBattle(state: BattleState, inputs: PlayerInputSnapshot, deltaSeconds: number): BattleState {
+  const frameCount = Math.max(0, Math.round(Math.min(deltaSeconds, 0.25) / BATTLE_TICK_SECONDS));
+  let next = state;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    next = stepBattleFrame(next, inputs);
+  }
+  return next;
+}
+
+export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot): BattleState {
   const next = cloneState(state);
-  const dt = Math.min(deltaSeconds, 1 / 20);
+  const dt = BATTLE_TICK_SECONDS;
 
   if (next.status === "countdown") {
     next.countdown -= dt;
@@ -120,7 +134,7 @@ export function stepBattle(state: BattleState, inputs: PlayerInputSnapshot, delt
       next.status = "running";
       next.message = "";
     }
-    return next;
+    return advanceFrame(next);
   }
 
   if (next.status === "roundOver") {
@@ -133,11 +147,11 @@ export function stepBattle(state: BattleState, inputs: PlayerInputSnapshot, delt
         resetRound(next);
       }
     }
-    return next;
+    return advanceFrame(next);
   }
 
   if (next.status !== "running") {
-    return next;
+    return advanceFrame(next);
   }
 
   next.timer = Math.max(0, next.timer - dt);
@@ -150,7 +164,7 @@ export function stepBattle(state: BattleState, inputs: PlayerInputSnapshot, delt
     finishRound(next);
   }
 
-  return next;
+  return advanceFrame(next);
 }
 
 export function restartMatch(state: BattleState): BattleState {
@@ -158,6 +172,27 @@ export function restartMatch(state: BattleState): BattleState {
     p1: { id: state.fighters.p1.id, name: state.fighters.p1.name },
     p2: { id: state.fighters.p2.id, name: state.fighters.p2.name },
   });
+}
+
+export function getBattleChecksum(state: BattleState): string {
+  const p1 = state.fighters.p1;
+  const p2 = state.fighters.p2;
+  const source = [
+    state.frame,
+    state.status,
+    state.round,
+    fixed(state.timer),
+    state.winner ?? "",
+    state.roundWinner ?? "",
+    fighterChecksum(p1),
+    fighterChecksum(p2),
+  ].join("|");
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function createRuntime(
@@ -267,7 +302,7 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
     defender.hitStun = defender.blocking ? 0.08 : 0.24;
     defender.pose = "hit";
     attacker.hasHitThisAttack = true;
-    state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: performance.now() };
+    state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: state.frame };
   }
 }
 
@@ -305,4 +340,33 @@ function resetRound(state: BattleState) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function advanceFrame(state: BattleState): BattleState {
+  state.frame += 1;
+  return state;
+}
+
+function fighterChecksum(fighter: FighterRuntime) {
+  return [
+    fighter.slot,
+    fighter.id,
+    fixed(fighter.x),
+    fixed(fighter.y),
+    fixed(fighter.velocityY),
+    fighter.facing,
+    fighter.health,
+    fighter.roundsWon,
+    fighter.pose,
+    fighter.blocking ? 1 : 0,
+    fighter.attack?.kind ?? "",
+    fixed(fighter.attackElapsed),
+    fixed(fighter.cooldown),
+    fighter.hasHitThisAttack ? 1 : 0,
+    fixed(fighter.hitStun),
+  ].join(",");
+}
+
+function fixed(value: number) {
+  return Math.round(value * 1000) / 1000;
 }
