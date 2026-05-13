@@ -368,5 +368,5 @@ function fighterChecksum(fighter: FighterRuntime) {
 }
 
 function fixed(value: number) {
-  return Math.round(value * 1000) / 1000;
+  return Math.round(value * 100) / 100;
 }

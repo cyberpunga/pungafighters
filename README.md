@@ -56,7 +56,9 @@ Online guests can also use Player 1 controls while playing from the Player 2 cor
 
 ## Online Matches
 
-Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no backend, accounts, matchmaking, GunDB relay, or TURN server; some restrictive networks may fail to connect.
+Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
+
+Online matches intentionally buffer inputs by a small fixed delay so both browsers can simulate the same frames. If the network is jittery, the match may briefly slow while waiting for the missing input frame instead of guessing and diverging.
 
 ### TURN Configuration
 

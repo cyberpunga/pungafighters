@@ -213,6 +213,7 @@ export class BattleScene extends Phaser.Scene {
     while (this.accumulator >= BATTLE_TICK_SECONDS && steps < 6) {
       const inputs = this.mode === "online" ? this.readNetworkInputsForFrame() : this.readLocalInputs();
       if (!inputs) {
+        this.accumulator = Math.min(this.accumulator, BATTLE_TICK_SECONDS);
         break;
       }
       this.state = stepBattleFrame(this.state, inputs);

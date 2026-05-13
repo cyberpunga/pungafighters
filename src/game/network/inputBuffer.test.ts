@@ -13,7 +13,7 @@ describe("NetplayInputBuffer", () => {
   });
 
   it("schedules local inputs into a delayed frame and accepts remote frames", () => {
-    const buffer = new NetplayInputBuffer({ localSlot: "p1" });
+    const buffer = new NetplayInputBuffer({ localSlot: "p1", inputDelay: 4, repeatFrameCount: 8 });
     const local = { ...createEmptyActions(), right: true };
     const remote = { ...createEmptyActions(), left: true };
 
@@ -25,7 +25,7 @@ describe("NetplayInputBuffer", () => {
   });
 
   it("repeats recent local frames so packet loss can recover", () => {
-    const buffer = new NetplayInputBuffer({ localSlot: "p2" });
+    const buffer = new NetplayInputBuffer({ localSlot: "p2", inputDelay: 4, repeatFrameCount: 8 });
     let message = buffer.queueLocalInput(0, createEmptyActions());
     message = buffer.queueLocalInput(1, { ...createEmptyActions(), punch: true });
     message = buffer.queueLocalInput(2, { ...createEmptyActions(), kick: true });

@@ -78,6 +78,8 @@ class InviteMatchSession {
   private announced = false;
   private readyStarted = false;
   private destroyed = false;
+  private waitingForHostToAcceptAnswer = false;
+  private channelOpened = false;
 
   constructor(role: OnlineRole, localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks, rtcConfiguration: RTCConfiguration) {
     this.role = role;
@@ -87,8 +89,13 @@ class InviteMatchSession {
     this.pc = new RTCPeerConnection(rtcConfiguration);
     this.pc.addEventListener("connectionstatechange", () => {
       if (this.pc.connectionState === "connected") {
+        this.waitingForHostToAcceptAnswer = false;
         this.callbacks.onStatus("Peer connection established.");
       } else if (this.pc.connectionState === "failed") {
+        if (this.role === "guest" && this.waitingForHostToAcceptAnswer && !this.channelOpened) {
+          this.callbacks.onStatus("Answer ready. Waiting for host to connect...");
+          return;
+        }
         this.fail("WebRTC connection failed. A TURN server may be needed for this network.");
       } else if (this.pc.connectionState === "disconnected" || this.pc.connectionState === "closed") {
         this.controller?.notifyClosed();
@@ -129,6 +136,7 @@ class InviteMatchSession {
 
   async createAnswerCode(offer: RTCSessionDescriptionInit): Promise<string> {
     this.callbacks.onStatus("Reading host invite...");
+    this.waitingForHostToAcceptAnswer = true;
     await this.pc.setRemoteDescription(offer);
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
@@ -164,6 +172,8 @@ class InviteMatchSession {
 
   private wireSetupChannel(channel: RTCDataChannel) {
     channel.addEventListener("open", () => {
+      this.channelOpened = true;
+      this.waitingForHostToAcceptAnswer = false;
       this.callbacks.onStatus("Setup channel open. Exchanging fighters...");
       void this.announceLocalFighter();
       this.maybeStartMatch();
@@ -179,6 +189,8 @@ class InviteMatchSession {
 
   private wireInputChannel(channel: RTCDataChannel) {
     channel.addEventListener("open", () => {
+      this.channelOpened = true;
+      this.waitingForHostToAcceptAnswer = false;
       this.callbacks.onStatus("Input channel open.");
       this.maybeStartMatch();
     });

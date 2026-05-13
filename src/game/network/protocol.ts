@@ -1,8 +1,8 @@
 import type { ActionSnapshot, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
 
 export const NETPLAY_PROTOCOL_VERSION = 1;
-export const NETPLAY_INPUT_DELAY = 4;
-export const NETPLAY_REPEAT_FRAMES = 8;
+export const NETPLAY_INPUT_DELAY = 10;
+export const NETPLAY_REPEAT_FRAMES = 24;
 export const NETPLAY_CHECKSUM_INTERVAL = 30;
 
 export type OnlineRole = "host" | "guest";
