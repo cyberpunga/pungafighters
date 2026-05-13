@@ -13,6 +13,7 @@
 - Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
+- TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, audio blobs, and settings.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
 
@@ -28,6 +29,7 @@
 - `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
+- `server/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials.
 
 ## Engineering Rules
 

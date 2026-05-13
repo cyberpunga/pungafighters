@@ -1,5 +1,6 @@
 import type { LoadedFighter } from "../../types/game";
 import { loadRemoteFighterFromPayload, serializeFighterForNetwork } from "./fighterTransfer";
+import { getRtcConfiguration } from "./iceServers";
 import { DataChannelNetworkInputController, type NetworkInputController } from "./networkInputController";
 import {
   NETPLAY_PROTOCOL_VERSION,
@@ -34,12 +35,8 @@ export interface GuestInviteSession {
   destroy: () => void;
 }
 
-const RTC_CONFIGURATION: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }],
-};
-
 export async function createHostInviteSession(localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks): Promise<HostInviteSession> {
-  const session = new InviteMatchSession("host", localFighter, callbacks);
+  const session = new InviteMatchSession("host", localFighter, callbacks, await getRtcConfiguration());
   const offerCode = await session.createOfferCode();
   return {
     offerCode,
@@ -57,7 +54,7 @@ export async function createGuestInviteSession(
   if (offer.role !== "host" || offer.description.type !== "offer") {
     throw new Error("Expected a host offer code.");
   }
-  const session = new InviteMatchSession("guest", localFighter, callbacks);
+  const session = new InviteMatchSession("guest", localFighter, callbacks, await getRtcConfiguration());
   const answerCode = await session.createAnswerCode(offer.description);
   return {
     answerCode,
@@ -70,7 +67,7 @@ class InviteMatchSession {
   private readonly localSlot: "p1" | "p2";
   private readonly localFighter: LoadedFighter;
   private readonly callbacks: OnlineSessionCallbacks;
-  private readonly pc = new RTCPeerConnection(RTC_CONFIGURATION);
+  private readonly pc: RTCPeerConnection;
   private setupChannel?: RTCDataChannel;
   private inputChannel?: RTCDataChannel;
   private controller?: DataChannelNetworkInputController;
@@ -82,11 +79,12 @@ class InviteMatchSession {
   private readyStarted = false;
   private destroyed = false;
 
-  constructor(role: OnlineRole, localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks) {
+  constructor(role: OnlineRole, localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks, rtcConfiguration: RTCConfiguration) {
     this.role = role;
     this.localSlot = slotForRole(role);
     this.localFighter = localFighter;
     this.callbacks = callbacks;
+    this.pc = new RTCPeerConnection(rtcConfiguration);
     this.pc.addEventListener("connectionstatechange", () => {
       if (this.pc.connectionState === "connected") {
         this.callbacks.onStatus("Peer connection established.");

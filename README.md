@@ -58,6 +58,28 @@ Online guests can also use Player 1 controls while playing from the Player 2 cor
 
 Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no backend, accounts, matchmaking, GunDB relay, or TURN server; some restrictive networks may fail to connect.
 
+### TURN Configuration
+
+Online matches use STUN by default. To improve connection reliability, provide short-lived TURN `iceServers` at runtime:
+
+```bash
+VITE_RTC_ICE_SERVERS_URL=https://your-credentials-endpoint.example/ice-servers
+```
+
+The endpoint should return either Cloudflare's generated `{ "iceServers": [...] }` response or an `iceServers` array. Keep Cloudflare TURN keys and API tokens server-side; the browser should only receive expiring credentials. For quick local testing only, you can paste a generated response into `VITE_RTC_ICE_SERVERS_JSON`. Set `VITE_RTC_FORCE_TURN=true` to force relay candidates while testing whether TURN is actually being used.
+
+This repo includes a Cloudflare Worker in `server/` for that endpoint. Configure its secrets with `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`, then deploy it:
+
+```bash
+cd server
+pnpm install
+pnpm wrangler secret put TURN_KEY_ID
+pnpm wrangler secret put TURN_KEY_API_TOKEN
+pnpm deploy
+```
+
+Set `ALLOWED_ORIGINS` in `server/wrangler.toml` to the deployed game origin and any local dev origins you need.
+
 ## Browser Requirements
 
 - Modern Chromium, Firefox, or Safari.
