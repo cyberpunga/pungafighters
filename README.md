@@ -31,7 +31,7 @@ Open the local Vite URL shown in the terminal.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for per-action capture delays, MediaPipe mask tuning, and Transformers.js model selection.
-- Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips.
+- Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips that play during battle.
 - Character export for local `.pungafighter.json` files, with creator-side imports for character files, simple spritesheet images, and single action images.
 - Custom battle background image import for local fights and host-selected online arenas.
 - Local-only persistence in IndexedDB.

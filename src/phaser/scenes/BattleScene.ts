@@ -1,5 +1,14 @@
 import Phaser from "phaser";
-import type { BattleConfig, FighterPose, LoadedFighter, PlayerInputSnapshot, PlayerSlot, RuntimeBattleBackground } from "../../types/game";
+import {
+  VOICE_CLIPS,
+  type BattleConfig,
+  type FighterPose,
+  type LoadedFighter,
+  type PlayerInputSnapshot,
+  type PlayerSlot,
+  type RuntimeBattleBackground,
+  type VoiceClipType,
+} from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
 import {
   BATTLE_TICK_SECONDS,
@@ -45,6 +54,11 @@ const CUSTOM_STAGE_HORIZONTAL_DRIFT = 0.12;
 const CUSTOM_STAGE_VERTICAL_DRIFT = 0.04;
 const CUSTOM_STAGE_PAN_EASE = 4.5;
 const SUPER_FLASH_DEPTH = 30;
+const VOICE_VOLUME: Record<VoiceClipType, number> = {
+  attack: 0.82,
+  hit: 0.76,
+  win: 0.9,
+};
 
 export class BattleScene extends Phaser.Scene {
   private state: BattleState;
@@ -98,6 +112,8 @@ export class BattleScene extends Phaser.Scene {
     }
     this.loadFighterTextures("p1", this.fighters.p1);
     this.loadFighterTextures("p2", this.fighters.p2);
+    this.loadFighterVoices("p1", this.fighters.p1);
+    this.loadFighterVoices("p2", this.fighters.p2);
   }
 
   create() {
@@ -149,6 +165,15 @@ export class BattleScene extends Phaser.Scene {
     Object.entries(fighter.frameUrls).forEach(([pose, url]) => {
       if (url) {
         this.load.image(`${slot}-${pose}`, url);
+      }
+    });
+  }
+
+  private loadFighterVoices(slot: PlayerSlot, fighter: LoadedFighter) {
+    VOICE_CLIPS.forEach((clip) => {
+      const url = fighter.voiceUrls[clip];
+      if (url) {
+        this.load.audio(this.getVoiceKey(slot, clip), url);
       }
     });
   }
@@ -250,8 +275,9 @@ export class BattleScene extends Phaser.Scene {
         this.accumulator = Math.min(this.accumulator, BATTLE_TICK_SECONDS);
         break;
       }
+      const previousState = this.state;
       this.state = stepBattleFrame(this.state, inputs);
-      this.afterSimulationFrame();
+      this.afterSimulationFrame(previousState);
       this.accumulator -= BATTLE_TICK_SECONDS;
       steps += 1;
     }
@@ -296,7 +322,8 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private afterSimulationFrame() {
+  private afterSimulationFrame(previousState: BattleState) {
+    this.playVoiceEvents(previousState);
     if (this.mode !== "online" || !this.networkController || this.state.frame % NETPLAY_CHECKSUM_INTERVAL !== 0) {
       return;
     }
@@ -308,6 +335,37 @@ export class BattleScene extends Phaser.Scene {
       this.pendingRemoteChecksums.delete(this.state.frame);
       this.compareRemoteChecksum(this.state.frame, pending);
     }
+  }
+
+  private playVoiceEvents(previousState: BattleState) {
+    (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
+      const previousAttack = previousState.fighters[slot].attack;
+      const currentAttack = this.state.fighters[slot].attack;
+      if (currentAttack && !previousAttack) {
+        this.playVoice(slot, "attack");
+      }
+    });
+
+    const hit = this.state.lastHit;
+    if (hit && hit.at !== previousState.lastHit?.at) {
+      this.playVoice(hit.defender, "hit");
+    }
+
+    if (this.state.winner && this.state.winner !== previousState.winner) {
+      this.playVoice(this.state.winner, "win");
+    }
+  }
+
+  private playVoice(slot: PlayerSlot, clip: VoiceClipType) {
+    const key = this.getVoiceKey(slot, clip);
+    if (!this.cache.audio.exists(key)) {
+      return;
+    }
+    this.sound.play(key, { volume: VOICE_VOLUME[clip] });
+  }
+
+  private getVoiceKey(slot: PlayerSlot, clip: VoiceClipType) {
+    return `${slot}-voice-${clip}`;
   }
 
   private processNetworkEvents() {
