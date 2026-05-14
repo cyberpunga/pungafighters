@@ -1,6 +1,6 @@
 import type { ActionSnapshot, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
 
-export const NETPLAY_PROTOCOL_VERSION = 1;
+export const NETPLAY_PROTOCOL_VERSION = 2;
 export const NETPLAY_INPUT_DELAY = 10;
 export const NETPLAY_REPEAT_FRAMES = 24;
 export const NETPLAY_CHECKSUM_INTERVAL = 30;
@@ -13,32 +13,53 @@ export interface SignalCodePayload {
   description: RTCSessionDescriptionInit;
 }
 
-export interface NetworkFighterFrame {
+export interface NetworkFighterFrameAsset {
   pose: FighterPose;
-  dataUrl: string;
+  assetId: string;
+  mimeType: string;
+  byteLength: number;
   anchor: FrameAnchor;
   width: number;
   height: number;
 }
 
-export interface NetworkVoiceClip {
-  dataUrl: string;
+export interface NetworkVoiceClipAsset {
+  clip: VoiceClipType;
+  assetId: string;
+  mimeType: string;
+  byteLength: number;
 }
 
-export interface NetworkFighterPayload {
+export interface NetworkFighterManifest {
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
   movesetId: "basic-v1";
   isDefault?: boolean;
-  frames: Record<FighterPose, NetworkFighterFrame>;
-  voiceClips: Partial<Record<VoiceClipType, NetworkVoiceClip>>;
+  totalBytes: number;
+  frames: Record<FighterPose, NetworkFighterFrameAsset>;
+  voiceClips: Partial<Record<VoiceClipType, NetworkVoiceClipAsset>>;
+}
+
+export interface NetworkAssetChunkHeader {
+  type: "assetChunk";
+  assetId: string;
+  offset: number;
+  chunkIndex: number;
+  chunkCount: number;
+  totalBytes: number;
+  byteLength: number;
+}
+
+export interface NetworkAssetChunkMessage {
+  header: NetworkAssetChunkHeader;
+  payload: Uint8Array;
 }
 
 export type SetupMessage =
   | { type: "hello"; version: typeof NETPLAY_PROTOCOL_VERSION; role: OnlineRole; slot: PlayerSlot }
-  | { type: "fighterPayload"; fighter: NetworkFighterPayload }
+  | { type: "fighterManifest"; fighter: NetworkFighterManifest }
   | { type: "ready" }
   | { type: "checksum"; frame: number; checksum: string }
   | { type: "restart"; frame: number }

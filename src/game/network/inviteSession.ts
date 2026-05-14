@@ -1,16 +1,28 @@
 import type { LoadedFighter } from "../../types/game";
-import { loadRemoteFighterFromPayload, serializeFighterForNetwork } from "./fighterTransfer";
+import { createAssetChunkEnvelope, parseAssetChunkEnvelope } from "./assetChunks";
+import {
+  NETWORK_ASSET_CHUNK_BYTES,
+  NetworkFighterAssetReceiver,
+  serializeFighterForNetwork,
+  type NetworkFighterTransferAsset,
+} from "./fighterTransfer";
 import { getRtcConfiguration } from "./iceServers";
 import { DataChannelNetworkInputController, type NetworkInputController } from "./networkInputController";
 import {
   NETPLAY_PROTOCOL_VERSION,
   slotForRole,
   type InputMessage,
-  type NetworkFighterPayload,
+  type NetworkFighterManifest,
   type OnlineRole,
   type SetupMessage,
 } from "./protocol";
 import { decodeSignalCode, encodeSignalCode } from "./signalCode";
+
+const SETUP_BUFFER_HIGH_BYTES = 512 * 1024;
+const SETUP_BUFFER_POLL_MS = 50;
+const SETUP_BUFFER_TIMEOUT_MS = 15000;
+const FIGHTER_TRANSFER_TIMEOUT_MS = 60000;
+const MAX_CHUNK_HEADER_BYTES = 1024;
 
 export interface OnlineReadyMatch {
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
@@ -72,6 +84,9 @@ class InviteMatchSession {
   private inputChannel?: RTCDataChannel;
   private controller?: DataChannelNetworkInputController;
   private remoteFighter?: LoadedFighter;
+  private remoteTransfer?: NetworkFighterAssetReceiver;
+  private remoteTransferFinalizing = false;
+  private remoteTransferTimeout?: ReturnType<typeof setTimeout>;
   private revokeRemoteFighter?: () => void;
   private localReadySent = false;
   private remoteReady = false;
@@ -153,6 +168,7 @@ class InviteMatchSession {
       return;
     }
     this.destroyed = true;
+    this.clearRemoteTransferTimeout();
     this.setupChannel?.close();
     this.inputChannel?.close();
     this.pc.close();
@@ -171,6 +187,7 @@ class InviteMatchSession {
   }
 
   private wireSetupChannel(channel: RTCDataChannel) {
+    channel.binaryType = "arraybuffer";
     channel.addEventListener("open", () => {
       this.channelOpened = true;
       this.waitingForHostToAcceptAnswer = false;
@@ -179,10 +196,11 @@ class InviteMatchSession {
       this.maybeStartMatch();
     });
     channel.addEventListener("message", (event) => {
-      if (typeof event.data !== "string") {
+      if (typeof event.data === "string") {
+        this.receiveSetupMessage(event.data);
         return;
       }
-      this.receiveSetupMessage(event.data);
+      void this.receiveAssetChunk(event.data);
     });
     channel.addEventListener("close", () => this.controller?.notifyClosed());
   }
@@ -220,21 +238,77 @@ class InviteMatchSession {
       return;
     }
     this.announced = true;
-    this.sendSetupMessage({
-      type: "hello",
-      version: NETPLAY_PROTOCOL_VERSION,
-      role: this.role,
-      slot: this.localSlot,
-    });
+    if (
+      !this.sendSetupMessage({
+        type: "hello",
+        version: NETPLAY_PROTOCOL_VERSION,
+        role: this.role,
+        slot: this.localSlot,
+      })
+    ) {
+      return;
+    }
     try {
-      const fighter = await serializeFighterForNetwork(this.localFighter);
-      this.sendSetupMessage({ type: "fighterPayload", fighter });
-      this.sendSetupMessage({ type: "ready" });
+      const transfer = await serializeFighterForNetwork(this.localFighter);
+      this.callbacks.onStatus("Sending fighter manifest...");
+      if (!this.sendSetupMessage({ type: "fighterManifest", fighter: transfer.manifest })) {
+        return;
+      }
+      await this.sendFighterAssets(transfer.assets, transfer.totalBytes);
+      if (!this.sendSetupMessage({ type: "ready" })) {
+        return;
+      }
       this.localReadySent = true;
       this.callbacks.onStatus("Local fighter sent. Waiting for opponent...");
       this.maybeStartMatch();
     } catch (error) {
-      this.fail(error instanceof Error ? error.message : "Could not send fighter.");
+      this.fail(normalizeTransferError(error, "Could not send fighter."));
+    }
+  }
+
+  private async sendFighterAssets(assets: NetworkFighterTransferAsset[], totalBytes: number) {
+    const channel = this.setupChannel;
+    if (!channel || channel.readyState !== "open") {
+      throw new Error("Setup channel closed before fighter assets could be sent.");
+    }
+
+    const maxMessageBytes = getMaxDataChannelMessageBytes(this.pc);
+    const chunkBytes = getChunkPayloadBytes(maxMessageBytes);
+    let sentBytes = 0;
+    let lastProgress = -1;
+
+    for (const asset of assets) {
+      const chunkCount = Math.ceil(asset.byteLength / chunkBytes);
+      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+        const offset = chunkIndex * chunkBytes;
+        const payload = new Uint8Array(await asset.blob.slice(offset, offset + chunkBytes).arrayBuffer());
+        const envelope = createAssetChunkEnvelope(
+          {
+            type: "assetChunk",
+            assetId: asset.assetId,
+            offset,
+            chunkIndex,
+            chunkCount,
+            totalBytes: asset.byteLength,
+            byteLength: payload.byteLength,
+          },
+          payload,
+        );
+
+        if (maxMessageBytes && envelope.byteLength > maxMessageBytes) {
+          throw new Error("A fighter asset chunk exceeded this browser's WebRTC message size limit.");
+        }
+
+        await waitForSetupBuffer(channel);
+        channel.send(envelope);
+        sentBytes += payload.byteLength;
+
+        const progress = totalBytes > 0 ? Math.floor((sentBytes / totalBytes) * 100) : 100;
+        if (progress >= lastProgress + 10 || progress === 100) {
+          lastProgress = progress;
+          this.callbacks.onStatus(`Sending fighter assets ${progress}%...`);
+        }
+      }
     }
   }
 
@@ -244,8 +318,8 @@ class InviteMatchSession {
       this.fail("Received an incompatible setup message.");
       return;
     }
-    if (message.type === "fighterPayload") {
-      void this.receiveFighter(message.fighter);
+    if (message.type === "fighterManifest") {
+      this.receiveFighterManifest(message.fighter);
       return;
     }
     if (message.type === "ready") {
@@ -255,27 +329,83 @@ class InviteMatchSession {
       return;
     }
     if (message.type === "hello") {
+      if (message.version !== NETPLAY_PROTOCOL_VERSION) {
+        this.fail("Opponent is using an incompatible online protocol version.");
+      }
       return;
     }
     this.controller?.receiveSetupMessage(message);
+  }
+
+  private receiveFighterManifest(fighter: NetworkFighterManifest) {
+    try {
+      this.remoteTransfer = new NetworkFighterAssetReceiver(fighter);
+      this.remoteTransferFinalizing = false;
+      this.startRemoteTransferTimeout();
+      this.callbacks.onStatus("Receiving opponent fighter assets...");
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not read opponent fighter manifest."));
+    }
+  }
+
+  private async receiveAssetChunk(data: unknown) {
+    try {
+      const chunk = data instanceof ArrayBuffer || data instanceof Blob ? await parseAssetChunkEnvelope(data) : undefined;
+      if (!chunk) {
+        throw new Error("Received a malformed fighter asset chunk.");
+      }
+      if (!this.remoteTransfer) {
+        throw new Error("Received fighter asset data before the fighter manifest.");
+      }
+
+      this.remoteTransfer.receiveChunk(chunk.header, chunk.payload);
+      const progress = this.remoteTransfer.getProgress();
+      const percent = progress.totalBytes > 0 ? Math.floor((progress.receivedBytes / progress.totalBytes) * 100) : 100;
+      this.callbacks.onStatus(`Receiving opponent fighter assets ${percent}%...`);
+
+      if (this.remoteTransfer.isComplete()) {
+        this.finishRemoteFighterTransfer();
+      }
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not receive opponent fighter."));
+    }
+  }
+
+  private finishRemoteFighterTransfer() {
+    if (!this.remoteTransfer || this.remoteTransferFinalizing) {
+      return;
+    }
+    this.remoteTransferFinalizing = true;
+    try {
+      const loaded = this.remoteTransfer.createLoadedFighter();
+      this.clearRemoteTransferTimeout();
+      this.remoteFighter = loaded.fighter;
+      this.revokeRemoteFighter = loaded.revoke;
+      this.callbacks.onStatus("Opponent fighter received.");
+      this.maybeStartMatch();
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not load remote fighter."));
+    }
+  }
+
+  private startRemoteTransferTimeout() {
+    this.clearRemoteTransferTimeout();
+    this.remoteTransferTimeout = setTimeout(() => {
+      this.fail("Timed out receiving opponent fighter assets. Try a smaller fighter or reconnect.");
+    }, FIGHTER_TRANSFER_TIMEOUT_MS);
+  }
+
+  private clearRemoteTransferTimeout() {
+    if (this.remoteTransferTimeout) {
+      clearTimeout(this.remoteTransferTimeout);
+      this.remoteTransferTimeout = undefined;
+    }
   }
 
   private receiveInputMessage(raw: string) {
     const message = parseInputMessage(raw);
     if (message) {
       this.controller?.receiveInputMessage(message);
-    }
-  }
-
-  private async receiveFighter(fighter: NetworkFighterPayload) {
-    try {
-      const loaded = await loadRemoteFighterFromPayload(fighter);
-      this.remoteFighter = loaded.fighter;
-      this.revokeRemoteFighter = loaded.revoke;
-      this.callbacks.onStatus("Opponent fighter received.");
-      this.maybeStartMatch();
-    } catch (error) {
-      this.fail(error instanceof Error ? error.message : "Could not load remote fighter.");
     }
   }
 
@@ -303,13 +433,21 @@ class InviteMatchSession {
     });
   }
 
-  private sendSetupMessage(message: SetupMessage) {
-    if (this.setupChannel?.readyState === "open") {
+  private sendSetupMessage(message: SetupMessage): boolean {
+    if (this.setupChannel?.readyState !== "open") {
+      return false;
+    }
+    try {
       this.setupChannel.send(JSON.stringify(message));
+      return true;
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not send setup message."));
+      return false;
     }
   }
 
   private fail(message: string) {
+    this.clearRemoteTransferTimeout();
     this.callbacks.onError(message);
     this.controller?.sendError(message);
   }
@@ -333,6 +471,45 @@ function waitForIceGatheringComplete(pc: RTCPeerConnection, timeoutMs = 8000): P
     };
     pc.addEventListener("icegatheringstatechange", onStateChange);
   });
+}
+
+async function waitForSetupBuffer(channel: RTCDataChannel): Promise<void> {
+  const startedAt = Date.now();
+  while (channel.bufferedAmount > SETUP_BUFFER_HIGH_BYTES) {
+    if (channel.readyState !== "open") {
+      throw new Error("Setup channel closed while sending fighter assets.");
+    }
+    if (Date.now() - startedAt > SETUP_BUFFER_TIMEOUT_MS) {
+      throw new Error("Timed out sending fighter assets. Try a smaller fighter or reconnect.");
+    }
+    await delay(SETUP_BUFFER_POLL_MS);
+  }
+}
+
+function getMaxDataChannelMessageBytes(pc: RTCPeerConnection): number | undefined {
+  const maxMessageSize = pc.sctp?.maxMessageSize;
+  return typeof maxMessageSize === "number" && Number.isFinite(maxMessageSize) && maxMessageSize > 0 ? maxMessageSize : undefined;
+}
+
+function getChunkPayloadBytes(maxMessageBytes: number | undefined) {
+  if (!maxMessageBytes) {
+    return NETWORK_ASSET_CHUNK_BYTES;
+  }
+  return Math.max(1024, Math.min(NETWORK_ASSET_CHUNK_BYTES, maxMessageBytes - MAX_CHUNK_HEADER_BYTES));
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeTransferError(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) {
+    return fallback;
+  }
+  if (/message size|too large|exceeded/i.test(error.message)) {
+    return "Fighter assets are too large for this WebRTC connection. Try a smaller fighter or remove long voice clips.";
+  }
+  return error.message || fallback;
 }
 
 function parseSetupMessage(raw: string): SetupMessage | undefined {

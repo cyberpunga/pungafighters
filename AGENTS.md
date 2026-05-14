@@ -14,6 +14,7 @@
 - Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
+- Online fighter asset transfer uses manifest metadata plus chunked DataChannel binary payloads with a 12 MB selected-fighter cap; do not reintroduce single-message data URL fighter payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, imported battle background image blobs, audio blobs, and settings.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
