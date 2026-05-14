@@ -1,15 +1,22 @@
-import { Gamepad2, RadioTower, Trash2 } from "lucide-react";
+import { Download, Gamepad2, RadioTower, Trash2, Upload } from "lucide-react";
+import { useRef } from "react";
+import { FIGHTER_IMPORT_ACCEPT } from "../creator/fighterFiles";
 import type { LoadedFighter } from "../types/game";
 
 export function FighterSelectView(props: {
   fighters: LoadedFighter[];
   selected: { p1: string; p2: string };
+  fileStatus: string;
   onSelected: (next: { p1: string; p2: string }) => void;
+  onImportFile: (file: File) => Promise<void>;
+  onExport: (fighter: LoadedFighter) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onFight: () => void;
   onHostOnline: () => void;
   onJoinOnline: () => void;
 }) {
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <section className="select-view">
       <div className="duel-header">
@@ -18,6 +25,23 @@ export function FighterSelectView(props: {
           <h2>Fighter Select</h2>
         </div>
         <div className="action-row">
+          <button className="secondary-button" type="button" onClick={() => importInputRef.current?.click()}>
+            <Upload size={18} />
+            Import
+          </button>
+          <input
+            ref={importInputRef}
+            className="sr-only"
+            type="file"
+            accept={FIGHTER_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void props.onImportFile(file);
+              }
+            }}
+          />
           <button className="secondary-button" type="button" onClick={props.onHostOnline}>
             <RadioTower size={18} />
             Host Online
@@ -32,12 +56,14 @@ export function FighterSelectView(props: {
           </button>
         </div>
       </div>
+      {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}
       <div className="select-columns">
         <FighterColumn
           slot="p1"
           fighters={props.fighters}
           selectedId={props.selected.p1}
           onSelect={(id) => props.onSelected({ ...props.selected, p1: id })}
+          onExport={props.onExport}
           onDelete={props.onDelete}
         />
         <FighterColumn
@@ -45,6 +71,7 @@ export function FighterSelectView(props: {
           fighters={props.fighters}
           selectedId={props.selected.p2}
           onSelect={(id) => props.onSelected({ ...props.selected, p2: id })}
+          onExport={props.onExport}
           onDelete={props.onDelete}
         />
       </div>
@@ -57,6 +84,7 @@ function FighterColumn(props: {
   fighters: LoadedFighter[];
   selectedId: string;
   onSelect: (id: string) => void;
+  onExport: (fighter: LoadedFighter) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   return (
@@ -69,11 +97,16 @@ function FighterColumn(props: {
               <img src={fighter.frameUrls.idle} alt="" />
               <span>{fighter.name}</span>
             </button>
-            {!fighter.isDefault && (
-              <button className="icon-button danger" type="button" onClick={() => void props.onDelete(fighter.id)} title="Delete fighter">
-                <Trash2 size={17} />
+            <div className="fighter-card-actions">
+              <button className="icon-button" type="button" onClick={() => void props.onExport(fighter)} title="Export fighter">
+                <Download size={17} />
               </button>
-            )}
+              {!fighter.isDefault && (
+                <button className="icon-button danger" type="button" onClick={() => void props.onDelete(fighter.id)} title="Delete fighter">
+                  <Trash2 size={17} />
+                </button>
+              )}
+            </div>
           </article>
         ))}
       </div>

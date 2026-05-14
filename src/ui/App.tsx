@@ -2,8 +2,9 @@ import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BattleConfig, LoadedFighter, PlayerSlot } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
+import { downloadFighterExport, readFighterImportFile } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
-import { deleteFighter, listLoadedFighters } from "../storage/db";
+import { deleteFighter, listLoadedFighters, saveImportedFighter } from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import { FighterSelectView } from "./FighterSelectView";
@@ -37,6 +38,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [onlineRole, setOnlineRole] = useState<OnlineRole>("host");
   const [onlineBattle, setOnlineBattle] = useState<OnlineBattle | undefined>();
+  const [fileStatus, setFileStatus] = useState("");
 
   const refreshFighters = useCallback(async () => {
     setLoading(true);
@@ -52,6 +54,32 @@ export function App() {
   useEffect(() => {
     void refreshFighters();
   }, [refreshFighters]);
+
+  const importFighterFile = useCallback(
+    async (file: File) => {
+      setFileStatus(`Importing ${file.name}...`);
+      try {
+        const imported = await readFighterImportFile(file);
+        const fighter = await saveImportedFighter(imported);
+        await refreshFighters();
+        setSelected((current) => ({ ...current, p1: fighter.id }));
+        setFileStatus(`${fighter.name} imported.`);
+      } catch (error) {
+        setFileStatus(error instanceof Error ? error.message : "Could not import fighter.");
+      }
+    },
+    [refreshFighters],
+  );
+
+  const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
+    setFileStatus(`Exporting ${fighter.name}...`);
+    try {
+      await downloadFighterExport(fighter);
+      setFileStatus(`${fighter.name} exported.`);
+    } catch (error) {
+      setFileStatus(error instanceof Error ? error.message : "Could not export fighter.");
+    }
+  }, []);
 
   const battleFighters = useMemo(() => {
     const p1 = fighters.find((fighter) => fighter.id === selected.p1);
@@ -73,7 +101,10 @@ export function App() {
         <FighterSelectView
           fighters={fighters}
           selected={selected}
+          fileStatus={fileStatus}
           onSelected={setSelected}
+          onImportFile={importFighterFile}
+          onExport={exportFighterFile}
           onDelete={async (id) => {
             await deleteFighter(id);
             await refreshFighters();

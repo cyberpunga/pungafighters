@@ -31,8 +31,15 @@ Open the local Vite URL shown in the terminal.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
+- Character export/import for local `.pungafighter.json` files and simple spritesheet image imports.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
+
+## Character Files
+
+Use Fighter Select to export any fighter as a `.pungafighter.json` file. The file contains the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
+
+Imports accept either `.pungafighter.json` or a PNG, JPEG, or WebP spritesheet. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom. PNG or WebP keeps transparent cutouts intact.
 
 ## Controls
 

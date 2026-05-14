@@ -1,6 +1,7 @@
-import { Camera, Volume2 } from "lucide-react";
+import { Camera, ImagePlus, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
+import { readSpritesheetFighterFile, SPRITESHEET_IMPORT_ACCEPT } from "../creator/fighterFiles";
 import { canvasToPngBlob, normalizeCanvas, videoToSourceCanvas } from "../creator/imageProcessing";
 import {
   DEFAULT_SEGMENTATION_OPTIONS,
@@ -29,6 +30,7 @@ type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
 
 export function CreatorView(props: { onSaved: () => Promise<void> }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const spritesheetInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
   const framesRef = useRef<Partial<Record<FighterPose, { blob: Blob; url: string }>>>({});
@@ -53,6 +55,23 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
   const selectedProvider = useMemo(() => getSegmentationProvider(providerId), [providerId]);
   const selectedOptions = segmentationOptions[providerId];
   const captureBusy = isCapturing || countdown > 0;
+
+  const replaceFrames = useCallback((frameBlobs: Record<FighterPose, Blob>) => {
+    setFrames((current) => {
+      Object.values(current).forEach((frame) => {
+        if (frame) {
+          URL.revokeObjectURL(frame.url);
+        }
+      });
+
+      return Object.fromEntries(
+        FIGHTER_POSES.map((pose) => {
+          const blob = frameBlobs[pose];
+          return [pose, { blob, url: URL.createObjectURL(blob) }];
+        }),
+      ) as Partial<Record<FighterPose, { blob: Blob; url: string }>>;
+    });
+  }, []);
 
   useEffect(() => {
     framesRef.current = frames;
@@ -231,7 +250,7 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
     setSaving(true);
     await saveFighterDraft({
       name,
-      frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, frames[pose]!.blob])),
+      frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, frames[pose]!.blob])) as Record<FighterPose, Blob>,
       voiceBlobs,
     });
     setSaving(false);
@@ -253,11 +272,41 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
     setRecording(clip);
   };
 
+  const importSpritesheet = async (file: File) => {
+    try {
+      const imported = await readSpritesheetFighterFile(file);
+      replaceFrames(imported.frameBlobs);
+      if (!name.trim() || name.trim() === "New Fighter") {
+        setName(imported.name);
+      }
+      setCameraStatus("Spritesheet imported.");
+    } catch (error) {
+      setCameraStatus(error instanceof Error ? error.message : "Could not import spritesheet.");
+    }
+  };
+
   return (
     <section className="creator-grid">
       <div className="creator-camera">
         <video ref={videoRef} autoPlay muted playsInline />
         <div className="camera-actions">
+          <button className="secondary-button" type="button" onClick={() => spritesheetInputRef.current?.click()} disabled={captureBusy}>
+            <ImagePlus size={18} />
+            Import Sheet
+          </button>
+          <input
+            ref={spritesheetInputRef}
+            className="sr-only"
+            type="file"
+            accept={SPRITESHEET_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void importSpritesheet(file);
+              }
+            }}
+          />
           <button className="secondary-button" type="button" onClick={startCamera}>
             <Camera size={18} />
             Camera

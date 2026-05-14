@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { FighterProfile, LoadedFighter, VoiceClipType } from "../types/game";
+import type { FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES } from "../types/game";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 
@@ -57,7 +57,27 @@ export async function getLoadedFighter(id: string): Promise<LoadedFighter | unde
 
 export async function saveFighterDraft(input: {
   name: string;
-  frameBlobs: Record<string, Blob>;
+  frameBlobs: Record<FighterPose, Blob>;
+  voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
+}): Promise<FighterProfile> {
+  return saveFighterAssets(input);
+}
+
+export async function saveImportedFighter(input: {
+  name: string;
+  frameBlobs: Record<FighterPose, Blob>;
+  voiceBlobs?: Partial<Record<VoiceClipType, Blob>>;
+}): Promise<FighterProfile> {
+  return saveFighterAssets({
+    name: input.name,
+    frameBlobs: input.frameBlobs,
+    voiceBlobs: input.voiceBlobs ?? {},
+  });
+}
+
+async function saveFighterAssets(input: {
+  name: string;
+  frameBlobs: Record<FighterPose, Blob>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   const db = await getDb();
