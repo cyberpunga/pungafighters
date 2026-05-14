@@ -1,6 +1,6 @@
 import type { ActionSnapshot, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
 
-export const NETPLAY_PROTOCOL_VERSION = 2;
+export const NETPLAY_PROTOCOL_VERSION = 3;
 export const NETPLAY_INPUT_DELAY = 10;
 export const NETPLAY_REPEAT_FRAMES = 24;
 export const NETPLAY_CHECKSUM_INTERVAL = 30;
@@ -42,6 +42,20 @@ export interface NetworkFighterManifest {
   voiceClips: Partial<Record<VoiceClipType, NetworkVoiceClipAsset>>;
 }
 
+export interface NetworkBattleBackgroundAsset {
+  assetId: string;
+  mimeType: string;
+  byteLength: number;
+}
+
+export interface NetworkBattleBackgroundManifest {
+  id: "default" | "custom";
+  name: string;
+  totalBytes: number;
+  updatedAt?: string;
+  asset?: NetworkBattleBackgroundAsset;
+}
+
 export interface NetworkAssetChunkHeader {
   type: "assetChunk";
   assetId: string;
@@ -59,6 +73,7 @@ export interface NetworkAssetChunkMessage {
 
 export type SetupMessage =
   | { type: "hello"; version: typeof NETPLAY_PROTOCOL_VERSION; role: OnlineRole; slot: PlayerSlot }
+  | { type: "stageManifest"; background: NetworkBattleBackgroundManifest }
   | { type: "fighterManifest"; fighter: NetworkFighterManifest }
   | { type: "ready" }
   | { type: "checksum"; frame: number; checksum: string }

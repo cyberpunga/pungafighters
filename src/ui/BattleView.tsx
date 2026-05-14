@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
-import type { BattleConfig, LoadedBattleBackground, LoadedFighter, PlayerSlot } from "../types/game";
+import type { BattleConfig, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { createBattleGame, type BattleGameHandle } from "../phaser/bridge/createBattleGame";
 
 export function BattleView(props: {
   config: BattleConfig;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
-  background?: LoadedBattleBackground;
+  background?: RuntimeBattleBackground;
   onExit: () => void;
   mode?: "local" | "online";
   localSlot?: PlayerSlot;

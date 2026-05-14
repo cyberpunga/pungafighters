@@ -116,6 +116,10 @@ export class NetworkFighterAssetReceiver {
     });
   }
 
+  hasAsset(assetId: string) {
+    return this.assemblers.has(assetId);
+  }
+
   receiveChunk(header: NetworkAssetChunkHeader, payload: Uint8Array) {
     const assembler = this.assemblers.get(header.assetId);
     if (!assembler) {

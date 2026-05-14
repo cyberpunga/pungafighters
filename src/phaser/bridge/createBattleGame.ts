@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { BattleConfig, LoadedBattleBackground, LoadedFighter } from "../../types/game";
+import type { BattleConfig, LoadedFighter, RuntimeBattleBackground } from "../../types/game";
 import type { NetworkInputController } from "../../game/network/networkInputController";
 import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
 
@@ -12,7 +12,7 @@ export function createBattleGame(input: {
   parent: HTMLElement;
   config: BattleConfig;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
-  background?: LoadedBattleBackground;
+  background?: RuntimeBattleBackground;
   onExit: () => void;
   mode?: BattleSceneOptions["mode"];
   localSlot?: BattleSceneOptions["localSlot"];

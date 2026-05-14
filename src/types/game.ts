@@ -59,6 +59,16 @@ export interface LoadedBattleBackground {
   updatedAt: string;
 }
 
+export interface RuntimeBattleBackground {
+  id: "custom" | "remote";
+  name: string;
+  imageUrl: string;
+  mimeType: string;
+  size: number;
+  updatedAt: string;
+  blobId?: string;
+}
+
 export interface LoadedFighter extends FighterProfile {
   frameUrls: Record<FighterPose, string>;
   voiceUrls: Partial<Record<VoiceClipType, string>>;

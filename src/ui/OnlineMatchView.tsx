@@ -1,6 +1,6 @@
 import { Check, Clipboard, Link2, RadioTower, Swords } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { LoadedFighter } from "../types/game";
+import type { LoadedFighter, RuntimeBattleBackground } from "../types/game";
 import {
   createGuestInviteSession,
   createHostInviteSession,
@@ -14,6 +14,7 @@ type OnlineSession = HostInviteSession | GuestInviteSession;
 export function OnlineMatchView(props: {
   role: "host" | "guest";
   localFighter: LoadedFighter;
+  background?: RuntimeBattleBackground;
   onReady: (match: OnlineReadyMatch) => void;
   onCancel: () => void;
 }) {
@@ -44,7 +45,7 @@ export function OnlineMatchView(props: {
     if (props.role === "host") {
       setBusy(true);
       setStatus("Creating invite...");
-      void createHostInviteSession(props.localFighter, {
+      void createHostInviteSession(props.localFighter, props.background, {
         onStatus: setStatus,
         onError: setError,
         onReady: (match) => {
@@ -71,7 +72,7 @@ export function OnlineMatchView(props: {
         sessionRef.current?.destroy();
       }
     };
-  }, [props.role, props.localFighter]);
+  }, [props.role, props.localFighter, props.background]);
 
   const acceptAnswer = async () => {
     const session = sessionRef.current;
@@ -119,7 +120,7 @@ export function OnlineMatchView(props: {
         </div>
         <button className="secondary-button" type="button" onClick={props.onCancel}>
           <Swords size={18} />
-          Fighter Select
+          Back
         </button>
       </div>
 
@@ -132,6 +133,15 @@ export function OnlineMatchView(props: {
               <strong>{props.localFighter.name}</strong>
             </div>
           </div>
+          {props.role === "host" && (
+            <div className="online-stage">
+              {props.background ? <img src={props.background.imageUrl} alt="" /> : <div className="stage-preview-default" />}
+              <div>
+                <span>Shared arena</span>
+                <strong>{props.background?.name ?? "Default Arena"}</strong>
+              </div>
+            </div>
+          )}
           <div className="connection-status">
             <RadioTower size={18} />
             <span>{error || status}</span>

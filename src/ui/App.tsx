@@ -1,9 +1,9 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { BattleConfig, LoadedBattleBackground, LoadedFighter, PlayerSlot } from "../types/game";
+import type { BattleConfig, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
-import { downloadFighterExport, readFighterImportFile } from "../creator/fighterFiles";
+import { downloadFighterExport } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import {
   clearBattleBackgroundImage,
@@ -11,11 +11,16 @@ import {
   getLoadedBattleBackground,
   listLoadedFighters,
   saveBattleBackgroundImage,
-  saveImportedFighter,
 } from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
-import { FighterSelectView } from "./FighterSelectView";
+import {
+  BackgroundSelectView,
+  FightModeView,
+  LocalFighterSelectView,
+  OnlineFighterSelectView,
+  type LocalFighterSelection,
+} from "./FighterSelectView";
 import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
 import { selectOnlineLocalFighter } from "./onlineSelection";
@@ -27,6 +32,7 @@ type OnlineRole = "host" | "guest";
 interface OnlineBattle {
   config: BattleConfig;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  background?: RuntimeBattleBackground;
   localSlot: PlayerSlot;
   controller: NetworkInputController;
 }
@@ -41,10 +47,12 @@ export function App() {
   const [route, navigate] = useAppRoute();
   const view = appRouteToView(route);
   const [fighters, setFighters] = useState<LoadedFighter[]>([]);
-  const [selected, setSelected] = useState<{ p1: string; p2: string }>({
+  const [localSelection, setLocalSelection] = useState<LocalFighterSelection>({
     p1: DEFAULT_FIGHTER_IDS[0],
     p2: DEFAULT_FIGHTER_IDS[1],
+    activeSlot: "p1",
   });
+  const [onlineSelectedFighterId, setOnlineSelectedFighterId] = useState<string>(DEFAULT_FIGHTER_IDS[0]);
   const [loading, setLoading] = useState(true);
   const [onlineBattle, setOnlineBattle] = useState<OnlineBattle | undefined>();
   const [fileStatus, setFileStatus] = useState("");
@@ -66,10 +74,12 @@ export function App() {
     const loaded = await listLoadedFighters();
     setFighters(loaded);
     setLoading(false);
-    setSelected((current) => ({
+    setLocalSelection((current) => ({
       p1: loaded.some((fighter) => fighter.id === current.p1) ? current.p1 : loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[0],
       p2: loaded.some((fighter) => fighter.id === current.p2) ? current.p2 : loaded[1]?.id ?? loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[1],
+      activeSlot: current.activeSlot,
     }));
+    setOnlineSelectedFighterId((current) => (loaded.some((fighter) => fighter.id === current) ? current : loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[0]));
   }, []);
 
   const refreshBattleBackground = useCallback(async () => {
@@ -98,22 +108,6 @@ export function App() {
       setOnlineBattle(undefined);
     }
   }, [view]);
-
-  const importFighterFile = useCallback(
-    async (file: File) => {
-      setFileStatus(`Importing ${file.name}...`);
-      try {
-        const imported = await readFighterImportFile(file);
-        const fighter = await saveImportedFighter(imported);
-        await refreshFighters();
-        setSelected((current) => ({ ...current, p1: fighter.id }));
-        setFileStatus(`${fighter.name} imported.`);
-      } catch (error) {
-        setFileStatus(error instanceof Error ? error.message : "Could not import fighter.");
-      }
-    },
-    [refreshFighters],
-  );
 
   const importBattleBackgroundFile = useCallback(
     async (file: File) => {
@@ -149,54 +143,106 @@ export function App() {
     }
   }, []);
 
+  const deleteFighterFile = useCallback(
+    async (id: string) => {
+      await deleteFighter(id);
+      await refreshFighters();
+      setFileStatus("Fighter deleted.");
+    },
+    [refreshFighters],
+  );
+
   const battleFighters = useMemo(() => {
-    const p1 = fighters.find((fighter) => fighter.id === selected.p1);
-    const p2 = fighters.find((fighter) => fighter.id === selected.p2);
+    const p1 = fighters.find((fighter) => fighter.id === localSelection.p1);
+    const p2 = fighters.find((fighter) => fighter.id === localSelection.p2);
     return p1 && p2 ? { p1, p2 } : undefined;
-  }, [fighters, selected]);
-  const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, selected), [fighters, selected]);
+  }, [fighters, localSelection]);
+  const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, onlineSelectedFighterId), [fighters, onlineSelectedFighterId]);
 
   return (
     <main className="app-shell">
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
-      {view === "menu" && <MenuView fighters={fighters} loading={loading} onCreate={() => navigate("creator")} onSelect={() => navigate("select")} />}
+      {view === "menu" && <MenuView fighters={fighters} loading={loading} onCreate={() => navigate("creator")} onSelect={() => navigate("fight")} />}
       {view === "creator" && <CreatorView onSaved={refreshFighters} />}
-      {view === "select" && (
-        <FighterSelectView
+      {route === "fight" && (
+        <FightModeView
+          onLocal={() => navigate("localFighters")}
+          onHost={() => navigate("remoteHostFighter")}
+          onJoin={() => navigate("remoteJoinFighter")}
+        />
+      )}
+      {route === "localFighters" && (
+        <LocalFighterSelectView
           fighters={fighters}
-          selected={selected}
+          selected={localSelection}
           fileStatus={fileStatus}
+          onSelected={setLocalSelection}
+          onExport={exportFighterFile}
+          onDelete={deleteFighterFile}
+          onBack={() => navigate("fight")}
+          onNext={() => navigate("localBackground")}
+        />
+      )}
+      {route === "remoteHostFighter" && (
+        <OnlineFighterSelectView
+          role="host"
+          fighters={fighters}
+          selectedId={onlineSelectedFighterId}
+          fileStatus={fileStatus}
+          onSelected={setOnlineSelectedFighterId}
+          onExport={exportFighterFile}
+          onDelete={deleteFighterFile}
+          onBack={() => navigate("fight")}
+          onNext={() => navigate("remoteHostBackground")}
+        />
+      )}
+      {route === "remoteJoinFighter" && (
+        <OnlineFighterSelectView
+          role="guest"
+          fighters={fighters}
+          selectedId={onlineSelectedFighterId}
+          fileStatus={fileStatus}
+          onSelected={setOnlineSelectedFighterId}
+          onExport={exportFighterFile}
+          onDelete={deleteFighterFile}
+          onBack={() => navigate("fight")}
+          onNext={() => navigate("onlineGuest")}
+        />
+      )}
+      {route === "localBackground" && (
+        <BackgroundSelectView
+          mode="local"
           backgroundStatus={backgroundStatus}
           battleBackground={battleBackground}
-          onSelected={setSelected}
-          onImportFile={importFighterFile}
           onImportBackgroundFile={importBattleBackgroundFile}
           onClearBackground={clearBattleBackground}
-          onExport={exportFighterFile}
-          onDelete={async (id) => {
-            await deleteFighter(id);
-            await refreshFighters();
-          }}
-          onFight={() => {
+          onBack={() => navigate("localFighters")}
+          onNext={() => {
             setOnlineBattle(undefined);
             if (battleFighters) {
               navigate("battle");
             }
           }}
-          onHostOnline={() => {
-            navigate("onlineHost");
-          }}
-          onJoinOnline={() => {
-            navigate("onlineGuest");
-          }}
+        />
+      )}
+      {route === "remoteHostBackground" && (
+        <BackgroundSelectView
+          mode="remoteHost"
+          backgroundStatus={backgroundStatus}
+          battleBackground={battleBackground}
+          onImportBackgroundFile={importBattleBackgroundFile}
+          onClearBackground={clearBattleBackground}
+          onBack={() => navigate("remoteHostFighter")}
+          onNext={() => navigate("onlineHost")}
         />
       )}
       {view === "online" && onlineLocalFighter && (
         <OnlineMatchView
           role={onlineRole}
           localFighter={onlineLocalFighter}
-          onCancel={() => navigate("select")}
+          background={onlineRole === "host" ? battleBackground : undefined}
+          onCancel={() => navigate(onlineRole === "host" ? "remoteHostBackground" : "remoteJoinFighter")}
           onReady={(match) => {
             setOnlineBattle({
               config: {
@@ -205,6 +251,7 @@ export function App() {
                 playerTwoFighterId: match.fighters.p2.id,
               },
               fighters: match.fighters,
+              background: match.background,
               localSlot: match.localSlot,
               controller: match.controller,
             });
@@ -220,19 +267,19 @@ export function App() {
           networkController={onlineBattle.controller}
           config={onlineBattle.config}
           fighters={onlineBattle.fighters}
-          background={battleBackground}
+          background={onlineBattle.background}
           onExit={() => {
             setOnlineBattle(undefined);
-            navigate("select", { replace: true });
+            navigate("fight", { replace: true });
           }}
         />
       )}
       {view === "battle" && !onlineBattle && battleFighters && (
         <BattleView
-          config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: selected.p1, playerTwoFighterId: selected.p2 }}
+          config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: localSelection.p1, playerTwoFighterId: localSelection.p2 }}
           fighters={battleFighters}
           background={battleBackground}
-          onExit={() => navigate("select", { replace: true })}
+          onExit={() => navigate("fight", { replace: true })}
         />
       )}
     </main>
@@ -247,6 +294,8 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
     event.preventDefault();
     props.onNavigate(route);
   };
+
+  const fightActive = props.view === "fightMode" || props.view === "fighterSelect" || props.view === "backgroundSelect" || props.view === "online";
 
   return (
     <header className="topbar">
@@ -266,12 +315,12 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
           <Camera size={19} />
         </a>
         <a
-          className={props.view === "select" ? "icon-button active" : "icon-button"}
-          href={appRouteToHref("select")}
-          onClick={(event) => onRouteClick(event, "select")}
-          aria-current={props.view === "select" ? "page" : undefined}
-          aria-label="Select fighters"
-          title="Select fighters"
+          className={fightActive ? "icon-button active" : "icon-button"}
+          href={appRouteToHref("fight")}
+          onClick={(event) => onRouteClick(event, "fight")}
+          aria-current={fightActive ? "page" : undefined}
+          aria-label="Fight setup"
+          title="Fight setup"
         >
           <Gamepad2 size={19} />
         </a>

@@ -1,11 +1,28 @@
-export type View = "menu" | "creator" | "select" | "settings" | "online" | "battle";
+export type View = "menu" | "creator" | "fightMode" | "fighterSelect" | "backgroundSelect" | "settings" | "online" | "battle";
 
-export type AppRoute = "menu" | "creator" | "select" | "settings" | "onlineHost" | "onlineGuest" | "battle";
+export type AppRoute =
+  | "menu"
+  | "creator"
+  | "fight"
+  | "localFighters"
+  | "localBackground"
+  | "remoteHostFighter"
+  | "remoteHostBackground"
+  | "remoteJoinFighter"
+  | "settings"
+  | "onlineHost"
+  | "onlineGuest"
+  | "battle";
 
 const ROUTE_PATHS: Record<AppRoute, string> = {
   menu: "/",
   creator: "/creator",
-  select: "/select",
+  fight: "/fight",
+  localFighters: "/fight/local/fighters",
+  localBackground: "/fight/local/background",
+  remoteHostFighter: "/fight/remote/host/fighter",
+  remoteHostBackground: "/fight/remote/host/background",
+  remoteJoinFighter: "/fight/remote/join/fighter",
   settings: "/settings",
   onlineHost: "/online/host",
   onlineGuest: "/online/join",
@@ -32,6 +49,15 @@ export function appRouteToHref(route: AppRoute, basePath = getAppBasePath()): st
 }
 
 export function appRouteToView(route: AppRoute): View {
+  if (route === "fight") {
+    return "fightMode";
+  }
+  if (route === "localFighters" || route === "remoteHostFighter" || route === "remoteJoinFighter") {
+    return "fighterSelect";
+  }
+  if (route === "localBackground" || route === "remoteHostBackground") {
+    return "backgroundSelect";
+  }
   if (route === "onlineHost" || route === "onlineGuest") {
     return "online";
   }
@@ -46,8 +72,19 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
       return "menu";
     case "/creator":
       return "creator";
+    case "/fight":
     case "/select":
-      return "select";
+      return "fight";
+    case "/fight/local/fighters":
+      return "localFighters";
+    case "/fight/local/background":
+      return "localBackground";
+    case "/fight/remote/host/fighter":
+      return "remoteHostFighter";
+    case "/fight/remote/host/background":
+      return "remoteHostBackground";
+    case "/fight/remote/join/fighter":
+      return "remoteJoinFighter";
     case "/settings":
       return "settings";
     case "/online/host":

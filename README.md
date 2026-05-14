@@ -24,23 +24,23 @@ Open the local Vite URL shown in the terminal.
 
 ## MVP Features
 
-- Route-backed React shell for menus, fighter creator, fighter select, settings, online invites, and battle mount.
+- Route-backed React shell for menus, fighter creator, staged fight setup, settings, online invites, and battle mount.
 - Phaser 3 battle runtime embedded inside React.
 - Local same-device 1v1 battle with deterministic health, timer, rounds, hitboxes, and keyboard controls.
 - WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
-- Character export/import for local `.pungafighter.json` files and simple spritesheet image imports.
-- Custom battle background image import for the local arena.
+- Character export for local `.pungafighter.json` files, with creator-side imports for character files and simple spritesheet images.
+- Custom battle background image import for local fights and host-selected online arenas.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
 
 ## Character Files
 
-Use Fighter Select to export any fighter as a `.pungafighter.json` file. The file contains the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
+Use the fight setup roster to export any fighter as a `.pungafighter.json` file. The file contains the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
 
-Imports accept either `.pungafighter.json` or a PNG, JPEG, or WebP spritesheet. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom. PNG or WebP keeps transparent cutouts intact.
+Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Imports accept either `.pungafighter.json` or a PNG, JPEG, or WebP spritesheet. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom. PNG or WebP keeps transparent cutouts intact.
 
 ## Controls
 
@@ -64,11 +64,11 @@ Online guests can also use Player 1 controls while playing from the Player 2 cor
 
 ## Online Matches
 
-Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
+Use Fight Setup to choose local or remote play before choosing fighters. For online matches, the host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange setup assets. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
 
-Each computer sends its local Player 1 selection for online play; the guest's fighter is placed in the Player 2 corner after the exchange. The online preview shows the fighter that will be sent.
+Each computer selects and sends one local fighter for online play; the host is placed in the Player 1 corner and the guest is placed in the Player 2 corner after the exchange. The online preview shows the fighter that will be sent.
 
-Selected fighter images and voice clips are sent peer-to-peer in chunks for that match only, with a 12 MB cap per selected fighter. Custom battle backgrounds remain local and are not synchronized in online matches.
+Selected fighter images and voice clips are sent peer-to-peer in chunks for that match only, with a 12 MB cap per selected fighter. The host's selected battle background is also synchronized for the match with the same 10 MB imported-background limit; the default arena sends metadata only.
 
 Online matches intentionally buffer inputs by a small fixed delay so both browsers can simulate the same frames. If the network is jittery, the match may briefly slow while waiting for the missing input frame instead of guessing and diverging.
 
@@ -109,4 +109,4 @@ GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafi
 
 ## Privacy
 
-Punga Fighters is local-first. Captured images, generated cutouts, custom battle backgrounds, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. Online invite matches send the selected fighter assets directly to the opponent for that match and do not save remote fighters or custom backgrounds locally. No backend or account system exists in this prototype.
+Punga Fighters is local-first. Captured images, generated cutouts, custom battle backgrounds, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. Online invite matches send the selected fighter assets and the host's selected background directly to the opponent for that match and do not save remote fighters or remote backgrounds locally. No backend or account system exists in this prototype.

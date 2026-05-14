@@ -9,7 +9,7 @@ export function MenuView(props: { fighters: LoadedFighter[]; loading: boolean; o
         <p className="eyebrow">Local webcam fighter</p>
         <h1>Punga Fighters</h1>
         <p>
-          Build cutout fighters from your camera, save them locally, and settle the argument on one keyboard.
+          Build cutout fighters from your camera, save them locally, then fight on one keyboard or through a manual remote invite.
         </p>
         <div className="action-row">
           <button className="primary-button" type="button" onClick={props.onCreate}>

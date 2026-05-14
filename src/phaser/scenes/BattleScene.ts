@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { BattleConfig, FighterPose, LoadedBattleBackground, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
+import type { BattleConfig, FighterPose, LoadedFighter, PlayerInputSnapshot, PlayerSlot, RuntimeBattleBackground } from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
 import {
   BATTLE_TICK_SECONDS,
@@ -31,7 +31,7 @@ export interface BattleSceneOptions {
   mode?: "local" | "online";
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
-  background?: LoadedBattleBackground;
+  background?: RuntimeBattleBackground;
 }
 
 const FIGHTER_DISPLAY_SIZE = 190;
@@ -54,7 +54,7 @@ export class BattleScene extends Phaser.Scene {
   private readonly mode: "local" | "online";
   private readonly localSlot: PlayerSlot;
   private readonly networkController?: NetworkInputController;
-  private readonly background?: LoadedBattleBackground;
+  private readonly background?: RuntimeBattleBackground;
   private views?: Record<PlayerSlot, FighterView>;
   private timerText?: Phaser.GameObjects.Text;
   private messageText?: Phaser.GameObjects.Text;

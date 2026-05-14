@@ -14,7 +14,7 @@
 - Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
-- Online fighter asset transfer uses manifest metadata plus chunked DataChannel binary payloads with a 12 MB selected-fighter cap; do not reintroduce single-message data URL fighter payloads.
+- Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, imported battle background image blobs, audio blobs, and settings.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
@@ -41,6 +41,7 @@
 - Use DOM for text-heavy UI and controls.
 - Keep center playfield readable during battle.
 - When adding assets or generated media, prefer local placeholders or user-generated content.
+- Keep saved character import in the creator/editor flow so imported fighters load as editable drafts before saving.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
 - Keep provider-specific controls near the provider implementation and pass them through the shared `SegmentationProvider` options shape.

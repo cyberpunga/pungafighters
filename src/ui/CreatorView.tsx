@@ -1,7 +1,7 @@
-import { Camera, ImagePlus, Volume2 } from "lucide-react";
+import { Camera, Upload, Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
-import { readSpritesheetFighterFile, SPRITESHEET_IMPORT_ACCEPT } from "../creator/fighterFiles";
+import { FIGHTER_IMPORT_ACCEPT, readFighterImportFile } from "../creator/fighterFiles";
 import { canvasToPngBlob, normalizeCanvas, videoToSourceCanvas } from "../creator/imageProcessing";
 import {
   DEFAULT_SEGMENTATION_OPTIONS,
@@ -30,7 +30,7 @@ type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
 
 export function CreatorView(props: { onSaved: () => Promise<void> }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const spritesheetInputRef = useRef<HTMLInputElement | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
   const framesRef = useRef<Partial<Record<FighterPose, { blob: Blob; url: string }>>>({});
@@ -272,16 +272,19 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
     setRecording(clip);
   };
 
-  const importSpritesheet = async (file: File) => {
+  const importFighterDraft = async (file: File) => {
     try {
-      const imported = await readSpritesheetFighterFile(file);
+      setCameraStatus(`Importing ${file.name}...`);
+      const imported = await readFighterImportFile(file);
+      recorderRef.current?.cancel();
+      recorderRef.current = null;
+      setRecording(undefined);
       replaceFrames(imported.frameBlobs);
-      if (!name.trim() || name.trim() === "New Fighter") {
-        setName(imported.name);
-      }
-      setCameraStatus("Spritesheet imported.");
+      setVoiceBlobs(imported.voiceBlobs);
+      setName(imported.name);
+      setCameraStatus("Fighter draft imported. Press Save fighter when ready.");
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not import spritesheet.");
+      setCameraStatus(error instanceof Error ? error.message : "Could not import fighter.");
     }
   };
 
@@ -290,20 +293,20 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
       <div className="creator-camera">
         <video ref={videoRef} autoPlay muted playsInline />
         <div className="camera-actions">
-          <button className="secondary-button" type="button" onClick={() => spritesheetInputRef.current?.click()} disabled={captureBusy}>
-            <ImagePlus size={18} />
-            Import Sheet
+          <button className="secondary-button" type="button" onClick={() => importInputRef.current?.click()} disabled={captureBusy}>
+            <Upload size={18} />
+            Import
           </button>
           <input
-            ref={spritesheetInputRef}
+            ref={importInputRef}
             className="sr-only"
             type="file"
-            accept={SPRITESHEET_IMPORT_ACCEPT}
+            accept={FIGHTER_IMPORT_ACCEPT}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               event.currentTarget.value = "";
               if (file) {
-                void importSpritesheet(file);
+                void importFighterDraft(file);
               }
             }}
           />

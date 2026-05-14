@@ -4,27 +4,27 @@ import { FIGHTER_POSES } from "../types/game";
 import { selectOnlineLocalFighter } from "./onlineSelection";
 
 describe("online fighter selection", () => {
-  it("uses the local Player 1 selection for online matches", () => {
+  it("uses the selected local fighter for online matches", () => {
     const hostOrGuestFighter = createFighter("custom-local", "Custom Local");
     const fighters = [createFighter("default-p1", "Default P1"), createFighter("default-p2", "Default P2"), hostOrGuestFighter];
 
-    expect(selectOnlineLocalFighter(fighters, { p1: "custom-local", p2: "default-p2" })).toBe(hostOrGuestFighter);
+    expect(selectOnlineLocalFighter(fighters, "custom-local")).toBe(hostOrGuestFighter);
   });
 
-  it("sends an imported fighter selected into Player 1 instead of the Player 2 slot", () => {
+  it("does not couple online selection to a local Player 2 slot", () => {
     const importedFighter = createFighter("imported-guest", "Imported Guest");
     const playerTwoSlotFighter = createFighter("default-p2", "Default P2");
     const fighters = [createFighter("default-p1", "Default P1"), playerTwoSlotFighter, importedFighter];
 
-    expect(selectOnlineLocalFighter(fighters, { p1: "imported-guest", p2: "default-p2" })).toBe(importedFighter);
-    expect(selectOnlineLocalFighter(fighters, { p1: "imported-guest", p2: "default-p2" })).not.toBe(playerTwoSlotFighter);
+    expect(selectOnlineLocalFighter(fighters, "imported-guest")).toBe(importedFighter);
+    expect(selectOnlineLocalFighter(fighters, "imported-guest")).not.toBe(playerTwoSlotFighter);
   });
 
-  it("falls back to the first loaded fighter when the Player 1 selection is missing", () => {
+  it("falls back to the first loaded fighter when the online selection is missing", () => {
     const fallback = createFighter("default-p1", "Default P1");
     const fighters = [fallback, createFighter("default-p2", "Default P2")];
 
-    expect(selectOnlineLocalFighter(fighters, { p1: "deleted-fighter", p2: "default-p2" })).toBe(fallback);
+    expect(selectOnlineLocalFighter(fighters, "deleted-fighter")).toBe(fallback);
   });
 });
 

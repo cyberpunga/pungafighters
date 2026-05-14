@@ -1,5 +1,10 @@
-import type { LoadedFighter } from "../../types/game";
+import type { LoadedFighter, RuntimeBattleBackground } from "../../types/game";
 import { createAssetChunkEnvelope, parseAssetChunkEnvelope } from "./assetChunks";
+import {
+  NetworkBackgroundAssetReceiver,
+  serializeBattleBackgroundForNetwork,
+  type NetworkBackgroundTransferAsset,
+} from "./backgroundTransfer";
 import {
   NETWORK_ASSET_CHUNK_BYTES,
   NetworkFighterAssetReceiver,
@@ -12,6 +17,7 @@ import {
   NETPLAY_PROTOCOL_VERSION,
   slotForRole,
   type InputMessage,
+  type NetworkBattleBackgroundManifest,
   type NetworkFighterManifest,
   type OnlineRole,
   type SetupMessage,
@@ -26,6 +32,7 @@ const MAX_CHUNK_HEADER_BYTES = 1024;
 
 export interface OnlineReadyMatch {
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  background?: RuntimeBattleBackground;
   localSlot: "p1" | "p2";
   controller: NetworkInputController;
 }
@@ -47,8 +54,12 @@ export interface GuestInviteSession {
   destroy: () => void;
 }
 
-export async function createHostInviteSession(localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks): Promise<HostInviteSession> {
-  const session = new InviteMatchSession("host", localFighter, callbacks, await getRtcConfiguration());
+export async function createHostInviteSession(
+  localFighter: LoadedFighter,
+  background: RuntimeBattleBackground | undefined,
+  callbacks: OnlineSessionCallbacks,
+): Promise<HostInviteSession> {
+  const session = new InviteMatchSession("host", localFighter, background, callbacks, await getRtcConfiguration());
   const offerCode = await session.createOfferCode();
   return {
     offerCode,
@@ -66,7 +77,7 @@ export async function createGuestInviteSession(
   if (offer.role !== "host" || offer.description.type !== "offer") {
     throw new Error("Expected a host offer code.");
   }
-  const session = new InviteMatchSession("guest", localFighter, callbacks, await getRtcConfiguration());
+  const session = new InviteMatchSession("guest", localFighter, undefined, callbacks, await getRtcConfiguration());
   const answerCode = await session.createAnswerCode(offer.description);
   return {
     answerCode,
@@ -78,6 +89,7 @@ class InviteMatchSession {
   private readonly role: OnlineRole;
   private readonly localSlot: "p1" | "p2";
   private readonly localFighter: LoadedFighter;
+  private readonly hostBackground?: RuntimeBattleBackground;
   private readonly callbacks: OnlineSessionCallbacks;
   private readonly pc: RTCPeerConnection;
   private setupChannel?: RTCDataChannel;
@@ -85,21 +97,35 @@ class InviteMatchSession {
   private controller?: DataChannelNetworkInputController;
   private remoteFighter?: LoadedFighter;
   private remoteTransfer?: NetworkFighterAssetReceiver;
+  private remoteBackground?: RuntimeBattleBackground;
+  private remoteBackgroundTransfer?: NetworkBackgroundAssetReceiver;
   private remoteTransferFinalizing = false;
+  private remoteBackgroundTransferFinalizing = false;
   private remoteTransferTimeout?: ReturnType<typeof setTimeout>;
   private revokeRemoteFighter?: () => void;
+  private revokeRemoteBackground?: () => void;
+  private localAssetsSent = false;
   private localReadySent = false;
   private remoteReady = false;
+  private remoteBackgroundReady = false;
   private announced = false;
   private readyStarted = false;
   private destroyed = false;
   private waitingForHostToAcceptAnswer = false;
   private channelOpened = false;
 
-  constructor(role: OnlineRole, localFighter: LoadedFighter, callbacks: OnlineSessionCallbacks, rtcConfiguration: RTCConfiguration) {
+  constructor(
+    role: OnlineRole,
+    localFighter: LoadedFighter,
+    hostBackground: RuntimeBattleBackground | undefined,
+    callbacks: OnlineSessionCallbacks,
+    rtcConfiguration: RTCConfiguration,
+  ) {
     this.role = role;
     this.localSlot = slotForRole(role);
     this.localFighter = localFighter;
+    this.hostBackground = role === "host" ? hostBackground : undefined;
+    this.remoteBackgroundReady = role === "host";
     this.callbacks = callbacks;
     this.pc = new RTCPeerConnection(rtcConfiguration);
     this.pc.addEventListener("connectionstatechange", () => {
@@ -173,6 +199,7 @@ class InviteMatchSession {
     this.inputChannel?.close();
     this.pc.close();
     this.revokeRemoteFighter?.();
+    this.revokeRemoteBackground?.();
   }
 
   private assignChannel(channel: RTCDataChannel) {
@@ -191,7 +218,7 @@ class InviteMatchSession {
     channel.addEventListener("open", () => {
       this.channelOpened = true;
       this.waitingForHostToAcceptAnswer = false;
-      this.callbacks.onStatus("Setup channel open. Exchanging fighters...");
+      this.callbacks.onStatus("Setup channel open. Exchanging setup assets...");
       void this.announceLocalFighter();
       this.maybeStartMatch();
     });
@@ -249,27 +276,41 @@ class InviteMatchSession {
       return;
     }
     try {
+      if (this.role === "host") {
+        await this.announceHostBackground();
+      }
       const transfer = await serializeFighterForNetwork(this.localFighter);
       this.callbacks.onStatus("Sending fighter manifest...");
       if (!this.sendSetupMessage({ type: "fighterManifest", fighter: transfer.manifest })) {
         return;
       }
-      await this.sendFighterAssets(transfer.assets, transfer.totalBytes);
-      if (!this.sendSetupMessage({ type: "ready" })) {
-        return;
-      }
-      this.localReadySent = true;
-      this.callbacks.onStatus("Local fighter sent. Waiting for opponent...");
+      await this.sendTransferAssets(transfer.assets, transfer.totalBytes, "fighter");
+      this.localAssetsSent = true;
+      this.callbacks.onStatus("Local fighter sent. Waiting for setup...");
+      this.maybeSendReady();
       this.maybeStartMatch();
     } catch (error) {
       this.fail(normalizeTransferError(error, "Could not send fighter."));
     }
   }
 
-  private async sendFighterAssets(assets: NetworkFighterTransferAsset[], totalBytes: number) {
+  private async announceHostBackground() {
+    const transfer = await serializeBattleBackgroundForNetwork(this.hostBackground);
+    this.callbacks.onStatus("Sending battle background...");
+    if (!this.sendSetupMessage({ type: "stageManifest", background: transfer.manifest })) {
+      throw new Error("Setup channel closed before background manifest could be sent.");
+    }
+    await this.sendTransferAssets(transfer.assets, transfer.totalBytes, "background");
+  }
+
+  private async sendTransferAssets(
+    assets: Array<NetworkFighterTransferAsset | NetworkBackgroundTransferAsset>,
+    totalBytes: number,
+    label: "fighter" | "background",
+  ) {
     const channel = this.setupChannel;
     if (!channel || channel.readyState !== "open") {
-      throw new Error("Setup channel closed before fighter assets could be sent.");
+      throw new Error(`Setup channel closed before ${label} assets could be sent.`);
     }
 
     const maxMessageBytes = getMaxDataChannelMessageBytes(this.pc);
@@ -296,7 +337,7 @@ class InviteMatchSession {
         );
 
         if (maxMessageBytes && envelope.byteLength > maxMessageBytes) {
-          throw new Error("A fighter asset chunk exceeded this browser's WebRTC message size limit.");
+          throw new Error(`A ${label} asset chunk exceeded this browser's WebRTC message size limit.`);
         }
 
         await waitForSetupBuffer(channel);
@@ -306,7 +347,7 @@ class InviteMatchSession {
         const progress = totalBytes > 0 ? Math.floor((sentBytes / totalBytes) * 100) : 100;
         if (progress >= lastProgress + 10 || progress === 100) {
           lastProgress = progress;
-          this.callbacks.onStatus(`Sending fighter assets ${progress}%...`);
+          this.callbacks.onStatus(`Sending ${label} assets ${progress}%...`);
         }
       }
     }
@@ -320,6 +361,10 @@ class InviteMatchSession {
     }
     if (message.type === "fighterManifest") {
       this.receiveFighterManifest(message.fighter);
+      return;
+    }
+    if (message.type === "stageManifest") {
+      this.receiveBackgroundManifest(message.background);
       return;
     }
     if (message.type === "ready") {
@@ -348,12 +393,43 @@ class InviteMatchSession {
     }
   }
 
+  private receiveBackgroundManifest(background: NetworkBattleBackgroundManifest) {
+    if (this.role !== "guest") {
+      this.fail("Only the host can choose the online battle background.");
+      return;
+    }
+    try {
+      this.remoteBackgroundTransfer = new NetworkBackgroundAssetReceiver(background);
+      this.remoteBackgroundTransferFinalizing = false;
+      if (this.remoteBackgroundTransfer.isComplete()) {
+        this.finishRemoteBackgroundTransfer();
+        return;
+      }
+      this.startRemoteTransferTimeout();
+      this.callbacks.onStatus("Receiving host battle background...");
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not read host background manifest."));
+    }
+  }
+
   private async receiveAssetChunk(data: unknown) {
     try {
       const chunk = data instanceof ArrayBuffer || data instanceof Blob ? await parseAssetChunkEnvelope(data) : undefined;
       if (!chunk) {
-        throw new Error("Received a malformed fighter asset chunk.");
+        throw new Error("Received a malformed asset chunk.");
       }
+
+      if (this.remoteBackgroundTransfer?.hasAsset(chunk.header.assetId)) {
+        this.remoteBackgroundTransfer.receiveChunk(chunk.header, chunk.payload);
+        const progress = this.remoteBackgroundTransfer.getProgress();
+        const percent = progress.totalBytes > 0 ? Math.floor((progress.receivedBytes / progress.totalBytes) * 100) : 100;
+        this.callbacks.onStatus(`Receiving host background ${percent}%...`);
+        if (this.remoteBackgroundTransfer.isComplete()) {
+          this.finishRemoteBackgroundTransfer();
+        }
+        return;
+      }
+
       if (!this.remoteTransfer) {
         throw new Error("Received fighter asset data before the fighter manifest.");
       }
@@ -367,7 +443,7 @@ class InviteMatchSession {
         this.finishRemoteFighterTransfer();
       }
     } catch (error) {
-      this.fail(normalizeTransferError(error, "Could not receive opponent fighter."));
+      this.fail(normalizeTransferError(error, "Could not receive setup asset."));
     }
   }
 
@@ -385,6 +461,24 @@ class InviteMatchSession {
       this.maybeStartMatch();
     } catch (error) {
       this.fail(normalizeTransferError(error, "Could not load remote fighter."));
+    }
+  }
+
+  private finishRemoteBackgroundTransfer() {
+    if (!this.remoteBackgroundTransfer || this.remoteBackgroundTransferFinalizing) {
+      return;
+    }
+    this.remoteBackgroundTransferFinalizing = true;
+    try {
+      const loaded = this.remoteBackgroundTransfer.createRuntimeBackground();
+      this.remoteBackground = loaded.background;
+      this.revokeRemoteBackground = loaded.revoke;
+      this.remoteBackgroundReady = true;
+      this.callbacks.onStatus(this.remoteBackground ? "Host background received." : "Host is using the default arena.");
+      this.maybeSendReady();
+      this.maybeStartMatch();
+    } catch (error) {
+      this.fail(normalizeTransferError(error, "Could not load host background."));
     }
   }
 
@@ -409,6 +503,17 @@ class InviteMatchSession {
     }
   }
 
+  private maybeSendReady() {
+    if (this.localReadySent || !this.localAssetsSent || !this.remoteBackgroundReady) {
+      return;
+    }
+    if (!this.sendSetupMessage({ type: "ready" })) {
+      return;
+    }
+    this.localReadySent = true;
+    this.callbacks.onStatus("Local setup ready. Waiting for opponent...");
+  }
+
   private maybeStartMatch() {
     if (
       this.readyStarted ||
@@ -416,6 +521,7 @@ class InviteMatchSession {
       !this.remoteFighter ||
       !this.localReadySent ||
       !this.remoteReady ||
+      !this.remoteBackgroundReady ||
       this.setupChannel?.readyState !== "open" ||
       this.inputChannel?.readyState !== "open"
     ) {
@@ -426,6 +532,7 @@ class InviteMatchSession {
     this.callbacks.onReady({
       localSlot: this.localSlot,
       controller: this.controller,
+      background: this.role === "host" ? this.hostBackground : this.remoteBackground,
       fighters:
         this.localSlot === "p1"
           ? { p1: this.localFighter, p2: this.remoteFighter }
@@ -507,7 +614,7 @@ function normalizeTransferError(error: unknown, fallback: string) {
     return fallback;
   }
   if (/message size|too large|exceeded/i.test(error.message)) {
-    return "Fighter assets are too large for this WebRTC connection. Try a smaller fighter or remove long voice clips.";
+    return "Setup assets are too large for this WebRTC connection. Try a smaller fighter, shorter voice clips, or a smaller background.";
   }
   return error.message || fallback;
 }
