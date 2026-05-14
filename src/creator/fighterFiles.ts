@@ -1,9 +1,11 @@
-import { canvasToPngBlob, NORMALIZED_FRAME_SIZE, normalizeCanvas } from "./imageProcessing";
+import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE, normalizeCanvas } from "./imageProcessing";
 import type { FighterPose, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 
-export const FIGHTER_IMPORT_ACCEPT = ".pungafighter.json,.json,application/json,image/png,image/jpeg,image/webp";
-export const SPRITESHEET_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
+export const FIGHTER_CHARACTER_IMPORT_ACCEPT = ".pungafighter.json,.json,application/json";
+export const FIGHTER_IMAGE_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
+export const FIGHTER_IMPORT_ACCEPT = `${FIGHTER_CHARACTER_IMPORT_ACCEPT},${FIGHTER_IMAGE_IMPORT_ACCEPT}`;
+export const SPRITESHEET_IMPORT_ACCEPT = FIGHTER_IMAGE_IMPORT_ACCEPT;
 
 const CHARACTER_FILE_FORMAT = "punga-fighters.character";
 const CHARACTER_FILE_VERSION = 1;
@@ -43,11 +45,10 @@ export interface ImportedFighterAssets {
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }
 
-interface DecodedImage {
-  source: CanvasImageSource;
-  width: number;
-  height: number;
-  close: () => void;
+export interface ImportedSpritesheetAssets {
+  name: string;
+  sourceBlobs: Record<FighterPose, Blob>;
+  frameBlobs: Record<FighterPose, Blob>;
 }
 
 export async function downloadFighterExport(fighter: LoadedFighter): Promise<void> {
@@ -116,8 +117,27 @@ export async function readFighterImportFile(file: File): Promise<ImportedFighter
   throw new Error("Choose a Punga fighter JSON file or a PNG, JPEG, or WebP spritesheet.");
 }
 
+export async function readFighterCharacterFile(file: File): Promise<ImportedFighterAssets> {
+  if (!isJsonFile(file)) {
+    throw new Error("Choose a Punga fighter JSON file.");
+  }
+  return readCharacterJsonFile(file);
+}
+
 export async function readSpritesheetFighterFile(file: File): Promise<ImportedFighterAssets> {
-  const image = await decodeImageFile(file);
+  const imported = await readSpritesheetDraftFile(file);
+  return {
+    name: imported.name,
+    frameBlobs: imported.frameBlobs,
+    voiceBlobs: {},
+  };
+}
+
+export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpritesheetAssets> {
+  if (!isImageFile(file)) {
+    throw new Error("Choose a PNG, JPEG, or WebP spritesheet.");
+  }
+  const image = await decodeImageBlob(file, "Could not read spritesheet image.");
   try {
     const horizontal = image.width >= image.height;
     const columns = horizontal ? FIGHTER_POSES.length : 1;
@@ -129,7 +149,7 @@ export async function readSpritesheetFighterFile(file: File): Promise<ImportedFi
       throw new Error("Spritesheet cells are too small to import.");
     }
 
-    const framePairs = await Promise.all(
+    const pairs = await Promise.all(
       FIGHTER_POSES.map(async (pose, index) => {
         const cellCanvas = document.createElement("canvas");
         cellCanvas.width = Math.round(cellWidth);
@@ -142,15 +162,19 @@ export async function readSpritesheetFighterFile(file: File): Promise<ImportedFi
         const sy = Math.floor(index / columns) * cellHeight;
         ctx.drawImage(image.source, sx, sy, cellWidth, cellHeight, 0, 0, cellCanvas.width, cellCanvas.height);
 
+        const sourceBlob = await canvasToPngBlob(cellCanvas);
         const normalized = normalizeCanvas(cellCanvas, { paddingScale: 1, anchorY: 0.9 });
-        return [pose, await canvasToPngBlob(normalized)] as const;
+        return [pose, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
       }),
     );
 
+    const sourcePairs = pairs.map(([pose, blobs]) => [pose, blobs.sourceBlob] as const);
+    const framePairs = pairs.map(([pose, blobs]) => [pose, blobs.frameBlob] as const);
+
     return {
       name: nameFromFile(file.name),
+      sourceBlobs: Object.fromEntries(sourcePairs) as Record<FighterPose, Blob>,
       frameBlobs: Object.fromEntries(framePairs) as Record<FighterPose, Blob>,
-      voiceBlobs: {},
     };
   } finally {
     image.close();
@@ -244,34 +268,6 @@ async function dataUrlToBlob(dataUrl: string) {
     throw new Error("Could not read fighter asset.");
   }
   return response.blob();
-}
-
-async function decodeImageFile(file: File): Promise<DecodedImage> {
-  if ("createImageBitmap" in window) {
-    const bitmap = await createImageBitmap(file);
-    return {
-      source: bitmap,
-      width: bitmap.width,
-      height: bitmap.height,
-      close: () => bitmap.close(),
-    };
-  }
-
-  const url = URL.createObjectURL(file);
-  const image = new Image();
-  image.decoding = "async";
-  await new Promise<void>((resolve, reject) => {
-    image.addEventListener("load", () => resolve(), { once: true });
-    image.addEventListener("error", () => reject(new Error("Could not read spritesheet image.")), { once: true });
-    image.src = url;
-  });
-
-  return {
-    source: image,
-    width: image.naturalWidth || image.width,
-    height: image.naturalHeight || image.height,
-    close: () => URL.revokeObjectURL(url),
-  };
 }
 
 function isJsonFile(file: File) {

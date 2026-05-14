@@ -1,6 +1,6 @@
 # Punga Fighters
 
-Punga Fighters is an original browser fighting-game prototype inspired by camera-first character creators. Players capture webcam poses, segment themselves from the background in-browser, save a fighter locally, and battle in same-device or invite-code WebRTC 1v1 matches.
+Punga Fighters is an original browser fighting-game prototype inspired by camera-first character creators. Players capture or import action poses, optionally segment themselves from the background in-browser, save a fighter locally, and battle in same-device or invite-code WebRTC 1v1 matches.
 
 This is not a Photo Dojo clone and does not use Nintendo branding, names, or assets.
 
@@ -30,8 +30,9 @@ Open the local Vite URL shown in the terminal.
 - WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
-- Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
-- Character export for local `.pungafighter.json` files, with creator-side imports for character files and simple spritesheet images.
+- Creator-side segmentation controls for per-action capture delays, MediaPipe mask tuning, and Transformers.js model selection.
+- Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips.
+- Character export for local `.pungafighter.json` files, with creator-side imports for character files, simple spritesheet images, and single action images.
 - Custom battle background image import for local fights and host-selected online arenas.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
@@ -40,7 +41,9 @@ Open the local Vite URL shown in the terminal.
 
 Use the fight setup roster to export any fighter as a `.pungafighter.json` file. The file contains the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
 
-Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Imports accept either `.pungafighter.json` or a PNG, JPEG, or WebP spritesheet. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom. PNG or WebP keeps transparent cutouts intact.
+Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Use the top-level fighter import for `.pungafighter.json` files, the strip import for a PNG, JPEG, or WebP spritesheet, or each action card's import button for one pose at a time. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom.
+
+Captured, single-image, and spritesheet sources are saveable immediately as normalized frames. Use `Process` on an action, or `Process all`, to run the selected browser-side cutout engine and replace those frames with transparent cutouts.
 
 ## Controls
 

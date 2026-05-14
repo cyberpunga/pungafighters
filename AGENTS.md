@@ -42,6 +42,7 @@
 - Keep center playfield readable during battle.
 - When adding assets or generated media, prefer local placeholders or user-generated content.
 - Keep saved character import in the creator/editor flow so imported fighters load as editable drafts before saving.
+- Keep creator image acquisition separate from cutout processing: captured, per-action imported, and spritesheet-split source images should be saveable as normalized frames, with processing as an optional per-action or all-action step.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
 - Keep provider-specific controls near the provider implementation and pass them through the shared `SegmentationProvider` options shape.

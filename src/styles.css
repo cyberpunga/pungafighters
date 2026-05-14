@@ -96,7 +96,6 @@ button:disabled {
 
 .nav-cluster,
 .action-row,
-.camera-actions,
 .voice-row {
   display: flex;
   align-items: center;
@@ -238,12 +237,11 @@ button:disabled {
 
 .creator-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(300px, 410px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   padding: clamp(16px, 3vw, 32px);
 }
 
-.creator-camera,
 .creator-panel,
 .settings-view,
 .select-view {
@@ -252,36 +250,30 @@ button:disabled {
   border-radius: 8px;
 }
 
-.creator-camera {
-  min-height: 560px;
+.creator-workspace {
   display: grid;
-  grid-template-rows: minmax(360px, 1fr) auto;
-  overflow: hidden;
+  gap: 16px;
+  align-content: start;
 }
 
-.creator-camera video {
-  width: 100%;
-  height: 100%;
-  min-height: 360px;
-  object-fit: cover;
-  background: #09080d;
+.creator-name-field {
+  max-width: 460px;
 }
 
-.camera-actions {
+.creator-source-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
   padding: 14px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  border-top: 1px solid var(--line);
-}
-
-.capture-delay-control {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(44px, 1fr));
-  gap: 5px;
-  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #111018;
+  background: rgba(29, 26, 40, 0.8);
+}
+
+.source-action {
+  min-height: 50px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 .delay-option {
@@ -377,13 +369,28 @@ button:disabled {
 
 .pose-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
-.pose-tile {
-  min-height: 112px;
+.pose-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: 16px;
   border: 1px solid var(--line);
+  background: rgba(40, 35, 55, 0.76);
+  border-radius: 8px;
+}
+
+.pose-card.complete {
+  border-color: rgba(46, 196, 182, 0.52);
+}
+
+.pose-frame-preview {
+  min-height: 220px;
+  aspect-ratio: 4 / 3;
   background:
     linear-gradient(45deg, rgba(248, 244, 223, 0.14) 25%, transparent 25%),
     linear-gradient(-45deg, rgba(248, 244, 223, 0.14) 25%, transparent 25%),
@@ -403,24 +410,194 @@ button:disabled {
   text-transform: capitalize;
   font-weight: 900;
   overflow: hidden;
+  border: 1px solid rgba(248, 244, 223, 0.08);
 }
 
-.pose-tile.active {
-  border-color: var(--gold);
-}
-
-.cutout-preview {
-  display: grid;
-  place-items: center;
+.pose-frame-preview img {
   width: 100%;
-  height: 112px;
+  height: 100%;
+  min-height: 220px;
+  object-fit: contain;
   background: rgba(17, 16, 24, 0.44);
 }
 
-.cutout-preview img {
+.pose-frame-preview video {
+  display: block;
   width: 100%;
-  height: 112px;
-  object-fit: contain;
+  height: 100%;
+  min-height: 220px;
+  object-fit: cover;
+  background: #09080d;
+}
+
+.pose-frame-preview.live {
+  background: #09080d;
+}
+
+.pose-card-body {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.pose-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pose-card-header strong {
+  text-transform: capitalize;
+}
+
+.pose-card-header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pose-delay-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(38px, 1fr));
+  gap: 5px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.pose-action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 42px;
+  gap: 8px;
+}
+
+.pose-action-button {
+  min-height: 42px;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.pose-action-button svg {
+  flex: 0 0 auto;
+}
+
+.pose-settings-button {
+  padding: 0;
+}
+
+.sound-section,
+.creator-footer {
+  border: 1px solid var(--line);
+  background: rgba(29, 26, 40, 0.8);
+  border-radius: 8px;
+}
+
+.sound-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.sound-section-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sound-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.62);
+}
+
+.sound-card-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sound-card-title strong {
+  text-transform: capitalize;
+}
+
+.sound-card-title span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sound-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.creator-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+}
+
+.creator-status {
+  display: grid;
+  gap: 6px;
+}
+
+.creator-drawer-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  justify-items: end;
+}
+
+.creator-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(17, 16, 24, 0.52);
+}
+
+.creator-settings-drawer {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 390px);
+  min-height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 18px;
+  border-left: 1px solid var(--line);
+  background: rgba(29, 26, 40, 0.96);
+  box-shadow: -18px 0 36px rgba(0, 0, 0, 0.28);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .helper-text {
@@ -911,6 +1088,37 @@ button:disabled {
 
   .stage-picker {
     grid-template-columns: 1fr;
+  }
+
+  .sound-grid,
+  .creator-footer {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .creator-source-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pose-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pose-frame-preview,
+  .pose-frame-preview img,
+  .pose-frame-preview video {
+    min-height: 220px;
+    height: 220px;
+  }
+
+  .pose-action-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 42px;
+  }
+
+  .sound-card {
+    align-items: start;
+    flex-direction: column;
   }
 }
 
