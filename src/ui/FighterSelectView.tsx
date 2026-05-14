@@ -1,14 +1,19 @@
-import { Download, Gamepad2, RadioTower, Trash2, Upload } from "lucide-react";
+import { Download, Gamepad2, ImagePlus, RadioTower, RotateCcw, Trash2, Upload } from "lucide-react";
 import { useRef } from "react";
 import { FIGHTER_IMPORT_ACCEPT } from "../creator/fighterFiles";
-import type { LoadedFighter } from "../types/game";
+import { BATTLE_BACKGROUND_IMPORT_ACCEPT } from "../storage/db";
+import type { LoadedBattleBackground, LoadedFighter } from "../types/game";
 
 export function FighterSelectView(props: {
   fighters: LoadedFighter[];
   selected: { p1: string; p2: string };
   fileStatus: string;
+  backgroundStatus: string;
+  battleBackground?: LoadedBattleBackground;
   onSelected: (next: { p1: string; p2: string }) => void;
   onImportFile: (file: File) => Promise<void>;
+  onImportBackgroundFile: (file: File) => Promise<void>;
+  onClearBackground: () => Promise<void>;
   onExport: (fighter: LoadedFighter) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onFight: () => void;
@@ -16,6 +21,7 @@ export function FighterSelectView(props: {
   onJoinOnline: () => void;
 }) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const backgroundInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <section className="select-view">
@@ -54,6 +60,41 @@ export function FighterSelectView(props: {
             <Gamepad2 size={18} />
             Start Battle
           </button>
+        </div>
+      </div>
+      <div className="stage-picker">
+        <div className="stage-preview" aria-hidden="true">
+          {props.battleBackground ? <img src={props.battleBackground.imageUrl} alt="" /> : <div className="stage-preview-default" />}
+        </div>
+        <div className="stage-details">
+          <div className="stage-title">
+            <span className="field-label-text">Battle Background</span>
+            <strong>{props.battleBackground?.name ?? "Default Arena"}</strong>
+          </div>
+          <div className="action-row">
+            <button className="secondary-button" type="button" onClick={() => backgroundInputRef.current?.click()}>
+              <ImagePlus size={18} />
+              Import Background
+            </button>
+            <input
+              ref={backgroundInputRef}
+              className="sr-only"
+              type="file"
+              accept={BATTLE_BACKGROUND_IMPORT_ACCEPT}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                if (file) {
+                  void props.onImportBackgroundFile(file);
+                }
+              }}
+            />
+            <button className="secondary-button" type="button" onClick={() => void props.onClearBackground()} disabled={!props.battleBackground}>
+              <RotateCcw size={18} />
+              Reset
+            </button>
+          </div>
+          {props.backgroundStatus && <p className="helper-text">{props.backgroundStatus}</p>}
         </div>
       </div>
       {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}

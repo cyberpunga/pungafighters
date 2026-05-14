@@ -1,11 +1,18 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { BattleConfig, LoadedFighter, PlayerSlot } from "../types/game";
+import type { BattleConfig, LoadedBattleBackground, LoadedFighter, PlayerSlot } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport, readFighterImportFile } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
-import { deleteFighter, listLoadedFighters, saveImportedFighter } from "../storage/db";
+import {
+  clearBattleBackgroundImage,
+  deleteFighter,
+  getLoadedBattleBackground,
+  listLoadedFighters,
+  saveBattleBackgroundImage,
+  saveImportedFighter,
+} from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import { FighterSelectView } from "./FighterSelectView";
@@ -40,7 +47,18 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [onlineBattle, setOnlineBattle] = useState<OnlineBattle | undefined>();
   const [fileStatus, setFileStatus] = useState("");
+  const [backgroundStatus, setBackgroundStatus] = useState("");
+  const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
+  const battleBackgroundUrlRef = useRef<string | undefined>();
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
+
+  const setLoadedBattleBackground = useCallback((next: LoadedBattleBackground | undefined) => {
+    if (battleBackgroundUrlRef.current && battleBackgroundUrlRef.current !== next?.imageUrl) {
+      URL.revokeObjectURL(battleBackgroundUrlRef.current);
+    }
+    battleBackgroundUrlRef.current = next?.imageUrl;
+    setBattleBackground(next);
+  }, []);
 
   const refreshFighters = useCallback(async () => {
     setLoading(true);
@@ -53,9 +71,26 @@ export function App() {
     }));
   }, []);
 
+  const refreshBattleBackground = useCallback(async () => {
+    setLoadedBattleBackground(await getLoadedBattleBackground());
+  }, [setLoadedBattleBackground]);
+
   useEffect(() => {
     void refreshFighters();
   }, [refreshFighters]);
+
+  useEffect(() => {
+    void refreshBattleBackground();
+  }, [refreshBattleBackground]);
+
+  useEffect(
+    () => () => {
+      if (battleBackgroundUrlRef.current) {
+        URL.revokeObjectURL(battleBackgroundUrlRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (view !== "battle") {
@@ -78,6 +113,30 @@ export function App() {
     },
     [refreshFighters],
   );
+
+  const importBattleBackgroundFile = useCallback(
+    async (file: File) => {
+      setBackgroundStatus(`Importing ${file.name}...`);
+      try {
+        const background = await saveBattleBackgroundImage(file);
+        setLoadedBattleBackground(background);
+        setBackgroundStatus(`${background.name} set as battle background.`);
+      } catch (error) {
+        setBackgroundStatus(error instanceof Error ? error.message : "Could not import background.");
+      }
+    },
+    [setLoadedBattleBackground],
+  );
+
+  const clearBattleBackground = useCallback(async () => {
+    try {
+      await clearBattleBackgroundImage();
+      setLoadedBattleBackground(undefined);
+      setBackgroundStatus("Default arena restored.");
+    } catch (error) {
+      setBackgroundStatus(error instanceof Error ? error.message : "Could not reset background.");
+    }
+  }, [setLoadedBattleBackground]);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
     setFileStatus(`Exporting ${fighter.name}...`);
@@ -110,8 +169,12 @@ export function App() {
           fighters={fighters}
           selected={selected}
           fileStatus={fileStatus}
+          backgroundStatus={backgroundStatus}
+          battleBackground={battleBackground}
           onSelected={setSelected}
           onImportFile={importFighterFile}
+          onImportBackgroundFile={importBattleBackgroundFile}
+          onClearBackground={clearBattleBackground}
           onExport={exportFighterFile}
           onDelete={async (id) => {
             await deleteFighter(id);
@@ -159,6 +222,7 @@ export function App() {
           networkController={onlineBattle.controller}
           config={onlineBattle.config}
           fighters={onlineBattle.fighters}
+          background={battleBackground}
           onExit={() => {
             setOnlineBattle(undefined);
             navigate("select", { replace: true });
@@ -169,6 +233,7 @@ export function App() {
         <BattleView
           config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: selected.p1, playerTwoFighterId: selected.p2 }}
           fighters={battleFighters}
+          background={battleBackground}
           onExit={() => navigate("select", { replace: true })}
         />
       )}

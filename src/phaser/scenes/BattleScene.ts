@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { BattleConfig, FighterPose, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
+import type { BattleConfig, FighterPose, LoadedBattleBackground, LoadedFighter, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
 import {
   BATTLE_TICK_SECONDS,
@@ -31,9 +31,19 @@ export interface BattleSceneOptions {
   mode?: "local" | "online";
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
+  background?: LoadedBattleBackground;
 }
 
 const FIGHTER_DISPLAY_SIZE = 190;
+const CUSTOM_STAGE_TEXTURE = "custom-stage-background";
+const ARENA_WIDTH = 960;
+const ARENA_HEIGHT = 540;
+const ARENA_CENTER_X = ARENA_WIDTH / 2;
+const ARENA_CENTER_Y = ARENA_HEIGHT / 2;
+const CUSTOM_STAGE_OVERSCAN = 1.08;
+const CUSTOM_STAGE_HORIZONTAL_DRIFT = 0.12;
+const CUSTOM_STAGE_VERTICAL_DRIFT = 0.04;
+const CUSTOM_STAGE_PAN_EASE = 4.5;
 
 export class BattleScene extends Phaser.Scene {
   private state: BattleState;
@@ -43,10 +53,12 @@ export class BattleScene extends Phaser.Scene {
   private readonly mode: "local" | "online";
   private readonly localSlot: PlayerSlot;
   private readonly networkController?: NetworkInputController;
+  private readonly background?: LoadedBattleBackground;
   private views?: Record<PlayerSlot, FighterView>;
   private timerText?: Phaser.GameObjects.Text;
   private messageText?: Phaser.GameObjects.Text;
   private restartHint?: Phaser.GameObjects.Text;
+  private stageImage?: Phaser.GameObjects.Image;
   private pressedCodes = new Set<string>();
   private lastHitAt = 0;
   private accumulator = 0;
@@ -71,6 +83,7 @@ export class BattleScene extends Phaser.Scene {
     this.mode = options.mode ?? "local";
     this.localSlot = options.localSlot ?? "p1";
     this.networkController = options.networkController;
+    this.background = options.background;
     this.state = createBattleState(config, {
       p1: { id: fighters.p1.id, name: fighters.p1.name },
       p2: { id: fighters.p2.id, name: fighters.p2.name },
@@ -78,6 +91,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   preload() {
+    if (this.background?.imageUrl) {
+      this.load.image(CUSTOM_STAGE_TEXTURE, this.background.imageUrl);
+    }
     this.loadFighterTextures("p1", this.fighters.p1);
     this.loadFighterTextures("p2", this.fighters.p2);
   }
@@ -136,17 +152,33 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createArena() {
-    const bg = this.add.graphics();
-    bg.fillGradientStyle(0x25223a, 0x25223a, 0x101018, 0x101018, 1);
-    bg.fillRect(0, 0, 960, 540);
-    bg.fillStyle(0x2ec4b6, 0.14);
-    bg.fillRect(0, 428, 960, 112);
-    bg.lineStyle(3, 0xf8f4df, 0.4);
-    bg.lineBetween(0, 430, 960, 430);
+    const hasCustomStage = this.background?.imageUrl && this.textures.exists(CUSTOM_STAGE_TEXTURE);
+    const bg = this.add.graphics().setDepth(-2);
 
-    for (let x = 80; x < 960; x += 140) {
-      bg.lineStyle(2, 0xf45b69, 0.18);
-      bg.lineBetween(x, 430, x + 80, 540);
+    if (hasCustomStage) {
+      this.stageImage = this.add.image(ARENA_CENTER_X, ARENA_CENTER_Y, CUSTOM_STAGE_TEXTURE).setOrigin(0.5).setDepth(-4);
+      const coverScale =
+        Math.max(ARENA_WIDTH / Math.max(this.stageImage.width, 1), ARENA_HEIGHT / Math.max(this.stageImage.height, 1)) *
+        CUSTOM_STAGE_OVERSCAN;
+      this.stageImage.setScale(coverScale);
+      bg.fillStyle(0x08070d, 0.28);
+      bg.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+      bg.fillStyle(0x08070d, 0.4);
+      bg.fillRect(0, 428, ARENA_WIDTH, 112);
+    } else {
+      this.stageImage = undefined;
+      bg.fillGradientStyle(0x25223a, 0x25223a, 0x101018, 0x101018, 1);
+      bg.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    }
+
+    bg.fillStyle(0x2ec4b6, hasCustomStage ? 0.18 : 0.14);
+    bg.fillRect(0, 428, ARENA_WIDTH, 112);
+    bg.lineStyle(3, 0xf8f4df, 0.4);
+    bg.lineBetween(0, 430, ARENA_WIDTH, 430);
+
+    for (let x = 80; x < ARENA_WIDTH; x += 140) {
+      bg.lineStyle(2, 0xf45b69, hasCustomStage ? 0.24 : 0.18);
+      bg.lineBetween(x, 430, x + 80, ARENA_HEIGHT);
     }
   }
 
@@ -323,6 +355,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const deltaSeconds = this.game.loop.delta / 1000;
+    this.updateStageParallax(deltaSeconds);
 
     (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
       const runtime = this.state.fighters[slot];
@@ -353,6 +386,28 @@ export class BattleScene extends Phaser.Scene {
     this.messageText?.setText(message);
     this.messageText?.setAlpha(message ? 1 : 0);
     this.restartHint?.setAlpha(this.state.status === "matchOver" ? 1 : 0);
+  }
+
+  private updateStageParallax(deltaSeconds: number) {
+    if (!this.stageImage) {
+      return;
+    }
+
+    const p1 = this.state.fighters.p1;
+    const p2 = this.state.fighters.p2;
+    const midpointX = (p1.x + p2.x) / 2;
+    const averageAirHeight = Math.max(0, ((this.state.groundY - p1.y) + (this.state.groundY - p2.y)) / 2);
+    const maxPanX = Math.max(0, (this.stageImage.displayWidth - ARENA_WIDTH) / 2);
+    const maxPanY = Math.max(0, (this.stageImage.displayHeight - ARENA_HEIGHT) / 2);
+    const targetX =
+      ARENA_CENTER_X - Phaser.Math.Clamp((midpointX - ARENA_CENTER_X) * CUSTOM_STAGE_HORIZONTAL_DRIFT, -maxPanX, maxPanX);
+    const targetY = ARENA_CENTER_Y + Phaser.Math.Clamp(averageAirHeight * CUSTOM_STAGE_VERTICAL_DRIFT, -maxPanY, maxPanY);
+    const ease = Phaser.Math.Clamp(deltaSeconds * CUSTOM_STAGE_PAN_EASE, 0, 1);
+
+    this.stageImage.setPosition(
+      Phaser.Math.Linear(this.stageImage.x, targetX, ease),
+      Phaser.Math.Linear(this.stageImage.y, targetY, ease),
+    );
   }
 
   private getFighterTexture(slot: PlayerSlot, pose: FighterPose) {

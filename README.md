@@ -32,6 +32,7 @@ Open the local Vite URL shown in the terminal.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for capture delay, MediaPipe mask tuning, and Transformers.js model selection.
 - Character export/import for local `.pungafighter.json` files and simple spritesheet image imports.
+- Custom battle background image import for the local arena.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
 
@@ -104,4 +105,4 @@ GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafi
 
 ## Privacy
 
-Punga Fighters is local-first. Captured images, generated cutouts, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. Online invite matches send the selected fighter assets directly to the opponent for that match and do not save remote fighters locally. No backend or account system exists in this prototype.
+Punga Fighters is local-first. Captured images, generated cutouts, custom battle backgrounds, and voice clips are stored in the browser's IndexedDB database named `punga-fighters`. Online invite matches send the selected fighter assets directly to the opponent for that match and do not save remote fighters or custom backgrounds locally. No backend or account system exists in this prototype.

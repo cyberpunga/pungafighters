@@ -49,6 +49,16 @@ export interface BattleConfig {
   stageId: "dojo-v1";
 }
 
+export interface LoadedBattleBackground {
+  id: "custom";
+  name: string;
+  blobId: string;
+  imageUrl: string;
+  mimeType: string;
+  size: number;
+  updatedAt: string;
+}
+
 export interface LoadedFighter extends FighterProfile {
   frameUrls: Record<FighterPose, string>;
   voiceUrls: Partial<Record<VoiceClipType, string>>;

@@ -1,7 +1,23 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../types/game";
+import type { FighterPose, FighterProfile, LoadedBattleBackground, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES } from "../types/game";
 import { getDefaultFighters } from "../game/content/defaultFighters";
+
+export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
+
+const BATTLE_BACKGROUND_SETTING_KEY = "battle-background";
+const BATTLE_BACKGROUND_BLOB_ID = "battle-background:current";
+const BATTLE_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
+const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+interface BattleBackgroundRecord {
+  id: "custom";
+  name: string;
+  blobId: string;
+  mimeType: string;
+  size: number;
+  updatedAt: string;
+}
 
 interface PungaFightersDb extends DBSchema {
   fighters: {
@@ -149,6 +165,54 @@ export async function deleteFighter(id: string) {
   await tx.done;
 }
 
+export async function getLoadedBattleBackground(): Promise<LoadedBattleBackground | undefined> {
+  const db = await getDb();
+  const record = await db.get("settings", BATTLE_BACKGROUND_SETTING_KEY);
+  if (!isBattleBackgroundRecord(record)) {
+    return undefined;
+  }
+
+  const blob = await db.get("imageBlobs", record.blobId);
+  return blob ? loadBattleBackground(record, blob) : undefined;
+}
+
+export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattleBackground> {
+  if (!isSupportedBattleBackgroundFile(file)) {
+    throw new Error("Choose a PNG, JPEG, or WebP background image.");
+  }
+  if (file.size > BATTLE_BACKGROUND_MAX_BYTES) {
+    throw new Error("Choose a background image under 10 MB.");
+  }
+
+  const db = await getDb();
+  const now = new Date().toISOString();
+  const record: BattleBackgroundRecord = {
+    id: "custom",
+    name: cleanBackgroundName(file.name),
+    blobId: BATTLE_BACKGROUND_BLOB_ID,
+    mimeType: file.type || getImageMimeTypeFromName(file.name) || "image/png",
+    size: file.size,
+    updatedAt: now,
+  };
+  const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
+  await Promise.all([
+    tx.objectStore("imageBlobs").put(file, BATTLE_BACKGROUND_BLOB_ID),
+    tx.objectStore("settings").put(record, BATTLE_BACKGROUND_SETTING_KEY),
+  ]);
+  await tx.done;
+  return loadBattleBackground(record, file);
+}
+
+export async function clearBattleBackgroundImage(): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
+  await Promise.all([
+    tx.objectStore("imageBlobs").delete(BATTLE_BACKGROUND_BLOB_ID),
+    tx.objectStore("settings").delete(BATTLE_BACKGROUND_SETTING_KEY),
+  ]);
+  await tx.done;
+}
+
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const db = await getDb();
   const value = await db.get("settings", key);
@@ -191,4 +255,49 @@ async function loadFighterAssets(fighter: FighterProfile): Promise<LoadedFighter
     frameUrls: Object.fromEntries(framePairs) as LoadedFighter["frameUrls"],
     voiceUrls: Object.fromEntries(voicePairs.filter(([, url]) => Boolean(url))) as Partial<Record<VoiceClipType, string>>,
   };
+}
+
+function loadBattleBackground(record: BattleBackgroundRecord, blob: Blob): LoadedBattleBackground {
+  return {
+    ...record,
+    imageUrl: URL.createObjectURL(blob),
+  };
+}
+
+function isSupportedBattleBackgroundFile(file: File) {
+  return BATTLE_BACKGROUND_MIME_TYPES.has(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+}
+
+function getImageMimeTypeFromName(filename: string) {
+  if (/\.png$/i.test(filename)) {
+    return "image/png";
+  }
+  if (/\.jpe?g$/i.test(filename)) {
+    return "image/jpeg";
+  }
+  if (/\.webp$/i.test(filename)) {
+    return "image/webp";
+  }
+  return undefined;
+}
+
+function cleanBackgroundName(filename: string) {
+  const basename = filename.replace(/\.[^.]+$/, "");
+  const cleaned = basename.trim().replace(/\s+/g, " ");
+  return cleaned ? cleaned.slice(0, 48) : "Custom Background";
+}
+
+function isBattleBackgroundRecord(value: unknown): value is BattleBackgroundRecord {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record.id === "custom" &&
+    typeof record.name === "string" &&
+    typeof record.blobId === "string" &&
+    typeof record.mimeType === "string" &&
+    typeof record.size === "number" &&
+    typeof record.updatedAt === "string"
+  );
 }

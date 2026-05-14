@@ -474,6 +474,66 @@ button:disabled {
   margin-bottom: 18px;
 }
 
+.stage-picker {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.stage-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.stage-preview img,
+.stage-preview-default {
+  width: 100%;
+  height: 100%;
+}
+
+.stage-preview img {
+  display: block;
+  object-fit: cover;
+}
+
+.stage-preview-default {
+  background:
+    linear-gradient(180deg, rgba(37, 34, 58, 0.95), rgba(16, 16, 24, 0.96)),
+    linear-gradient(90deg, transparent 0 14%, rgba(244, 91, 105, 0.2) 14% 15%, transparent 15% 100%),
+    linear-gradient(90deg, transparent 0 34%, rgba(46, 196, 182, 0.22) 34% 35%, transparent 35% 100%);
+}
+
+.stage-details,
+.stage-title {
+  display: grid;
+}
+
+.stage-details {
+  gap: 10px;
+  min-width: 0;
+}
+
+.stage-title {
+  gap: 4px;
+}
+
+.stage-title strong {
+  overflow: hidden;
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .fighter-card {
   display: flex;
   align-items: center;
@@ -672,6 +732,10 @@ button:disabled {
   .duel-header {
     align-items: start;
     flex-direction: column;
+  }
+
+  .stage-picker {
+    grid-template-columns: 1fr;
   }
 }
 
