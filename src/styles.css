@@ -489,6 +489,12 @@ button:disabled {
   width: 100%;
   text-align: left;
   font-weight: 900;
+  overflow: hidden;
+}
+
+.fighter-pick > span {
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 .fighter-pick img {
