@@ -15,6 +15,7 @@ const HURTBOX = {
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
+const SUPER_FREEZE_FRAMES = 42;
 
 type AttackKind = "punch" | "kick" | "special";
 
@@ -97,6 +98,12 @@ export interface FighterRuntime {
   hitStun: number;
 }
 
+export interface SuperFreezeState {
+  attacker: PlayerSlot;
+  remainingFrames: number;
+  startedAt: number;
+}
+
 export interface BattleState {
   frame: number;
   status: "countdown" | "running" | "roundOver" | "matchOver";
@@ -111,6 +118,8 @@ export interface BattleState {
   roundWinner?: PlayerSlot;
   message: string;
   lastHit?: { attacker: PlayerSlot; defender: PlayerSlot; damage: number; at: number };
+  lastSuper?: { attacker: PlayerSlot; at: number };
+  superFreeze?: SuperFreezeState;
 }
 
 interface Box {
@@ -181,9 +190,22 @@ export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot)
     return advanceFrame(next);
   }
 
+  if (next.superFreeze) {
+    next.superFreeze.remainingFrames -= 1;
+    if (next.superFreeze.remainingFrames <= 0) {
+      next.superFreeze = undefined;
+    }
+    return advanceFrame(next);
+  }
+
   next.timer = Math.max(0, next.timer - dt);
-  updateFighter(next.fighters.p1, next.fighters.p2, inputs.p1 ?? createEmptyActions(), dt);
-  updateFighter(next.fighters.p2, next.fighters.p1, inputs.p2 ?? createEmptyActions(), dt);
+  const p1Attack = updateFighter(next.fighters.p1, next.fighters.p2, inputs.p1 ?? createEmptyActions(), dt);
+  const p2Attack = updateFighter(next.fighters.p2, next.fighters.p1, inputs.p2 ?? createEmptyActions(), dt);
+  if (p1Attack === "special") {
+    startSuperFreeze(next, "p1");
+  } else if (p2Attack === "special") {
+    startSuperFreeze(next, "p2");
+  }
   resolveAttack(next, "p1", "p2");
   resolveAttack(next, "p2", "p1");
 
@@ -211,6 +233,8 @@ export function getBattleChecksum(state: BattleState): string {
     fixed(state.timer),
     state.winner ?? "",
     state.roundWinner ?? "",
+    state.lastSuper ? `${state.lastSuper.attacker}:${state.lastSuper.at}` : "",
+    state.superFreeze ? `${state.superFreeze.attacker}:${state.superFreeze.remainingFrames}:${state.superFreeze.startedAt}` : "",
     fighterChecksum(p1),
     fighterChecksum(p2),
   ].join("|");
@@ -255,6 +279,8 @@ function cloneState(state: BattleState): BattleState {
       p2: { ...state.fighters.p2, attack: state.fighters.p2.attack && { ...state.fighters.p2.attack } },
     },
     lastHit: state.lastHit && { ...state.lastHit },
+    lastSuper: state.lastSuper && { ...state.lastSuper },
+    superFreeze: state.superFreeze && { ...state.superFreeze },
   };
 }
 
@@ -263,7 +289,9 @@ function updateFighter(
   opponent: FighterRuntime,
   input: ReturnType<typeof createEmptyActions>,
   dt: number,
-) {
+): AttackKind | undefined {
+  let startedAttack: AttackKind | undefined;
+
   fighter.facing = fighter.x <= opponent.x ? 1 : -1;
   fighter.cooldown = Math.max(0, fighter.cooldown - dt);
   fighter.hitStun = Math.max(0, fighter.hitStun - dt);
@@ -288,6 +316,7 @@ function updateFighter(
       fighter.cooldown = requestedAttack.duration + requestedAttack.cooldown;
       fighter.hasHitThisAttack = false;
       fighter.pose = requestedAttack.pose;
+      startedAttack = requestedAttack.kind;
     } else {
       fighter.pose = "idle";
     }
@@ -308,6 +337,8 @@ function updateFighter(
     fighter.velocityY = 0;
   }
   fighter.x = clamp(fighter.x, 80, ARENA_WIDTH - 80);
+
+  return startedAttack;
 }
 
 function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlot: PlayerSlot) {
@@ -366,6 +397,7 @@ function finishRound(state: BattleState) {
   state.fighters[roundWinner].roundsWon += 1;
   state.message = `${state.fighters[roundWinner].name} takes the round`;
   state.countdown = 2.25;
+  state.superFreeze = undefined;
 
   if (state.fighters[roundWinner].roundsWon >= Math.ceil(state.config.roundCount / 2)) {
     state.winner = roundWinner;
@@ -386,7 +418,18 @@ function resetRound(state: BattleState) {
   state.status = "countdown";
   state.roundWinner = undefined;
   state.lastHit = undefined;
+  state.lastSuper = undefined;
+  state.superFreeze = undefined;
   state.message = "Ready";
+}
+
+function startSuperFreeze(state: BattleState, attacker: PlayerSlot) {
+  state.superFreeze = {
+    attacker,
+    remainingFrames: SUPER_FREEZE_FRAMES,
+    startedAt: state.frame,
+  };
+  state.lastSuper = { attacker, at: state.frame };
 }
 
 function clamp(value: number, min: number, max: number) {

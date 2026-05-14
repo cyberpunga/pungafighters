@@ -44,6 +44,28 @@ describe("battle simulation", () => {
     expect(state.lastHit?.at).toBeLessThan(state.frame);
   });
 
+  it("freezes the simulation when a special starts before the active attack advances", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), special: true },
+      p2: createEmptyActions(),
+    });
+    const attackElapsedAtFreezeStart = state.fighters.p1.attackElapsed;
+    const timerAtFreezeStart = state.timer;
+
+    expect(state.lastSuper).toMatchObject({ attacker: "p1", at: 0 });
+    expect(state.superFreeze?.attacker).toBe("p1");
+    expect(state.fighters.p1.attack?.kind).toBe("special");
+
+    state = stepBattleFrame(state, emptyInputs());
+
+    expect(state.fighters.p1.attackElapsed).toBe(attackElapsedAtFreezeStart);
+    expect(state.timer).toBe(timerAtFreezeStart);
+    expect(state.superFreeze?.remainingFrames).toBeGreaterThan(0);
+  });
+
   it("does not hit through transparent fighter padding", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };

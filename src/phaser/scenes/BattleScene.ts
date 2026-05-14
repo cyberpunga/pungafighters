@@ -44,6 +44,7 @@ const CUSTOM_STAGE_OVERSCAN = 1.08;
 const CUSTOM_STAGE_HORIZONTAL_DRIFT = 0.12;
 const CUSTOM_STAGE_VERTICAL_DRIFT = 0.04;
 const CUSTOM_STAGE_PAN_EASE = 4.5;
+const SUPER_FLASH_DEPTH = 30;
 
 export class BattleScene extends Phaser.Scene {
   private state: BattleState;
@@ -60,7 +61,8 @@ export class BattleScene extends Phaser.Scene {
   private restartHint?: Phaser.GameObjects.Text;
   private stageImage?: Phaser.GameObjects.Image;
   private pressedCodes = new Set<string>();
-  private lastHitAt = 0;
+  private lastHitAt = -1;
+  private lastSuperAt = -1;
   private accumulator = 0;
   private onlineStatus?: string;
   private haltedMessage?: string;
@@ -342,6 +344,8 @@ export class BattleScene extends Phaser.Scene {
 
   private resetSyncState() {
     this.accumulator = 0;
+    this.lastHitAt = -1;
+    this.lastSuperAt = -1;
     this.onlineStatus = undefined;
     this.haltedMessage = undefined;
     this.checksumHistory.clear();
@@ -355,12 +359,13 @@ export class BattleScene extends Phaser.Scene {
     }
 
     const deltaSeconds = this.game.loop.delta / 1000;
-    this.updateStageParallax(deltaSeconds);
+    const animationDeltaSeconds = this.state.superFreeze ? 0 : deltaSeconds;
+    this.updateStageParallax(animationDeltaSeconds);
 
     (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
       const runtime = this.state.fighters[slot];
       const view = this.views![slot];
-      const frame = updateFighterRenderState(view.renderState, runtime, deltaSeconds, this.state.groundY);
+      const frame = updateFighterRenderState(view.renderState, runtime, animationDeltaSeconds, this.state.groundY);
       const texture = this.getFighterTexture(slot, view.renderState.currentPose);
       this.applyFighterImage(view.sprite, texture, frame.current, runtime.facing, frame.currentAlpha);
 
@@ -374,6 +379,11 @@ export class BattleScene extends Phaser.Scene {
       view.name.setText(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
     });
+
+    if (this.state.lastSuper && this.state.lastSuper.at !== this.lastSuperAt) {
+      this.lastSuperAt = this.state.lastSuper.at;
+      this.createSuperFlash(this.state.lastSuper.attacker);
+    }
 
     if (this.state.lastHit && this.state.lastHit.at !== this.lastHitAt) {
       this.lastHitAt = this.state.lastHit.at;
@@ -435,6 +445,172 @@ export class BattleScene extends Phaser.Scene {
     } else {
       sprite.clearTint();
     }
+  }
+
+  private createSuperFlash(attackerSlot: PlayerSlot) {
+    const attacker = this.state.fighters[attackerSlot];
+    const fromLeft = attackerSlot === "p1";
+    const slide = fromLeft ? 1 : -1;
+    const accent = attackerSlot === "p1" ? 0xf45b69 : 0x2ec4b6;
+    const texture = this.getFighterTexture(attackerSlot, "victory");
+    const overlay = this.add.container(0, 0).setDepth(SUPER_FLASH_DEPTH);
+
+    const blackout = this.add.rectangle(ARENA_CENTER_X, ARENA_CENTER_Y, ARENA_WIDTH, ARENA_HEIGHT, 0x04030a, 0);
+    const flash = this.add
+      .rectangle(ARENA_CENTER_X, ARENA_CENTER_Y, ARENA_WIDTH, ARENA_HEIGHT, 0xf8f4df, 0.82)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const impactFlash = this.add
+      .rectangle(ARENA_CENTER_X, ARENA_CENTER_Y, ARENA_WIDTH, ARENA_HEIGHT, accent, 0)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const speedLines = this.createSuperSpeedLines(fromLeft, accent);
+    const slash = this.createSuperSlash(fromLeft, accent);
+
+    const portraitStartX = fromLeft ? -180 : ARENA_WIDTH + 180;
+    const portraitX = fromLeft ? 288 : 672;
+    const portraitY = 486;
+    const portraitFlip = attacker.facing === -1;
+    const portraitShadow = this.add
+      .image(portraitStartX - slide * 24, portraitY + 12, texture)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(500, 500)
+      .setFlipX(portraitFlip)
+      .setTint(0x000000)
+      .setAlpha(0.48);
+    const portraitGlow = this.add
+      .image(portraitStartX - slide * 10, portraitY, texture)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(520, 520)
+      .setFlipX(portraitFlip)
+      .setTint(accent)
+      .setAlpha(0.34)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const portrait = this.add
+      .image(portraitStartX, portraitY, texture)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(470, 470)
+      .setFlipX(portraitFlip);
+
+    const textX = fromLeft ? 678 : 282;
+    const textStartX = fromLeft ? ARENA_WIDTH + 120 : -120;
+    const title = this.add
+      .text(textStartX, 122, "SUPER", {
+        fontFamily: "Arial Black, Arial, sans-serif",
+        fontSize: "64px",
+        color: "#f8f4df",
+        stroke: "#090712",
+        strokeThickness: 12,
+        align: "center",
+      })
+      .setOrigin(0.5)
+      .setRotation(-0.08 * slide)
+      .setAlpha(0);
+    const name = this.add
+      .text(textStartX, 188, attacker.name.toUpperCase(), {
+        fontFamily: "Arial Black, Arial, sans-serif",
+        fontSize: "21px",
+        color: "#f7b267",
+        stroke: "#090712",
+        strokeThickness: 6,
+        align: "center",
+        fixedWidth: 330,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+
+    overlay.add([
+      blackout,
+      speedLines,
+      slash,
+      flash,
+      impactFlash,
+      portraitShadow,
+      portraitGlow,
+      portrait,
+      title,
+      name,
+    ]);
+
+    this.cameras.main.shake(250, 0.007);
+
+    this.tweens.add({ targets: blackout, alpha: 0.68, duration: 70, ease: "Cubic.easeOut" });
+    this.tweens.add({ targets: blackout, alpha: 0, delay: 540, duration: 220, ease: "Cubic.easeIn" });
+    this.tweens.add({ targets: flash, alpha: 0, duration: 140, ease: "Cubic.easeOut" });
+    this.tweens.add({ targets: impactFlash, alpha: 0.7, delay: 210, duration: 35, yoyo: true, ease: "Cubic.easeOut" });
+    this.tweens.add({ targets: speedLines, x: slide * 150, alpha: 0, duration: 760, ease: "Cubic.easeOut" });
+    this.tweens.add({ targets: slash, x: slide * 80, alpha: 0, delay: 420, duration: 250, ease: "Cubic.easeIn" });
+
+    this.tweens.add({
+      targets: portraitShadow,
+      x: portraitX - slide * 24,
+      duration: 170,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: portraitGlow,
+      x: portraitX - slide * 10,
+      duration: 165,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: portrait,
+      x: portraitX,
+      duration: 160,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: [portraitShadow, portraitGlow, portrait],
+      alpha: 0,
+      x: portraitX + slide * 78,
+      delay: 565,
+      duration: 190,
+      ease: "Cubic.easeIn",
+    });
+    this.tweens.add({
+      targets: [title, name],
+      x: textX,
+      alpha: 1,
+      duration: 145,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: [title, name],
+      x: textX - slide * 46,
+      alpha: 0,
+      delay: 520,
+      duration: 190,
+      ease: "Cubic.easeIn",
+    });
+    this.time.delayedCall(860, () => overlay.destroy(true));
+  }
+
+  private createSuperSpeedLines(fromLeft: boolean, accent: number) {
+    const slide = fromLeft ? 1 : -1;
+    const graphics = this.add.graphics().setAlpha(0.95).setBlendMode(Phaser.BlendModes.ADD);
+    for (let index = 0; index < 18; index += 1) {
+      const y = 42 + ((index * 47) % 456);
+      const thickness = index % 3 === 0 ? 6 : 3;
+      const length = 230 + (index % 5) * 46;
+      const offset = (index % 4) * 36;
+      const startX = fromLeft ? -80 - offset : ARENA_WIDTH + 80 + offset;
+      const endX = startX + slide * length;
+      graphics.lineStyle(thickness, index % 2 === 0 ? accent : 0xf8f4df, index % 3 === 0 ? 0.68 : 0.45);
+      graphics.beginPath();
+      graphics.moveTo(startX, y);
+      graphics.lineTo(endX, y - slide * (18 + (index % 4) * 8));
+      graphics.strokePath();
+    }
+    return graphics;
+  }
+
+  private createSuperSlash(fromLeft: boolean, accent: number) {
+    const graphics = this.add.graphics().setAlpha(0.72).setBlendMode(Phaser.BlendModes.ADD);
+    const leftX = fromLeft ? 70 : ARENA_WIDTH - 430;
+    const rightX = fromLeft ? 560 : ARENA_WIDTH - 70;
+    graphics.fillStyle(accent, 0.58);
+    graphics.fillTriangle(leftX, 94, rightX, 44, rightX - 82, 150);
+    graphics.fillStyle(0xf8f4df, 0.5);
+    graphics.fillTriangle(leftX + 54, 394, rightX + 40, 320, rightX - 28, 430);
+    return graphics;
   }
 
   private createHitEffects() {
