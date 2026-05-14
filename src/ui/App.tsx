@@ -18,6 +18,7 @@ import { CreatorView } from "./CreatorView";
 import { FighterSelectView } from "./FighterSelectView";
 import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
+import { selectOnlineLocalFighter } from "./onlineSelection";
 import { appRouteFromLocation, appRouteToHref, appRouteToView, type AppRoute, type View } from "./routes";
 import { SettingsView } from "./SettingsView";
 
@@ -153,10 +154,7 @@ export function App() {
     const p2 = fighters.find((fighter) => fighter.id === selected.p2);
     return p1 && p2 ? { p1, p2 } : undefined;
   }, [fighters, selected]);
-  const onlineLocalFighter = useMemo(
-    () => fighters.find((fighter) => fighter.id === selected[onlineRole === "host" ? "p1" : "p2"]) ?? fighters[0],
-    [fighters, onlineRole, selected],
-  );
+  const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, selected), [fighters, selected]);
 
   return (
     <main className="app-shell">

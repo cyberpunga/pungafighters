@@ -66,6 +66,8 @@ Online guests can also use Player 1 controls while playing from the Player 2 cor
 
 Use Fighter Select to host or join an online match. The host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange fighters. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
 
+Each computer sends its local Player 1 selection for online play; the guest's fighter is placed in the Player 2 corner after the exchange. The online preview shows the fighter that will be sent.
+
 Selected fighter images and voice clips are sent peer-to-peer in chunks for that match only, with a 12 MB cap per selected fighter. Custom battle backgrounds remain local and are not synchronized in online matches.
 
 Online matches intentionally buffer inputs by a small fixed delay so both browsers can simulate the same frames. If the network is jittery, the match may briefly slow while waiting for the missing input frame instead of guessing and diverging.
