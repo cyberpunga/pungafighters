@@ -24,7 +24,7 @@ Open the local Vite URL shown in the terminal.
 
 ## MVP Features
 
-- React shell for menus, fighter creator, fighter select, settings, and battle mount.
+- Route-backed React shell for menus, fighter creator, fighter select, settings, online invites, and battle mount.
 - Phaser 3 battle runtime embedded inside React.
 - Local same-device 1v1 battle with deterministic health, timer, rounds, hitboxes, and keyboard controls.
 - WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
@@ -100,7 +100,7 @@ Set `ALLOWED_ORIGINS` in `server/wrangler.toml` to the deployed game origin and 
 
 ## Deployment
 
-GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafighters/` under the `cyberpun.ga` organization domain. Local development still runs from `/`; the Pages build uses `pnpm build:pages` to set the Vite base path.
+GitHub Actions deploys `main` to GitHub Pages with the app served from `/pungafighters/` under the `cyberpun.ga` organization domain. Local development still runs from `/`; the Pages build uses `pnpm build:pages` to set the Vite base path and emit a `404.html` fallback for direct route visits.
 
 ## Privacy
 

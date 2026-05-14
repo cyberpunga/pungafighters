@@ -1,5 +1,6 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 import type { BattleConfig, LoadedFighter, PlayerSlot } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport, readFighterImportFile } from "../creator/fighterFiles";
@@ -10,9 +11,9 @@ import { CreatorView } from "./CreatorView";
 import { FighterSelectView } from "./FighterSelectView";
 import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
+import { appRouteFromLocation, appRouteToHref, appRouteToView, type AppRoute, type View } from "./routes";
 import { SettingsView } from "./SettingsView";
 
-type View = "menu" | "creator" | "select" | "settings" | "online" | "battle";
 type OnlineRole = "host" | "guest";
 
 interface OnlineBattle {
@@ -29,16 +30,17 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
 };
 
 export function App() {
-  const [view, setView] = useState<View>("menu");
+  const [route, navigate] = useAppRoute();
+  const view = appRouteToView(route);
   const [fighters, setFighters] = useState<LoadedFighter[]>([]);
   const [selected, setSelected] = useState<{ p1: string; p2: string }>({
     p1: DEFAULT_FIGHTER_IDS[0],
     p2: DEFAULT_FIGHTER_IDS[1],
   });
   const [loading, setLoading] = useState(true);
-  const [onlineRole, setOnlineRole] = useState<OnlineRole>("host");
   const [onlineBattle, setOnlineBattle] = useState<OnlineBattle | undefined>();
   const [fileStatus, setFileStatus] = useState("");
+  const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
   const refreshFighters = useCallback(async () => {
     setLoading(true);
@@ -54,6 +56,12 @@ export function App() {
   useEffect(() => {
     void refreshFighters();
   }, [refreshFighters]);
+
+  useEffect(() => {
+    if (view !== "battle") {
+      setOnlineBattle(undefined);
+    }
+  }, [view]);
 
   const importFighterFile = useCallback(
     async (file: File) => {
@@ -93,9 +101,9 @@ export function App() {
 
   return (
     <main className="app-shell">
-      {view !== "battle" && <Topbar view={view} onNavigate={setView} />}
+      {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
-      {view === "menu" && <MenuView fighters={fighters} loading={loading} onCreate={() => setView("creator")} onSelect={() => setView("select")} />}
+      {view === "menu" && <MenuView fighters={fighters} loading={loading} onCreate={() => navigate("creator")} onSelect={() => navigate("select")} />}
       {view === "creator" && <CreatorView onSaved={refreshFighters} />}
       {view === "select" && (
         <FighterSelectView
@@ -112,16 +120,14 @@ export function App() {
           onFight={() => {
             setOnlineBattle(undefined);
             if (battleFighters) {
-              setView("battle");
+              navigate("battle");
             }
           }}
           onHostOnline={() => {
-            setOnlineRole("host");
-            setView("online");
+            navigate("onlineHost");
           }}
           onJoinOnline={() => {
-            setOnlineRole("guest");
-            setView("online");
+            navigate("onlineGuest");
           }}
         />
       )}
@@ -129,7 +135,7 @@ export function App() {
         <OnlineMatchView
           role={onlineRole}
           localFighter={onlineLocalFighter}
-          onCancel={() => setView("select")}
+          onCancel={() => navigate("select")}
           onReady={(match) => {
             setOnlineBattle({
               config: {
@@ -141,7 +147,7 @@ export function App() {
               localSlot: match.localSlot,
               controller: match.controller,
             });
-            setView("battle");
+            navigate("battle");
           }}
         />
       )}
@@ -155,7 +161,7 @@ export function App() {
           fighters={onlineBattle.fighters}
           onExit={() => {
             setOnlineBattle(undefined);
-            setView("select");
+            navigate("select", { replace: true });
           }}
         />
       )}
@@ -163,46 +169,81 @@ export function App() {
         <BattleView
           config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: selected.p1, playerTwoFighterId: selected.p2 }}
           fighters={battleFighters}
-          onExit={() => setView("select")}
+          onExit={() => navigate("select", { replace: true })}
         />
       )}
     </main>
   );
 }
 
-function Topbar(props: { view: View; onNavigate: (view: View) => void }) {
+function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
+  const onRouteClick = (event: MouseEvent<HTMLAnchorElement>, route: AppRoute) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
+      return;
+    }
+    event.preventDefault();
+    props.onNavigate(route);
+  };
+
   return (
     <header className="topbar">
-      <button className="brand-button" type="button" onClick={() => props.onNavigate("menu")}>
+      <a className="brand-button" href={appRouteToHref("menu")} onClick={(event) => onRouteClick(event, "menu")}>
         <span className="brand-mark">PF</span>
         <span>Punga Fighters</span>
-      </button>
+      </a>
       <nav className="nav-cluster" aria-label="Primary">
-        <button
+        <a
           className={props.view === "creator" ? "icon-button active" : "icon-button"}
-          type="button"
-          onClick={() => props.onNavigate("creator")}
+          href={appRouteToHref("creator")}
+          onClick={(event) => onRouteClick(event, "creator")}
+          aria-current={props.view === "creator" ? "page" : undefined}
+          aria-label="Create fighter"
           title="Create fighter"
         >
           <Camera size={19} />
-        </button>
-        <button
+        </a>
+        <a
           className={props.view === "select" ? "icon-button active" : "icon-button"}
-          type="button"
-          onClick={() => props.onNavigate("select")}
+          href={appRouteToHref("select")}
+          onClick={(event) => onRouteClick(event, "select")}
+          aria-current={props.view === "select" ? "page" : undefined}
+          aria-label="Select fighters"
           title="Select fighters"
         >
           <Gamepad2 size={19} />
-        </button>
-        <button
+        </a>
+        <a
           className={props.view === "settings" ? "icon-button active" : "icon-button"}
-          type="button"
-          onClick={() => props.onNavigate("settings")}
+          href={appRouteToHref("settings")}
+          onClick={(event) => onRouteClick(event, "settings")}
+          aria-current={props.view === "settings" ? "page" : undefined}
+          aria-label="Settings"
           title="Settings"
         >
           <Settings size={19} />
-        </button>
+        </a>
       </nav>
     </header>
   );
+}
+
+function useAppRoute(): [AppRoute, (route: AppRoute, options?: { replace?: boolean }) => void] {
+  const [route, setRoute] = useState<AppRoute>(() => appRouteFromLocation(window.location));
+
+  useEffect(() => {
+    const onPopState = () => setRoute(appRouteFromLocation(window.location));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigate = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
+    const href = appRouteToHref(nextRoute);
+    if (window.location.pathname !== href) {
+      const method = options?.replace ? "replaceState" : "pushState";
+      window.history[method]({ appRoute: nextRoute }, "", href);
+    }
+    setRoute(nextRoute);
+  }, []);
+
+  return [route, navigate];
 }

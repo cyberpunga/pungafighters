@@ -1,9 +1,11 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { copyFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 export default defineConfig(({ mode }) => ({
   base: mode === "github-pages" ? "/pungafighters/" : "/",
-  plugins: [react()],
+  plugins: [react(), mode === "github-pages" ? githubPagesSpaFallback() : undefined],
   build: {
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
@@ -23,3 +25,16 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
+function githubPagesSpaFallback(): Plugin {
+  return {
+    name: "github-pages-spa-fallback",
+    writeBundle(outputOptions) {
+      const outputDir = typeof outputOptions.dir === "string" ? outputOptions.dir : "dist";
+      const indexPath = resolve(outputDir, "index.html");
+      if (existsSync(indexPath)) {
+        copyFileSync(indexPath, resolve(outputDir, "404.html"));
+      }
+    },
+  };
+}

@@ -10,6 +10,7 @@
 ## Architecture
 
 - React owns menus, creator/editor UI, settings, and DOM overlays.
+- React views are route-backed through `src/ui/routes.ts`; keep browser history/back-forward behavior intact when adding screens.
 - Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
