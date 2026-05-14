@@ -3,11 +3,15 @@ import { createEmptyActions } from "../input/actions";
 
 const ARENA_WIDTH = 960;
 const GROUND_Y = 430;
-const PLAYER_WIDTH = 96;
-const PLAYER_HEIGHT = 160;
 const MOVE_SPEED = 250;
 const JUMP_SPEED = -650;
 const GRAVITY = 1800;
+
+const HURTBOX = {
+  halfWidth: 32,
+  height: 138,
+  bottomOffset: 10,
+} as const;
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
@@ -18,7 +22,11 @@ interface AttackDef {
   kind: AttackKind;
   pose: FighterPose;
   damage: number;
-  reach: number;
+  hitbox: {
+    reach: number;
+    height: number;
+    centerYOffset: number;
+  };
   activeStart: number;
   activeEnd: number;
   duration: number;
@@ -30,7 +38,11 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     kind: "punch",
     pose: "punch",
     damage: 8,
-    reach: 90,
+    hitbox: {
+      reach: 58,
+      height: 74,
+      centerYOffset: -94,
+    },
     activeStart: 0.08,
     activeEnd: 0.18,
     duration: 0.32,
@@ -40,7 +52,11 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     kind: "kick",
     pose: "kick",
     damage: 12,
-    reach: 115,
+    hitbox: {
+      reach: 74,
+      height: 78,
+      centerYOffset: -72,
+    },
     activeStart: 0.11,
     activeEnd: 0.24,
     duration: 0.42,
@@ -50,7 +66,11 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     kind: "special",
     pose: "punch",
     damage: 18,
-    reach: 145,
+    hitbox: {
+      reach: 98,
+      height: 106,
+      centerYOffset: -96,
+    },
     activeStart: 0.16,
     activeEnd: 0.34,
     duration: 0.62,
@@ -91,6 +111,13 @@ export interface BattleState {
   roundWinner?: PlayerSlot;
   message: string;
   lastHit?: { attacker: PlayerSlot; defender: PlayerSlot; damage: number; at: number };
+}
+
+interface Box {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
 }
 
 export function createBattleState(
@@ -292,11 +319,9 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
   }
 
   const active = attacker.attackElapsed >= attack.activeStart && attacker.attackElapsed <= attack.activeEnd;
-  const horizontalDistance = Math.abs(attacker.x - defender.x);
-  const verticalDistance = Math.abs(attacker.y - defender.y);
   const facingDefender = attacker.facing === 1 ? defender.x >= attacker.x : defender.x <= attacker.x;
 
-  if (active && facingDefender && horizontalDistance <= PLAYER_WIDTH + attack.reach && verticalDistance < PLAYER_HEIGHT) {
+  if (active && facingDefender && boxesOverlap(getAttackBox(attacker, attack), getHurtbox(defender))) {
     const damage = defender.blocking ? Math.ceil(attack.damage * 0.35) : attack.damage;
     defender.health = Math.max(0, defender.health - damage);
     defender.hitStun = defender.blocking ? 0.08 : 0.24;
@@ -304,6 +329,32 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
     attacker.hasHitThisAttack = true;
     state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: state.frame };
   }
+}
+
+function getHurtbox(fighter: FighterRuntime): Box {
+  const bottom = fighter.y - HURTBOX.bottomOffset;
+  return {
+    left: fighter.x - HURTBOX.halfWidth,
+    right: fighter.x + HURTBOX.halfWidth,
+    top: bottom - HURTBOX.height,
+    bottom,
+  };
+}
+
+function getAttackBox(attacker: FighterRuntime, attack: AttackDef): Box {
+  const bodyEdge = attacker.x + attacker.facing * HURTBOX.halfWidth;
+  const reachEdge = bodyEdge + attacker.facing * attack.hitbox.reach;
+  const centerY = attacker.y + attack.hitbox.centerYOffset;
+  return {
+    left: Math.min(bodyEdge, reachEdge),
+    right: Math.max(bodyEdge, reachEdge),
+    top: centerY - attack.hitbox.height / 2,
+    bottom: centerY + attack.hitbox.height / 2,
+  };
+}
+
+function boxesOverlap(a: Box, b: Box): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
 }
 
 function finishRound(state: BattleState) {

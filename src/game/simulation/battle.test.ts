@@ -43,6 +43,41 @@ describe("battle simulation", () => {
     expect(state.lastHit?.at).toBeGreaterThanOrEqual(0);
     expect(state.lastHit?.at).toBeLessThan(state.frame);
   });
+
+  it("does not hit through transparent fighter padding", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 470, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
+
+    expect(state.lastHit).toBeUndefined();
+    expect(state.fighters.p2.health).toBe(100);
+  });
+
+  it("requires vertical overlap with the active attack box", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 390, y: state.groundY - 150 };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), punch: true },
+      p2: createEmptyActions(),
+    });
+    state.fighters.p1 = { ...state.fighters.p1, attackElapsed: 0.1 };
+    state.fighters.p2 = { ...state.fighters.p2, y: state.groundY - 150, velocityY: 0 };
+    state = stepBattleFrame(state, emptyInputs());
+
+    expect(state.lastHit).toBeUndefined();
+    expect(state.fighters.p2.health).toBe(100);
+  });
 });
 
 function emptyInputs(): PlayerInputSnapshot {
