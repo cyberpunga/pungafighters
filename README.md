@@ -34,6 +34,7 @@ Open the local Vite URL shown in the terminal.
 - Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips that play during battle.
 - Character export for local `.pungafighter.json` files, with creator-side imports for character files, simple spritesheet images, and single action images.
 - Custom battle background image import for local fights and host-selected online arenas.
+- Clean, soft CRT, and strong CRT battle display modes stored in local settings.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { BattleConfig, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
+import type { BattleConfig, BattleDisplayEffect, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { createBattleGame, type BattleGameHandle } from "../phaser/bridge/createBattleGame";
 
@@ -11,6 +11,7 @@ export function BattleView(props: {
   mode?: "local" | "online";
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
+  displayEffect: BattleDisplayEffect;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<BattleGameHandle | null>(null);
@@ -28,6 +29,7 @@ export function BattleView(props: {
       mode: props.mode,
       localSlot: props.localSlot,
       networkController: props.networkController,
+      displayEffect: props.displayEffect,
     });
     return () => {
       gameRef.current?.destroy();

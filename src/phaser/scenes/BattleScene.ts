@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import {
   VOICE_CLIPS,
   type BattleConfig,
+  type BattleDisplayEffect,
   type FighterPose,
   type LoadedFighter,
   type PlayerInputSnapshot,
@@ -20,6 +21,7 @@ import {
 } from "../../game/simulation/battle";
 import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
 import type { NetworkInputController } from "../../game/network/networkInputController";
+import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPostFxPipeline";
 import {
   createFighterRenderState,
   updateFighterRenderState,
@@ -41,6 +43,7 @@ export interface BattleSceneOptions {
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
   background?: RuntimeBattleBackground;
+  displayEffect?: BattleDisplayEffect;
 }
 
 const FIGHTER_DISPLAY_SIZE = 190;
@@ -69,6 +72,7 @@ export class BattleScene extends Phaser.Scene {
   private readonly localSlot: PlayerSlot;
   private readonly networkController?: NetworkInputController;
   private readonly background?: RuntimeBattleBackground;
+  private readonly displayEffect: BattleDisplayEffect;
   private views?: Record<PlayerSlot, FighterView>;
   private timerText?: Phaser.GameObjects.Text;
   private messageText?: Phaser.GameObjects.Text;
@@ -100,6 +104,7 @@ export class BattleScene extends Phaser.Scene {
     this.localSlot = options.localSlot ?? "p1";
     this.networkController = options.networkController;
     this.background = options.background;
+    this.displayEffect = options.displayEffect ?? "clean";
     this.state = createBattleState(config, {
       p1: { id: fighters.p1.id, name: fighters.p1.name },
       p2: { id: fighters.p2.id, name: fighters.p2.name },
@@ -117,6 +122,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
+    this.applyDisplayEffect();
     this.createArena();
     this.createInputs();
     this.views = {
@@ -140,6 +146,14 @@ export class BattleScene extends Phaser.Scene {
       fontSize: "16px",
       color: "#d9d2b6",
     }).setOrigin(0.5).setAlpha(0);
+  }
+
+  private applyDisplayEffect() {
+    const config = getCrtPostFxConfig(this.displayEffect);
+    if (!config || this.game.renderer.type !== Phaser.WEBGL) {
+      return;
+    }
+    this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, config, false);
   }
 
   update(_time: number, delta: number) {

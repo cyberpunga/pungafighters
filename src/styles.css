@@ -353,6 +353,9 @@ button:disabled {
 }
 
 .segment-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 36px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -910,7 +913,7 @@ button:disabled {
   margin-top: 22px;
 }
 
-.settings-grid div {
+.settings-grid > div {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
@@ -921,6 +924,21 @@ button:disabled {
 
 .settings-grid span {
   color: var(--muted);
+}
+
+.settings-control-card {
+  grid-column: span 2;
+}
+
+.settings-effect-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 2px;
+}
+
+.settings-effect-control .segment-option {
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
 }
 
 .battle-mount {
@@ -1067,6 +1085,10 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .settings-control-card {
+    grid-column: auto;
+  }
+
   .online-header,
   .status-strip {
     align-items: start;
@@ -1119,6 +1141,10 @@ button:disabled {
   .sound-card {
     align-items: start;
     flex-direction: column;
+  }
+
+  .settings-effect-control {
+    grid-template-columns: 1fr;
   }
 }
 

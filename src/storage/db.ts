@@ -1,11 +1,13 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { FighterPose, FighterProfile, LoadedBattleBackground, LoadedFighter, VoiceClipType } from "../types/game";
-import { FIGHTER_POSES } from "../types/game";
+import type { BattleDisplayEffect, FighterPose, FighterProfile, LoadedBattleBackground, LoadedFighter, VoiceClipType } from "../types/game";
+import { BATTLE_DISPLAY_EFFECTS, FIGHTER_POSES } from "../types/game";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 
 export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
+export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "crt-soft";
 
 const BATTLE_BACKGROUND_SETTING_KEY = "battle-background";
+const BATTLE_DISPLAY_EFFECT_SETTING_KEY = "battle-display-effect";
 const BATTLE_BACKGROUND_BLOB_ID = "battle-background:current";
 const BATTLE_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
 const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -213,6 +215,17 @@ export async function clearBattleBackgroundImage(): Promise<void> {
   await tx.done;
 }
 
+export async function getBattleDisplayEffect(): Promise<BattleDisplayEffect> {
+  const db = await getDb();
+  const value = await db.get("settings", BATTLE_DISPLAY_EFFECT_SETTING_KEY);
+  return isBattleDisplayEffect(value) ? value : DEFAULT_BATTLE_DISPLAY_EFFECT;
+}
+
+export async function setBattleDisplayEffect(effect: BattleDisplayEffect): Promise<void> {
+  const db = await getDb();
+  await db.put("settings", effect, BATTLE_DISPLAY_EFFECT_SETTING_KEY);
+}
+
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const db = await getDb();
   const value = await db.get("settings", key);
@@ -266,6 +279,10 @@ function loadBattleBackground(record: BattleBackgroundRecord, blob: Blob): Loade
 
 function isSupportedBattleBackgroundFile(file: File) {
   return BATTLE_BACKGROUND_MIME_TYPES.has(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+}
+
+function isBattleDisplayEffect(value: unknown): value is BattleDisplayEffect {
+  return typeof value === "string" && BATTLE_DISPLAY_EFFECTS.includes(value as BattleDisplayEffect);
 }
 
 function getImageMimeTypeFromName(filename: string) {

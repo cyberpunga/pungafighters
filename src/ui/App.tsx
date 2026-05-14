@@ -1,16 +1,19 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { BattleConfig, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
+import type { BattleConfig, BattleDisplayEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import {
   clearBattleBackgroundImage,
   deleteFighter,
+  DEFAULT_BATTLE_DISPLAY_EFFECT,
+  getBattleDisplayEffect,
   getLoadedBattleBackground,
   listLoadedFighters,
   saveBattleBackgroundImage,
+  setBattleDisplayEffect as saveBattleDisplayEffect,
 } from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
@@ -58,6 +61,7 @@ export function App() {
   const [fileStatus, setFileStatus] = useState("");
   const [backgroundStatus, setBackgroundStatus] = useState("");
   const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
+  const [battleDisplayEffect, setBattleDisplayEffect] = useState<BattleDisplayEffect>(DEFAULT_BATTLE_DISPLAY_EFFECT);
   const battleBackgroundUrlRef = useRef<string | undefined>();
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
@@ -93,6 +97,18 @@ export function App() {
   useEffect(() => {
     void refreshBattleBackground();
   }, [refreshBattleBackground]);
+
+  useEffect(() => {
+    let active = true;
+    void getBattleDisplayEffect().then((effect) => {
+      if (active) {
+        setBattleDisplayEffect(effect);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -132,6 +148,11 @@ export function App() {
       setBackgroundStatus(error instanceof Error ? error.message : "Could not reset background.");
     }
   }, [setLoadedBattleBackground]);
+
+  const updateBattleDisplayEffect = useCallback((effect: BattleDisplayEffect) => {
+    setBattleDisplayEffect(effect);
+    void saveBattleDisplayEffect(effect);
+  }, []);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
     setFileStatus(`Exporting ${fighter.name}...`);
@@ -259,7 +280,7 @@ export function App() {
           }}
         />
       )}
-      {view === "settings" && <SettingsView />}
+      {view === "settings" && <SettingsView battleDisplayEffect={battleDisplayEffect} onBattleDisplayEffectChange={updateBattleDisplayEffect} />}
       {view === "battle" && onlineBattle && (
         <BattleView
           mode="online"
@@ -268,6 +289,7 @@ export function App() {
           config={onlineBattle.config}
           fighters={onlineBattle.fighters}
           background={onlineBattle.background}
+          displayEffect={battleDisplayEffect}
           onExit={() => {
             setOnlineBattle(undefined);
             navigate("fight", { replace: true });
@@ -279,6 +301,7 @@ export function App() {
           config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: localSelection.p1, playerTwoFighterId: localSelection.p2 }}
           fighters={battleFighters}
           background={battleBackground}
+          displayEffect={battleDisplayEffect}
           onExit={() => navigate("fight", { replace: true })}
         />
       )}
