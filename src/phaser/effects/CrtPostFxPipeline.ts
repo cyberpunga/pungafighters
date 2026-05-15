@@ -14,6 +14,8 @@ interface CrtPostFxConfig {
   flicker: number;
 }
 
+type CrtDisplayEffect = Extract<BattleDisplayEffect, "crt-soft" | "crt-strong">;
+
 const CRT_POST_FX_FRAGMENT_SHADER = `
 #define SHADER_NAME PUNGA_CRT_POST_FX
 precision mediump float;
@@ -83,7 +85,7 @@ const DEFAULT_CRT_CONFIG: CrtPostFxConfig = {
   flicker: 0,
 };
 
-const CRT_CONFIGS: Record<Exclude<BattleDisplayEffect, "clean">, CrtPostFxConfig> = {
+const CRT_CONFIGS: Record<CrtDisplayEffect, CrtPostFxConfig> = {
   "crt-soft": {
     warp: 0.018,
     scanline: 0.11,
@@ -136,5 +138,9 @@ export class CrtPostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPip
 }
 
 export function getCrtPostFxConfig(effect: BattleDisplayEffect): CrtPostFxConfig | undefined {
-  return effect === "clean" ? undefined : CRT_CONFIGS[effect];
+  return isCrtDisplayEffect(effect) ? CRT_CONFIGS[effect] : undefined;
+}
+
+function isCrtDisplayEffect(effect: BattleDisplayEffect): effect is CrtDisplayEffect {
+  return effect === "crt-soft" || effect === "crt-strong";
 }

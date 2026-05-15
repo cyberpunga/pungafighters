@@ -21,6 +21,7 @@ import {
 } from "../../game/simulation/battle";
 import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
 import type { NetworkInputController } from "../../game/network/networkInputController";
+import { BAD_TV_POST_FX_PIPELINE_KEY, getBadTvPostFxConfig } from "../effects/BadTvPostFxPipeline";
 import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPostFxPipeline";
 import {
   createFighterRenderState,
@@ -149,11 +150,18 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private applyDisplayEffect() {
-    const config = getCrtPostFxConfig(this.displayEffect);
-    if (!config || this.game.renderer.type !== Phaser.WEBGL) {
+    if (this.game.renderer.type !== Phaser.WEBGL) {
       return;
     }
-    this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, config, false);
+    const crtConfig = getCrtPostFxConfig(this.displayEffect);
+    if (crtConfig) {
+      this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, crtConfig, false);
+      return;
+    }
+    const badTvConfig = getBadTvPostFxConfig(this.displayEffect);
+    if (badTvConfig) {
+      this.cameras.main.setPostPipeline(BAD_TV_POST_FX_PIPELINE_KEY, badTvConfig, false);
+    }
   }
 
   update(_time: number, delta: number) {

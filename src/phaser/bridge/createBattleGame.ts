@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { BattleConfig, BattleDisplayEffect, LoadedFighter, RuntimeBattleBackground } from "../../types/game";
 import type { NetworkInputController } from "../../game/network/networkInputController";
+import { BAD_TV_POST_FX_PIPELINE_KEY, BadTvPostFxPipeline } from "../effects/BadTvPostFxPipeline";
 import { CRT_POST_FX_PIPELINE_KEY, CrtPostFxPipeline } from "../effects/CrtPostFxPipeline";
 import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
 
@@ -34,6 +35,7 @@ export function createBattleGame(input: {
     height: 540,
     backgroundColor: "#17151f",
     pipeline: {
+      [BAD_TV_POST_FX_PIPELINE_KEY]: BadTvPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
       [CRT_POST_FX_PIPELINE_KEY]: CrtPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
     },
     scale: {

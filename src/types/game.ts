@@ -1,6 +1,6 @@
 export const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
 export const VOICE_CLIPS = ["attack", "hit", "win"] as const;
-export const BATTLE_DISPLAY_EFFECTS = ["clean", "crt-soft", "crt-strong"] as const;
+export const BATTLE_DISPLAY_EFFECTS = ["clean", "crt-soft", "crt-strong", "bad-tv"] as const;
 
 export type FighterPose = (typeof FIGHTER_POSES)[number];
 export type VoiceClipType = (typeof VOICE_CLIPS)[number];

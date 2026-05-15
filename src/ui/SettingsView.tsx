@@ -1,10 +1,11 @@
-import { CircleOff, ScanLine, TvMinimal } from "lucide-react";
+import { CircleOff, ScanLine, TvMinimal, Zap } from "lucide-react";
 import type { BattleDisplayEffect } from "../types/game";
 
 const DISPLAY_EFFECT_OPTIONS = [
   { value: "clean", label: "Clean", Icon: CircleOff },
   { value: "crt-soft", label: "CRT Soft", Icon: TvMinimal },
   { value: "crt-strong", label: "CRT Max", Icon: ScanLine },
+  { value: "bad-tv", label: "Bad TV", Icon: Zap },
 ] as const satisfies ReadonlyArray<{
   value: BattleDisplayEffect;
   label: string;
