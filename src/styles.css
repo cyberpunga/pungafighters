@@ -372,7 +372,7 @@ button:disabled {
 
 .pose-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
 
@@ -1118,7 +1118,7 @@ button:disabled {
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 1400px) {
   .creator-source-row {
     grid-template-columns: 1fr;
   }
@@ -1132,6 +1132,7 @@ button:disabled {
   .pose-frame-preview video {
     min-height: 220px;
     height: 220px;
+    width: 100%;
   }
 
   .pose-action-row {

@@ -597,52 +597,6 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} disabled={creatorBusy} />
         </label>
 
-        <div className="creator-source-row" aria-label="Fighter source">
-          <button className="secondary-button source-action" type="button" onClick={() => characterImportInputRef.current?.click()} disabled={creatorBusy}>
-            <FileJson size={18} />
-            Import fighter
-          </button>
-          <input
-            ref={characterImportInputRef}
-            className="sr-only"
-            type="file"
-            accept={FIGHTER_CHARACTER_IMPORT_ACCEPT}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (file) {
-                void importFighterDraft(file);
-              }
-            }}
-          />
-          <button className="secondary-button source-action" type="button" onClick={() => spritesheetImportInputRef.current?.click()} disabled={creatorBusy}>
-            <Images size={18} />
-            Import strip
-          </button>
-          <input
-            ref={spritesheetImportInputRef}
-            className="sr-only"
-            type="file"
-            accept={SPRITESHEET_IMPORT_ACCEPT}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (file) {
-                void importSpritesheetDraft(file);
-              }
-            }}
-          />
-          <button
-            className="secondary-button source-action"
-            type="button"
-            onClick={() => void processAll()}
-            disabled={creatorBusy || providerStatus !== "ready" || !hasProcessableSources}
-          >
-            <Wand2 size={18} />
-            {activeOperation?.type === "process-all" ? "Processing..." : "Process all"}
-          </button>
-        </div>
-
         <div className="pose-grid" aria-label="Required actions">
           {FIGHTER_POSES.map((pose) => {
             const draft = drafts[pose];
@@ -779,6 +733,52 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
             })}
           </div>
         </section>
+
+        <div className="creator-source-row" aria-label="Fighter source">
+          <button className="secondary-button source-action" type="button" onClick={() => characterImportInputRef.current?.click()} disabled={creatorBusy}>
+            <FileJson size={18} />
+            Import fighter
+          </button>
+          <input
+            ref={characterImportInputRef}
+            className="sr-only"
+            type="file"
+            accept={FIGHTER_CHARACTER_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void importFighterDraft(file);
+              }
+            }}
+          />
+          <button className="secondary-button source-action" type="button" onClick={() => spritesheetImportInputRef.current?.click()} disabled={creatorBusy}>
+            <Images size={18} />
+            Import strip
+          </button>
+          <input
+            ref={spritesheetImportInputRef}
+            className="sr-only"
+            type="file"
+            accept={SPRITESHEET_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void importSpritesheetDraft(file);
+              }
+            }}
+          />
+          <button
+            className="secondary-button source-action"
+            type="button"
+            onClick={() => void processAll()}
+            disabled={creatorBusy || providerStatus !== "ready" || !hasProcessableSources}
+          >
+            <Wand2 size={18} />
+            {activeOperation?.type === "process-all" ? "Processing..." : "Process all"}
+          </button>
+        </div>
 
         <div className="creator-footer">
           <div className="creator-status">
