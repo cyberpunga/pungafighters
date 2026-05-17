@@ -40,9 +40,11 @@ interface FighterView {
   previousSprite: Phaser.GameObjects.Image;
   renderState: FighterRenderState;
   name: Phaser.GameObjects.Text;
-  health: Phaser.GameObjects.Rectangle;
-  superMeter: Phaser.GameObjects.Rectangle;
+  portrait: Phaser.GameObjects.Image;
+  setName: (value: string) => void;
   rounds: Phaser.GameObjects.Text;
+  updateHealthMeter: (ratio: number) => void;
+  updateSuperMeter: (ratio: number) => void;
 }
 
 export interface BattleSceneOptions {
@@ -66,6 +68,21 @@ const CUSTOM_STAGE_PAN_EASE = 4.5;
 const SUPER_FLASH_DEPTH = 30;
 const SUPER_BACKDROP_COLOR = 0x8f3dff;
 const SUPER_BACKDROP_SIZE = FIGHTER_DISPLAY_SIZE * 4;
+const HUD_PANEL_WIDTH = 320;
+const HUD_PANEL_HEIGHT = 96;
+const HUD_PORTRAIT_SIZE = 88;
+const HUD_HEALTH_LENGTH = 206;
+const HUD_HEALTH_HEIGHT = 24;
+const HUD_HEALTH_TIP = 26;
+const HUD_HEALTH_ANCHOR = 118;
+const HUD_HEALTH_TOP = 32;
+const HUD_SUPER_LENGTH = 188;
+const HUD_SUPER_HEIGHT = 16;
+const HUD_SUPER_TIP = 18;
+const HUD_SUPER_TOP = 66;
+const HUD_SUPER_ANCHOR = HUD_HEALTH_ANCHOR;
+const HUD_NAME_MAX_WIDTH = 180;
+const HUD_NAME_MIN_SCALE = 0.68;
 const VOICE_VOLUME: Record<VoiceClipType, number> = {
   attack: 0.82,
   hit: 0.76,
@@ -138,23 +155,36 @@ export class BattleScene extends Phaser.Scene {
       p1: this.createFighterView("p1", 72, 32),
       p2: this.createFighterView("p2", 888, 32),
     };
-    this.timerText = this.add.text(480, 28, "60", {
-      fontFamily: "Arial Black, Arial, sans-serif",
-      fontSize: "32px",
-      color: "#f8f4df",
-    }).setOrigin(0.5, 0);
-    this.messageText = this.add.text(480, 212, "Ready", {
-      fontFamily: "Arial Black, Arial, sans-serif",
-      fontSize: "48px",
-      color: "#f8f4df",
-      stroke: "#1b1724",
-      strokeThickness: 8,
-    }).setOrigin(0.5);
-    this.restartHint = this.add.text(480, 478, "Enter: restart  |  Esc: menu", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: "16px",
-      color: "#d9d2b6",
-    }).setOrigin(0.5).setAlpha(0);
+    this.timerText = this.add
+      .text(480, 22, "60", {
+        fontFamily: "Impact, Arial Black, sans-serif",
+        fontSize: "48px",
+        color: "#fff4d6",
+        stroke: "#150722",
+        strokeThickness: 10,
+      })
+      .setOrigin(0.5, 0);
+    this.timerText.setShadow(0, 6, "#06040d", 16, true, true);
+    this.messageText = this.add
+      .text(480, 212, "Ready", {
+        fontFamily: "Impact, Arial Black, sans-serif",
+        fontSize: "54px",
+        color: "#ffe9f5",
+        stroke: "#151433",
+        strokeThickness: 10,
+        align: "center",
+      })
+      .setOrigin(0.5);
+    this.messageText.setShadow(0, 8, "#040309", 18, true, true);
+    this.restartHint = this.add
+      .text(480, 478, "Enter: restart  |  Esc: menu", {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "16px",
+        color: "#e4dcff",
+      })
+      .setOrigin(0.5)
+      .setAlpha(0);
+    this.restartHint.setShadow(0, 3, "#05040b", 8, true, true);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hasCreated = false;
     });
@@ -293,6 +323,7 @@ export class BattleScene extends Phaser.Scene {
 
   private createFighterView(slot: PlayerSlot, hudX: number, hudY: number): FighterView {
     const runtime = this.state.fighters[slot];
+    const isP1 = slot === "p1";
     const previousSprite = this.add
       .image(runtime.x, runtime.y, `${slot}-idle`)
       .setOrigin(0.5, 0.9)
@@ -304,33 +335,285 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 0.9)
       .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
       .setDepth(2);
-    if (slot === "p2") {
+    if (!isP1) {
       previousSprite.setFlipX(true);
       sprite.setFlipX(true);
     }
-    const name = this.add.text(hudX, hudY, runtime.name, {
-      fontFamily: "Arial Black, Arial, sans-serif",
-      fontSize: "18px",
-      color: "#f8f4df",
-    }).setOrigin(slot === "p1" ? 0 : 1, 0);
-    const healthBack = this.add.rectangle(hudX, hudY + 34, 300, 16, 0x0d0d12, 0.8).setOrigin(slot === "p1" ? 0 : 1, 0);
-    const health = this.add.rectangle(hudX, hudY + 34, 300, 16, slot === "p1" ? 0xf45b69 : 0x2ec4b6, 1).setOrigin(slot === "p1" ? 0 : 1, 0);
-    healthBack.setStrokeStyle(1, 0xf8f4df, 0.3);
-    const superBack = this.add.rectangle(hudX, hudY + 54, 300, 8, 0x0d0d12, 0.8).setOrigin(slot === "p1" ? 0 : 1, 0);
-    const superMeter = this.add.rectangle(hudX, hudY + 54, 300, 8, 0xf7b267, 0.86).setOrigin(slot === "p1" ? 0 : 1, 0);
-    superBack.setStrokeStyle(1, 0xf7b267, 0.34);
-    const superLabel = this.add.text(hudX, hudY + 66, "Super", {
-      fontFamily: "Arial Black, Arial, sans-serif",
-      fontSize: "11px",
-      color: "#f7b267",
-    }).setOrigin(slot === "p1" ? 0 : 1, 0);
-    const rounds = this.add.text(hudX, hudY + 82, "Rounds: 0", {
-      fontFamily: "Arial, sans-serif",
-      fontSize: "14px",
-      color: "#d9d2b6",
-    }).setOrigin(slot === "p1" ? 0 : 1, 0);
-    superLabel.setAlpha(0.9);
-    return { sprite, previousSprite, renderState: createFighterRenderState(runtime, slot === "p1" ? 0 : 0.7), name, health, superMeter, rounds };
+
+    const orient = (value: number) => (isP1 ? value : HUD_PANEL_WIDTH - value);
+    const orientPoints = (points: { x: number; y: number }[]) => {
+      const oriented = points.map(({ x, y }) => ({ x: orient(x), y }));
+      return isP1 ? oriented : oriented.reverse();
+    };
+
+    const panelX = isP1 ? hudX : hudX - HUD_PANEL_WIDTH;
+    const container = this.add.container(panelX, hudY).setDepth(6);
+    container.setScrollFactor(0);
+
+    const frameColor = 0xf8f4df;
+    const baseDark = isP1 ? 0x09122b : 0x240a10;
+    const baseDarkAlt = isP1 ? 0x15255a : 0x3f1425;
+    const accentPrimary = isP1 ? 0x4ca7ff : 0xff5c72;
+    const accentSecondary = isP1 ? 0x7ff6ff : 0xffcb71;
+
+    const wingBackground = this.add.graphics();
+    wingBackground.fillGradientStyle(baseDark, baseDarkAlt, baseDark, baseDarkAlt, 0.92);
+    wingBackground.lineStyle(2, frameColor, 0.58);
+    const wingShape = orientPoints([
+      { x: 8, y: 6 },
+      { x: HUD_PANEL_WIDTH - 88, y: 0 },
+      { x: HUD_PANEL_WIDTH - 14, y: 30 },
+      { x: HUD_PANEL_WIDTH - 96, y: 88 },
+      { x: 12, y: HUD_PANEL_HEIGHT },
+    ]);
+    wingBackground.fillPoints(wingShape, true);
+    wingBackground.strokePoints(wingShape, true);
+    container.add(wingBackground);
+
+    const wingAccent = this.add.graphics();
+    wingAccent.fillGradientStyle(accentPrimary, accentSecondary, accentPrimary, accentSecondary, 0.74);
+    wingAccent.fillPoints(
+      orientPoints([
+        { x: HUD_PANEL_WIDTH - 142, y: 12 },
+        { x: HUD_PANEL_WIDTH - 22, y: 56 },
+        { x: HUD_PANEL_WIDTH - 168, y: 90 },
+        { x: HUD_PANEL_WIDTH - 214, y: 90 },
+      ]),
+      true,
+    );
+    container.add(wingAccent);
+
+    const techLines = this.add.graphics();
+    techLines.lineStyle(1, accentSecondary, 0.36);
+    techLines.strokePoints(
+      orientPoints([
+        { x: HUD_HEALTH_ANCHOR - 12, y: 22 },
+        { x: HUD_PANEL_WIDTH - 20, y: 22 },
+      ]),
+      false,
+    );
+    techLines.strokePoints(
+      orientPoints([
+        { x: HUD_HEALTH_ANCHOR - 10, y: HUD_PANEL_HEIGHT - 6 },
+        { x: HUD_PANEL_WIDTH - 104, y: HUD_PANEL_HEIGHT - 6 },
+      ]),
+      false,
+    );
+    container.add(techLines);
+
+    const portraitCenterX = orient(HUD_HEALTH_ANCHOR - 60);
+    const portraitCenterY = HUD_PANEL_HEIGHT - 6;
+    const portraitPlate = this.add.graphics();
+    portraitPlate.fillStyle(0x050810, 0.82);
+    portraitPlate.fillCircle(portraitCenterX, portraitCenterY, HUD_PORTRAIT_SIZE * 0.5);
+    container.add(portraitPlate);
+
+    const portrait = this.add
+      .image(portraitCenterX, portraitCenterY - 6, this.getPortraitTexture(slot))
+      .setOrigin(0.5)
+      .setDisplaySize(HUD_PORTRAIT_SIZE, HUD_PORTRAIT_SIZE)
+      .setFlipX(!isP1);
+    container.add(portrait);
+
+    const portraitRing = this.add.graphics();
+    portraitRing.lineStyle(3, frameColor, 0.72);
+    portraitRing.strokeCircle(portraitCenterX, portraitCenterY, HUD_PORTRAIT_SIZE * 0.5);
+    portraitRing.lineStyle(2, accentSecondary, 0.54);
+    portraitRing.strokeCircle(portraitCenterX, portraitCenterY, HUD_PORTRAIT_SIZE * 0.42);
+    container.add(portraitRing);
+    container.bringToTop(portrait);
+
+    const name = this.add
+      .text(orient(HUD_HEALTH_ANCHOR), 6, runtime.name, {
+        fontFamily: "Impact, Arial Black, sans-serif",
+        fontSize: "22px",
+        color: "#fef6e4",
+        stroke: "#120714",
+        strokeThickness: 6,
+      })
+      .setOrigin(isP1 ? 0 : 1, 0);
+    name.setShadow(0, 4, "#07030c", 12, true, true);
+    container.add(name);
+
+    const applyNameText = (value: string) => {
+      const textValue = value || "?";
+      name.setScale(1);
+      name.setText(textValue);
+      if (name.displayWidth <= HUD_NAME_MAX_WIDTH) {
+        return;
+      }
+      const scale = Phaser.Math.Clamp(HUD_NAME_MAX_WIDTH / name.displayWidth, HUD_NAME_MIN_SCALE, 1);
+      name.setScale(scale);
+      if (scale > HUD_NAME_MIN_SCALE + 0.001) {
+        return;
+      }
+      let truncated = textValue;
+      const allowedWidth = HUD_NAME_MAX_WIDTH / scale;
+      while (truncated.length > 1) {
+        truncated = truncated.slice(0, -1);
+        name.setText(`${truncated}...`);
+        if (name.width <= allowedWidth) {
+          break;
+        }
+      }
+      if (name.width > allowedWidth) {
+        name.setText("...");
+      }
+    };
+    applyNameText(runtime.name);
+
+    const rounds = this.add
+      .text(orient(HUD_HEALTH_ANCHOR), HUD_PANEL_HEIGHT - 8, "Rounds: 0", {
+        fontFamily: "Arial Black, Arial, sans-serif",
+        fontSize: "16px",
+        color: "#dcd0ff",
+        stroke: "#1a0a1f",
+        strokeThickness: 4,
+      })
+      .setOrigin(isP1 ? 0 : 1, 1);
+    rounds.setShadow(0, 3, "#040207", 8, true, true);
+    container.add(rounds);
+
+    const healthTrack = this.add.graphics();
+    const healthTrackShape = orientPoints([
+      { x: HUD_HEALTH_ANCHOR, y: HUD_HEALTH_TOP },
+      { x: HUD_HEALTH_ANCHOR + HUD_HEALTH_LENGTH, y: HUD_HEALTH_TOP },
+      { x: HUD_HEALTH_ANCHOR + HUD_HEALTH_LENGTH + HUD_HEALTH_TIP, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT },
+      { x: HUD_HEALTH_ANCHOR, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT },
+    ]);
+    healthTrack.fillStyle(0x04070f, 0.84);
+    healthTrack.fillPoints(healthTrackShape, true);
+    healthTrack.lineStyle(1, frameColor, 0.46);
+    healthTrack.strokePoints(healthTrackShape, true);
+    container.add(healthTrack);
+
+    const healthFill = this.add.graphics();
+    container.add(healthFill);
+    const healthShine = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    container.add(healthShine);
+
+    const updateHealthMeter = (ratio: number) => {
+      const clamped = Phaser.Math.Clamp(ratio, 0, 1);
+      healthFill.clear();
+      healthShine.clear();
+      if (clamped <= 0) {
+        return;
+      }
+      const width = HUD_HEALTH_LENGTH * clamped;
+      const tip = HUD_HEALTH_TIP * Math.min(1, clamped);
+      const healthPoints = orientPoints([
+        { x: HUD_HEALTH_ANCHOR, y: HUD_HEALTH_TOP },
+        { x: HUD_HEALTH_ANCHOR + width, y: HUD_HEALTH_TOP },
+        { x: HUD_HEALTH_ANCHOR + width + tip, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT },
+        { x: HUD_HEALTH_ANCHOR, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT },
+      ]);
+      healthFill.fillGradientStyle(accentSecondary, accentPrimary, accentSecondary, accentPrimary, 0.95);
+      healthFill.fillPoints(healthPoints, true);
+      healthFill.lineStyle(1, 0xffffff, 0.14);
+      healthFill.strokePoints(healthPoints, true);
+
+      if (width > 14) {
+        const shinePoints = orientPoints([
+          { x: HUD_HEALTH_ANCHOR + 4, y: HUD_HEALTH_TOP + 4 },
+          { x: HUD_HEALTH_ANCHOR + width - 6, y: HUD_HEALTH_TOP + 4 },
+          { x: HUD_HEALTH_ANCHOR + width + Math.min(tip, 12) - 6, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT * 0.45 },
+          { x: HUD_HEALTH_ANCHOR + 4, y: HUD_HEALTH_TOP + HUD_HEALTH_HEIGHT * 0.45 },
+        ]);
+        healthShine.fillStyle(0xffffff, 0.18);
+        healthShine.fillPoints(shinePoints, true);
+      }
+    };
+
+    const superTrack = this.add.graphics();
+    const superTrackShape = orientPoints([
+      { x: HUD_SUPER_ANCHOR, y: HUD_SUPER_TOP },
+      { x: HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH, y: HUD_SUPER_TOP },
+      { x: HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT },
+      { x: HUD_SUPER_ANCHOR, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT },
+    ]);
+    superTrack.fillStyle(0x050810, 0.86);
+    superTrack.fillPoints(superTrackShape, true);
+    superTrack.lineStyle(1, frameColor, 0.4);
+    superTrack.strokePoints(superTrackShape, true);
+    container.add(superTrack);
+
+    const superFill = this.add.graphics();
+    container.add(superFill);
+    const superGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    container.add(superGlow);
+    const superSegments = this.add.graphics();
+    superSegments.lineStyle(1, frameColor, 0.22);
+    for (let i = 1; i < SUPER_HITS_REQUIRED; i += 1) {
+      const ratio = i / SUPER_HITS_REQUIRED;
+      const lineX = HUD_SUPER_ANCHOR + ratio * HUD_SUPER_LENGTH;
+      const segment = orientPoints([
+        { x: lineX, y: HUD_SUPER_TOP + 2 },
+        { x: lineX + (isP1 ? HUD_SUPER_TIP * 0.4 : -HUD_SUPER_TIP * 0.4), y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT - 2 },
+      ]);
+      superSegments.strokePoints(segment, false);
+    }
+    container.add(superSegments);
+
+    const superMaxBadge = this.add
+      .text(orient(HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP + 10), HUD_SUPER_TOP + HUD_SUPER_HEIGHT + 10, "MAX", {
+        fontFamily: "Impact, Arial Black, sans-serif",
+        fontSize: "14px",
+        color: "#fff6d6",
+        stroke: "#1d0a11",
+        strokeThickness: 4,
+      })
+      .setOrigin(isP1 ? 0 : 1, 1)
+      .setAlpha(0);
+    container.add(superMaxBadge);
+
+    const updateSuperMeter = (ratio: number) => {
+      const clamped = Phaser.Math.Clamp(ratio, 0, 1);
+      superFill.clear();
+      superGlow.clear();
+      superFill.setAlpha(0.68 + clamped * 0.32);
+      if (clamped <= 0) {
+        superMaxBadge.setAlpha(0);
+        return;
+      }
+      const width = HUD_SUPER_LENGTH * clamped;
+      const tip = HUD_SUPER_TIP * Math.min(1, clamped);
+      const superPoints = orientPoints([
+        { x: HUD_SUPER_ANCHOR, y: HUD_SUPER_TOP },
+        { x: HUD_SUPER_ANCHOR + width, y: HUD_SUPER_TOP },
+        { x: HUD_SUPER_ANCHOR + width + tip, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT },
+        { x: HUD_SUPER_ANCHOR, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT },
+      ]);
+      superFill.fillGradientStyle(accentPrimary, accentSecondary, accentPrimary, accentSecondary, 0.9);
+      superFill.fillPoints(superPoints, true);
+      superFill.lineStyle(1, 0xffffff, 0.1);
+      superFill.strokePoints(superPoints, true);
+
+      if (clamped >= 0.999) {
+        const glowPoints = orientPoints([
+          { x: HUD_SUPER_ANCHOR - 6, y: HUD_SUPER_TOP - 6 },
+          { x: HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP + 10, y: HUD_SUPER_TOP - 6 },
+          { x: HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP + 22, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT + 12 },
+          { x: HUD_SUPER_ANCHOR - 6, y: HUD_SUPER_TOP + HUD_SUPER_HEIGHT + 12 },
+        ]);
+        superGlow.fillGradientStyle(accentSecondary, accentPrimary, accentSecondary, accentPrimary, 0.34);
+        superGlow.fillPoints(glowPoints, true);
+        superMaxBadge.setAlpha(1);
+      } else {
+        superMaxBadge.setAlpha(0);
+      }
+    };
+
+    return {
+      sprite,
+      previousSprite,
+      renderState: createFighterRenderState(runtime, isP1 ? 0 : 0.7),
+      name,
+      portrait,
+      setName: applyNameText,
+      rounds,
+      updateHealthMeter,
+      updateSuperMeter,
+    };
   }
 
   private stepFixedFrames(deltaSeconds: number) {
@@ -500,10 +783,13 @@ export class BattleScene extends Phaser.Scene {
       } else {
         view.previousSprite.setAlpha(0);
       }
-      view.health.displayWidth = 300 * (runtime.health / 100);
-      view.superMeter.displayWidth = 300 * (runtime.superMeter / SUPER_HITS_REQUIRED);
-      view.superMeter.setAlpha(runtime.superMeter >= SUPER_HITS_REQUIRED ? 1 : 0.82);
-      view.name.setText(runtime.name);
+      const portraitTexture = this.getPortraitTexture(slot);
+      if (view.portrait.texture.key !== portraitTexture) {
+        view.portrait.setTexture(portraitTexture);
+      }
+      view.updateHealthMeter(runtime.health / 100);
+      view.updateSuperMeter(runtime.superMeter / SUPER_HITS_REQUIRED);
+      view.setName(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
     });
 
@@ -551,6 +837,17 @@ export class BattleScene extends Phaser.Scene {
   private getFighterTexture(slot: PlayerSlot, pose: FighterPose) {
     const texture = `${slot}-${pose}`;
     return this.textures.exists(texture) ? texture : `${slot}-idle`;
+  }
+
+  private getPortraitTexture(slot: PlayerSlot) {
+    const preferred = ["portrait", "victory", "idle", "hit", "punch"];
+    for (const pose of preferred) {
+      const key = `${slot}-${pose}`;
+      if (this.textures.exists(key)) {
+        return key;
+      }
+    }
+    return `${slot}-idle`;
   }
 
   private applyFighterImage(
