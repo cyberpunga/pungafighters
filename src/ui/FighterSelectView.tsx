@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, Cpu, Download, Gamepad2, ImagePlus, Monitor, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Bot, Cpu, Download, Gamepad2, ImagePlus, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import { BATTLE_BACKGROUND_IMPORT_ACCEPT } from "../storage/db";
@@ -9,37 +9,6 @@ export interface LocalFighterSelection {
   p2: string;
   activeSlot: PlayerSlot;
   mode: LocalBattleMode;
-}
-
-export function FightModeView(props: { onLocal: () => void; onHost: () => void; onJoin: () => void }) {
-  return (
-    <section className="select-view">
-      <div className="duel-header">
-        <div>
-          <p className="eyebrow">Choose the match</p>
-          <h2>Fight Setup</h2>
-        </div>
-      </div>
-
-      <div className="fight-mode-grid">
-        <button className="mode-card" type="button" onClick={props.onLocal}>
-          <Users size={28} />
-          <strong>Local Fight</strong>
-          <span>Choose 1 vs 2, 1 vs CPU, or CPU vs CPU on this device.</span>
-        </button>
-        <button className="mode-card" type="button" onClick={props.onHost}>
-          <RadioTower size={28} />
-          <strong>Host Remote</strong>
-          <span>Pick your fighter and arena, then send an invite.</span>
-        </button>
-        <button className="mode-card" type="button" onClick={props.onJoin}>
-          <Monitor size={28} />
-          <strong>Join Remote</strong>
-          <span>Pick your fighter, then paste the host offer.</span>
-        </button>
-      </div>
-    </section>
-  );
 }
 
 export function LocalFighterSelectView(props: {

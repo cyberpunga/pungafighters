@@ -165,9 +165,11 @@ button:disabled {
   min-height: calc(100vh - 73px);
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+  grid-template-rows: auto auto;
   gap: clamp(24px, 5vw, 72px);
   align-items: center;
   padding: clamp(28px, 5vw, 64px);
+  padding-bottom: clamp(82px, 10vw, 108px);
   position: relative;
 }
 
@@ -200,6 +202,14 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(150px, 1fr));
   gap: 14px;
   align-items: stretch;
+}
+
+.home-fight-options {
+  grid-column: 1 / -1;
+}
+
+.home-fight-options .mode-card {
+  min-height: 156px;
 }
 
 .fighter-card {
@@ -1241,6 +1251,10 @@ button:disabled {
   .online-grid,
   .settings-grid {
     grid-template-columns: 1fr;
+  }
+
+  .menu-stage {
+    padding-bottom: clamp(28px, 5vw, 64px);
   }
 
   .settings-control-card {

@@ -69,7 +69,7 @@ CPU-controlled slots synthesize deterministic actions and ignore keyboard input.
 
 ## Online Matches
 
-Use Fight Setup to choose local or remote play before choosing fighters. For online matches, the host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange setup assets. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
+Use the homepage Local Fight, Host Remote, or Join Remote options before choosing fighters. For online matches, the host shares an offer code, the guest returns an answer code, and the match starts after both browsers exchange setup assets. V1 online play has no accounts, matchmaking, or GunDB relay. TURN can be configured through the Worker credentials endpoint below.
 
 Each computer selects and sends one local fighter for online play; the host is placed in the Player 1 corner and the guest is placed in the Player 2 corner after the exchange. The online preview shows the fighter that will be sent.
 

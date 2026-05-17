@@ -3,6 +3,9 @@ import type { FighterRuntime } from "../../game/simulation/battle";
 
 const CROSSFADE_SECONDS = 0.1;
 const LAND_SQUASH_SECONDS = 0.18;
+export const KNOCKOUT_FALL_SECONDS = 0.92;
+export const KNOCKOUT_BOUNCE_SECONDS = 0.78;
+const KNOCKOUT_TOTAL_SECONDS = KNOCKOUT_FALL_SECONDS + KNOCKOUT_BOUNCE_SECONDS;
 
 export interface FighterRenderState {
   currentPose: FighterPose;
@@ -15,6 +18,8 @@ export interface FighterRenderState {
   idleOffset: number;
   wasGrounded: boolean;
   landElapsed: number;
+  knockedOut: boolean;
+  knockoutElapsed: number;
 }
 
 export interface FighterRenderTransform {
@@ -45,6 +50,8 @@ export function createFighterRenderState(runtime: FighterRuntime, idleOffset: nu
     idleOffset,
     wasGrounded: true,
     landElapsed: LAND_SQUASH_SECONDS,
+    knockedOut: runtime.health <= 0,
+    knockoutElapsed: 0,
   };
 }
 
@@ -56,15 +63,24 @@ export function updateFighterRenderState(
 ): FighterRenderFrame {
   const dt = Math.max(deltaSeconds, 1 / 120);
   const grounded = runtime.y >= groundY - 1 && Math.abs(runtime.velocityY) < 1;
+  const knockedOut = runtime.health <= 0;
+  const targetPose = knockedOut ? "hit" : runtime.pose;
 
   renderState.velocityX = (runtime.x - renderState.previousX) / dt;
   renderState.poseElapsed += deltaSeconds;
   renderState.crossfadeElapsed = Math.min(CROSSFADE_SECONDS, renderState.crossfadeElapsed + deltaSeconds);
   renderState.landElapsed = Math.min(LAND_SQUASH_SECONDS, renderState.landElapsed + deltaSeconds);
+  if (knockedOut) {
+    const elapsed = renderState.knockedOut ? renderState.knockoutElapsed : 0;
+    renderState.knockoutElapsed = Math.min(KNOCKOUT_TOTAL_SECONDS, elapsed + deltaSeconds);
+  } else {
+    renderState.knockoutElapsed = 0;
+  }
+  renderState.knockedOut = knockedOut;
 
-  if (runtime.pose !== renderState.currentPose) {
+  if (targetPose !== renderState.currentPose) {
     renderState.previousPose = renderState.currentPose;
-    renderState.currentPose = runtime.pose;
+    renderState.currentPose = targetPose;
     renderState.poseElapsed = 0;
     renderState.crossfadeElapsed = 0;
   }
@@ -185,6 +201,17 @@ function resolveTransform(renderState: FighterRenderState, runtime: FighterRunti
     scaleY -= bounce * 0.02;
   }
 
+  if (renderState.knockedOut) {
+    const motion = getKnockoutMotion(renderState.knockoutElapsed, forward);
+    offsetX += motion.offsetX;
+    offsetY += motion.offsetY;
+    rotation = motion.rotation;
+    scaleX += motion.scaleX;
+    scaleY += motion.scaleY;
+    alpha = 1;
+    tint = motion.tint ?? tint;
+  }
+
   return {
     x: runtime.x + offsetX,
     y: runtime.y + offsetY,
@@ -193,6 +220,28 @@ function resolveTransform(renderState: FighterRenderState, runtime: FighterRunti
     rotation,
     alpha,
     tint,
+  };
+}
+
+function getKnockoutMotion(elapsed: number, forward: 1 | -1) {
+  const fallProgress = easeInOutSine(clamp01(elapsed / KNOCKOUT_FALL_SECONDS));
+  const bounceElapsed = Math.max(0, elapsed - KNOCKOUT_FALL_SECONDS);
+  const bounceProgress = clamp01(bounceElapsed / KNOCKOUT_BOUNCE_SECONDS);
+  const bounceDecay = Math.pow(1 - bounceProgress, 1.35);
+  const bounceWave = Math.abs(Math.sin(bounceProgress * Math.PI * 2));
+  const bounceLift = bounceWave * bounceDecay * 24;
+  const settle = easeOutCubic(bounceProgress);
+  const impactSquash = bounceElapsed > 0 ? Math.max(0, Math.cos(bounceProgress * Math.PI * 4)) * bounceDecay : 0;
+  const slideProgress = easeOutCubic(clamp01(elapsed / KNOCKOUT_TOTAL_SECONDS));
+  const recoilFlash = 1 - clamp01(elapsed / 0.22);
+
+  return {
+    offsetX: -forward * (16 * fallProgress + 62 * slideProgress),
+    offsetY: -(58 * fallProgress + Math.sin(fallProgress * Math.PI) * 28 + bounceLift),
+    rotation: -forward * (1.36 * fallProgress + 0.12 * settle - Math.sin(bounceProgress * Math.PI * 4) * bounceDecay * 0.08),
+    scaleX: fallProgress * 0.03 + impactSquash * 0.055,
+    scaleY: -fallProgress * 0.035 - impactSquash * 0.045,
+    tint: recoilFlash > 0 ? 0xf8f4df : undefined,
   };
 }
 

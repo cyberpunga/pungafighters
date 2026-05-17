@@ -1,7 +1,14 @@
-import { Camera, Gamepad2 } from "lucide-react";
+import { Camera, Monitor, RadioTower, Users } from "lucide-react";
 import type { LoadedFighter } from "../types/game";
 
-export function MenuView(props: { fighters: LoadedFighter[]; loading: boolean; onCreate: () => void; onSelect: () => void }) {
+export function MenuView(props: {
+  fighters: LoadedFighter[];
+  loading: boolean;
+  onCreate: () => void;
+  onLocal: () => void;
+  onHost: () => void;
+  onJoin: () => void;
+}) {
   const savedCount = props.fighters.filter((fighter) => !fighter.isDefault).length;
   return (
     <section className="menu-stage">
@@ -16,10 +23,6 @@ export function MenuView(props: { fighters: LoadedFighter[]; loading: boolean; o
             <Camera size={19} />
             Create
           </button>
-          <button className="secondary-button" type="button" onClick={props.onSelect}>
-            <Gamepad2 size={19} />
-            Fight
-          </button>
         </div>
       </div>
       <div className="fighter-marquee" aria-label="Fighter gallery">
@@ -29,6 +32,23 @@ export function MenuView(props: { fighters: LoadedFighter[]; loading: boolean; o
             <strong>{fighter.name}</strong>
           </div>
         ))}
+      </div>
+      <div className="fight-mode-grid home-fight-options" aria-label="Choose the match">
+        <button className="mode-card" type="button" onClick={props.onLocal}>
+          <Users size={28} />
+          <strong>Local Fight</strong>
+          <span>Choose 1 vs 2, 1 vs CPU, or CPU vs CPU on this device.</span>
+        </button>
+        <button className="mode-card" type="button" onClick={props.onHost}>
+          <RadioTower size={28} />
+          <strong>Host Remote</strong>
+          <span>Pick your fighter and arena, then send an invite.</span>
+        </button>
+        <button className="mode-card" type="button" onClick={props.onJoin}>
+          <Monitor size={28} />
+          <strong>Join Remote</strong>
+          <span>Pick your fighter, then paste the host offer.</span>
+        </button>
       </div>
       <footer className="status-strip">
         <span>{props.loading ? "Loading fighters" : `${savedCount} saved custom fighters`}</span>
