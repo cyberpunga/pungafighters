@@ -18,7 +18,6 @@ import {
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import {
-  FightModeView,
   LocalFighterSelectView,
   OnlineFighterSelectView,
   type LocalFighterSelection,
@@ -190,25 +189,27 @@ export function App() {
     [localSelection.mode, localSelection.p1, localSelection.p2],
   );
   const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, onlineSelectedFighterId), [fighters, onlineSelectedFighterId]);
-  const exitLocalBattle = useCallback(() => navigate("fight", { replace: true }), [navigate]);
+  const exitLocalBattle = useCallback(() => navigate("menu", { replace: true }), [navigate]);
   const exitOnlineBattle = useCallback(() => {
     setOnlineBattle(undefined);
-    navigate("fight", { replace: true });
+    navigate("menu", { replace: true });
   }, [navigate]);
 
   return (
     <main className="app-shell">
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
-      {view === "menu" && <MenuView fighters={fighters} loading={loading} onCreate={() => navigate("creator")} onSelect={() => navigate("fight")} />}
-      {view === "creator" && <CreatorView onSaved={refreshFighters} />}
-      {route === "fight" && (
-        <FightModeView
+      {view === "menu" && (
+        <MenuView
+          fighters={fighters}
+          loading={loading}
+          onCreate={() => navigate("creator")}
           onLocal={() => navigate("localFighters")}
           onHost={() => navigate("remoteHostFighter")}
           onJoin={() => navigate("remoteJoinFighter")}
         />
       )}
+      {view === "creator" && <CreatorView onSaved={refreshFighters} />}
       {route === "localFighters" && (
         <LocalFighterSelectView
           fighters={fighters}
@@ -221,7 +222,7 @@ export function App() {
           onDelete={deleteFighterFile}
           onImportBackgroundFile={importBattleBackgroundFile}
           onClearBackground={clearBattleBackground}
-          onBack={() => navigate("fight")}
+          onBack={() => navigate("menu")}
           onNext={() => {
             setOnlineBattle(undefined);
             if (battleFighters) {
@@ -243,7 +244,7 @@ export function App() {
           onDelete={deleteFighterFile}
           onImportBackgroundFile={importBattleBackgroundFile}
           onClearBackground={clearBattleBackground}
-          onBack={() => navigate("fight")}
+          onBack={() => navigate("menu")}
           onNext={() => navigate("onlineHost")}
         />
       )}
@@ -256,7 +257,7 @@ export function App() {
           onSelected={setOnlineSelectedFighterId}
           onExport={exportFighterFile}
           onDelete={deleteFighterFile}
-          onBack={() => navigate("fight")}
+          onBack={() => navigate("menu")}
           onNext={() => navigate("onlineGuest")}
         />
       )}
@@ -319,7 +320,7 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
     props.onNavigate(route);
   };
 
-  const fightActive = props.view === "fightMode" || props.view === "fighterSelect" || props.view === "online";
+  const fightActive = props.view === "menu" || props.view === "fighterSelect" || props.view === "online";
 
   return (
     <header className="topbar">
@@ -340,11 +341,11 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
         </a>
         <a
           className={fightActive ? "icon-button active" : "icon-button"}
-          href={appRouteToHref("fight")}
-          onClick={(event) => onRouteClick(event, "fight")}
+          href={appRouteToHref("menu")}
+          onClick={(event) => onRouteClick(event, "menu")}
           aria-current={fightActive ? "page" : undefined}
-          aria-label="Fight setup"
-          title="Fight setup"
+          aria-label="Fight options"
+          title="Fight options"
         >
           <Gamepad2 size={19} />
         </a>
@@ -371,6 +372,13 @@ function useAppRoute(): [AppRoute, (route: AppRoute, options?: { replace?: boole
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    const href = appRouteToHref(route);
+    if (window.location.pathname !== href) {
+      window.history.replaceState({ appRoute: route }, "", href);
+    }
+  }, [route]);
 
   const navigate = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
     const href = appRouteToHref(nextRoute);
