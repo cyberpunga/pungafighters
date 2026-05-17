@@ -27,9 +27,12 @@ import { BAD_TV_POST_FX_PIPELINE_KEY, getBadTvPostFxConfig } from "../effects/Ba
 import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPostFxPipeline";
 import { PIXEL_POST_FX_PIPELINE_KEY, getPixelPostFxConfig } from "../effects/PixelPostFxPipeline";
 import { STATIC_POST_FX_PIPELINE_KEY, getStaticPostFxConfig } from "../effects/StaticPostFxPipeline";
+import { playKnockdownImpactSfx } from "../audio/knockdownImpactSfx";
 import { playPunchImpactSfx } from "../audio/punchImpactSfx";
 import { playSuperSfx } from "../audio/superSfx";
 import {
+  KNOCKOUT_BOUNCE_SECONDS,
+  KNOCKOUT_FALL_SECONDS,
   createFighterRenderState,
   updateFighterRenderState,
   type FighterRenderState,
@@ -117,6 +120,8 @@ export class BattleScene extends Phaser.Scene {
   private accumulator = 0;
   private onlineStatus?: string;
   private haltedMessage?: string;
+  private readonly knockdownSfxSlots = new Set<PlayerSlot>();
+  private knockdownSfxEvents: Phaser.Time.TimerEvent[] = [];
   private readonly checksumHistory = new Map<number, string>();
   private readonly pendingRemoteChecksums = new Map<number, string>();
   private readonly handleKeyDown = (event: KeyboardEvent) => {
@@ -193,6 +198,8 @@ export class BattleScene extends Phaser.Scene {
     this.restartHint.setShadow(0, 3, "#05040b", 8, true, true);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.hasCreated = false;
+      this.clearKnockdownSfxEvents();
+      this.knockdownSfxSlots.clear();
     });
     this.hasCreated = true;
     this.applyDisplayEffects();
@@ -761,6 +768,8 @@ export class BattleScene extends Phaser.Scene {
     this.accumulator = 0;
     this.lastHitAt = -1;
     this.lastSuperAt = -1;
+    this.clearKnockdownSfxEvents();
+    this.knockdownSfxSlots.clear();
     this.onlineStatus = undefined;
     this.haltedMessage = undefined;
     this.checksumHistory.clear();
@@ -798,6 +807,7 @@ export class BattleScene extends Phaser.Scene {
       view.updateSuperMeter(runtime.superMeter / SUPER_HITS_REQUIRED);
       view.setName(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
+      this.updateKnockdownSfx(slot);
     });
     this.syncFighterDepths();
 
@@ -1177,6 +1187,40 @@ export class BattleScene extends Phaser.Scene {
       x: defender.x,
       arenaWidth: ARENA_WIDTH,
     });
+  }
+
+  private updateKnockdownSfx(slot: PlayerSlot) {
+    const runtime = this.state.fighters[slot];
+    if (runtime.health > 0) {
+      this.knockdownSfxSlots.delete(slot);
+      return;
+    }
+    if (this.knockdownSfxSlots.has(slot)) {
+      return;
+    }
+
+    this.knockdownSfxSlots.add(slot);
+    this.scheduleKnockdownImpact(runtime.x - runtime.facing * 72, KNOCKOUT_FALL_SECONDS, 1);
+    this.scheduleKnockdownImpact(runtime.x - runtime.facing * 88, KNOCKOUT_FALL_SECONDS + KNOCKOUT_BOUNCE_SECONDS * 0.5, 0.52);
+    this.scheduleKnockdownImpact(runtime.x - runtime.facing * 98, KNOCKOUT_FALL_SECONDS + KNOCKOUT_BOUNCE_SECONDS, 0.3);
+  }
+
+  private scheduleKnockdownImpact(x: number, delaySeconds: number, strength: number) {
+    const event = this.time.delayedCall(delaySeconds * 1000, () => {
+      playKnockdownImpactSfx(this.sound, {
+        x: Phaser.Math.Clamp(x, 0, ARENA_WIDTH),
+        arenaWidth: ARENA_WIDTH,
+        strength,
+      });
+      this.cameras.main.shake(Phaser.Math.Linear(45, 130, strength), Phaser.Math.Linear(0.0012, 0.0038, strength));
+      this.knockdownSfxEvents = this.knockdownSfxEvents.filter((queued) => queued !== event);
+    });
+    this.knockdownSfxEvents.push(event);
+  }
+
+  private clearKnockdownSfxEvents() {
+    this.knockdownSfxEvents.forEach((event) => event.remove(false));
+    this.knockdownSfxEvents = [];
   }
 
   private playSuperSound(attackerSlot: PlayerSlot) {
