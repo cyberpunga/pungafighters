@@ -1,8 +1,10 @@
-import { ArrowDown, ArrowUp, CircleOff, ScanLine, TvMinimal, Zap } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleOff, Grid3X3, ScanLine, Sparkles, TvMinimal, Zap } from "lucide-react";
 import type { BattlePostEffect } from "../types/game";
 
 const DISPLAY_EFFECT_OPTIONS = [
+  { value: "pixel", label: "Pixel", Icon: Grid3X3 },
   { value: "bad-tv", label: "Bad TV", Icon: Zap },
+  { value: "static", label: "Static", Icon: Sparkles },
   { value: "crt-soft", label: "CRT Soft", Icon: TvMinimal },
   { value: "crt-strong", label: "CRT Max", Icon: ScanLine },
 ] as const satisfies ReadonlyArray<{

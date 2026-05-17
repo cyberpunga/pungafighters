@@ -23,6 +23,8 @@ import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
 import type { NetworkInputController } from "../../game/network/networkInputController";
 import { BAD_TV_POST_FX_PIPELINE_KEY, getBadTvPostFxConfig } from "../effects/BadTvPostFxPipeline";
 import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPostFxPipeline";
+import { PIXEL_POST_FX_PIPELINE_KEY, getPixelPostFxConfig } from "../effects/PixelPostFxPipeline";
+import { STATIC_POST_FX_PIPELINE_KEY, getStaticPostFxConfig } from "../effects/StaticPostFxPipeline";
 import {
   createFighterRenderState,
   updateFighterRenderState,
@@ -164,6 +166,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private applyDisplayEffect(effect: BattlePostEffect) {
+    const pixelConfig = getPixelPostFxConfig(effect);
+    if (pixelConfig) {
+      this.cameras.main.setPostPipeline(PIXEL_POST_FX_PIPELINE_KEY, pixelConfig, false);
+      return;
+    }
     const badTvConfig = getBadTvPostFxConfig(effect);
     if (badTvConfig) {
       this.cameras.main.setPostPipeline(BAD_TV_POST_FX_PIPELINE_KEY, badTvConfig, false);
@@ -172,6 +179,11 @@ export class BattleScene extends Phaser.Scene {
     const crtConfig = getCrtPostFxConfig(effect);
     if (crtConfig) {
       this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, crtConfig, false);
+      return;
+    }
+    const staticConfig = getStaticPostFxConfig(effect);
+    if (staticConfig) {
+      this.cameras.main.setPostPipeline(STATIC_POST_FX_PIPELINE_KEY, staticConfig, false);
     }
   }
 

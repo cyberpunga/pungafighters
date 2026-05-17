@@ -3,6 +3,8 @@ import type { BattleConfig, BattlePostEffect, LoadedFighter, RuntimeBattleBackgr
 import type { NetworkInputController } from "../../game/network/networkInputController";
 import { BAD_TV_POST_FX_PIPELINE_KEY, BadTvPostFxPipeline } from "../effects/BadTvPostFxPipeline";
 import { CRT_POST_FX_PIPELINE_KEY, CrtPostFxPipeline } from "../effects/CrtPostFxPipeline";
+import { PIXEL_POST_FX_PIPELINE_KEY, PixelPostFxPipeline } from "../effects/PixelPostFxPipeline";
+import { STATIC_POST_FX_PIPELINE_KEY, StaticPostFxPipeline } from "../effects/StaticPostFxPipeline";
 import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
 
 export interface BattleGameHandle {
@@ -38,6 +40,8 @@ export function createBattleGame(input: {
     pipeline: {
       [BAD_TV_POST_FX_PIPELINE_KEY]: BadTvPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
       [CRT_POST_FX_PIPELINE_KEY]: CrtPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
+      [PIXEL_POST_FX_PIPELINE_KEY]: PixelPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
+      [STATIC_POST_FX_PIPELINE_KEY]: StaticPostFxPipeline as unknown as typeof Phaser.Renderer.WebGL.WebGLPipeline,
     },
     scale: {
       mode: Phaser.Scale.FIT,
