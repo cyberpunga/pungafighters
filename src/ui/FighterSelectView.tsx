@@ -1,4 +1,4 @@
-import { ArrowLeft, Bot, Cpu, Download, Gamepad2, ImagePlus, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Bot, Cpu, Download, Gamepad2, ImagePlus, Pencil, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import { BATTLE_BACKGROUND_IMPORT_ACCEPT } from "../storage/db";
@@ -19,6 +19,7 @@ export function LocalFighterSelectView(props: {
   battleBackground?: LoadedBattleBackground;
   onSelected: (next: LocalFighterSelection) => void;
   onExport: (fighter: LoadedFighter) => Promise<void>;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => Promise<void>;
   onImportBackgroundFile: (file: File) => Promise<void>;
   onClearBackground: () => Promise<void>;
@@ -65,6 +66,7 @@ export function LocalFighterSelectView(props: {
         localSelection={props.selected}
         onSelect={(id) => props.onSelected({ ...props.selected, [props.selected.activeSlot]: id })}
         onExport={props.onExport}
+        onEdit={props.onEdit}
         onDelete={props.onDelete}
       />
 
@@ -123,6 +125,7 @@ export function OnlineFighterSelectView(props: {
   battleBackground?: LoadedBattleBackground;
   onSelected: (id: string) => void;
   onExport: (fighter: LoadedFighter) => Promise<void>;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => Promise<void>;
   onImportBackgroundFile?: (file: File) => Promise<void>;
   onClearBackground?: () => Promise<void>;
@@ -150,6 +153,7 @@ export function OnlineFighterSelectView(props: {
         onlineSlot={props.role === "host" ? "p1" : "p2"}
         onSelect={props.onSelected}
         onExport={props.onExport}
+        onEdit={props.onEdit}
         onDelete={props.onDelete}
       />
 
@@ -237,6 +241,7 @@ function FighterGrid(props: {
   onlineSlot?: PlayerSlot;
   onSelect: (id: string) => void;
   onExport: (fighter: LoadedFighter) => Promise<void>;
+  onEdit: (id: string) => void;
   onDelete: (id: string) => Promise<void>;
 }) {
   return (
@@ -266,12 +271,18 @@ function FighterGrid(props: {
               <span>{fighter.name}</span>
             </button>
             <div className="fighter-card-actions">
+              <button className="icon-button" type="button" onClick={() => props.onEdit(fighter.id)} title="Edit fighter">
+                <Pencil size={17} />
+                <span className="sr-only">Edit {fighter.name}</span>
+              </button>
               <button className="icon-button" type="button" onClick={() => void props.onExport(fighter)} title="Export fighter">
                 <Download size={17} />
+                <span className="sr-only">Export {fighter.name}</span>
               </button>
               {!fighter.isDefault && (
                 <button className="icon-button danger" type="button" onClick={() => void props.onDelete(fighter.id)} title="Delete fighter">
                   <Trash2 size={17} />
+                  <span className="sr-only">Delete {fighter.name}</span>
                 </button>
               )}
             </div>
