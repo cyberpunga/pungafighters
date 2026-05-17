@@ -55,14 +55,14 @@ Player 1:
 - `S`: block
 - `J`: punch
 - `K`: kick
-- `L`: special
+- `J` + `K`: super when charged
 
 Player 2:
 
 - Arrow keys: move, jump, block
 - `1`: punch
 - `2`: kick
-- `3`: special
+- `1` + `2`: super when charged
 
 Online guests can also use Player 1 controls while playing from the Player 2 corner.
 CPU-controlled slots synthesize deterministic actions and ignore keyboard input.

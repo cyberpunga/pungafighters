@@ -1073,7 +1073,8 @@ export class BattleScene extends Phaser.Scene {
     const defender = this.state.fighters[hit.defender];
     const attacker = this.state.fighters[hit.attacker];
     const attackerView = this.views[hit.attacker];
-    const hitColor = hit.damage >= 18 ? 0xf7b267 : 0xf8f4df;
+    const isSuperHit = attacker.attack?.kind === "special";
+    const hitColor = isSuperHit ? 0xf7b267 : hit.damage >= 18 ? 0xf7b267 : 0xf8f4df;
 
     const damageText = this.add
       .text(defender.x, defender.y - 155, `-${hit.damage}`, {
@@ -1105,7 +1106,7 @@ export class BattleScene extends Phaser.Scene {
       onComplete: () => impact.destroy(),
     });
 
-    if (hit.damage >= 12) {
+    if (hit.damage >= 12 || isSuperHit) {
       const afterimage = this.add
         .image(attacker.x - attacker.facing * 22, attacker.y, attackerView.sprite.texture.key)
         .setOrigin(0.5, 0.9)

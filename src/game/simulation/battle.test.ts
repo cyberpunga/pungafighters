@@ -83,6 +83,33 @@ describe("battle simulation", () => {
     expect(state.superFreeze?.remainingFrames).toBeGreaterThan(0);
   });
 
+  it("applies a charged super as four deterministic light hits", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY, superMeter: SUPER_HITS_REQUIRED };
+    state.fighters.p2 = { ...state.fighters.p2, x: 380, y: state.groundY };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), punch: true, kick: true },
+      p2: createEmptyActions(),
+    });
+
+    let previousHitAt = state.lastHit?.at ?? -1;
+    const hitFrames: number[] = [];
+    for (let frame = 0; frame < 140; frame += 1) {
+      state = stepBattleFrame(state, emptyInputs());
+      if (state.lastHit?.attacker === "p1" && state.lastHit.at !== previousHitAt) {
+        hitFrames.push(state.lastHit.at);
+        previousHitAt = state.lastHit.at;
+        expect(state.lastHit.damage).toBe(5);
+      }
+    }
+
+    expect(hitFrames).toHaveLength(4);
+    expect(state.fighters.p2.health).toBe(80);
+    expect(state.fighters.p1.superMeter).toBe(4);
+  });
+
   it("does not start a super from punch and kick before the meter is full", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };

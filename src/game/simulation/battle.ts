@@ -17,6 +17,8 @@ export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
 export const SUPER_HITS_REQUIRED = 5;
 const SUPER_FREEZE_FRAMES = 42;
+const MAX_SUPER_HITS = 4;
+const SUPER_HIT_INTERVAL = 0.08;
 
 type AttackKind = "punch" | "kick" | "special";
 
@@ -67,15 +69,15 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
   special: {
     kind: "special",
     pose: "punch",
-    damage: 18,
+    damage: 5,
     hitbox: {
       reach: 98,
       height: 106,
       centerYOffset: -96,
     },
     activeStart: 0.16,
-    activeEnd: 0.34,
-    duration: 0.62,
+    activeEnd: 0.46,
+    duration: 0.72,
     cooldown: 0.45,
   },
 };
@@ -97,6 +99,7 @@ export interface FighterRuntime {
   attackElapsed: number;
   cooldown: number;
   hasHitThisAttack: boolean;
+  superHitsDelivered: number;
   hitStun: number;
 }
 
@@ -270,6 +273,7 @@ function createRuntime(
     attackElapsed: 0,
     cooldown: 0,
     hasHitThisAttack: false,
+    superHitsDelivered: 0,
     hitStun: 0,
   };
 }
@@ -308,6 +312,7 @@ function updateFighter(
       fighter.attackElapsed = 0;
       fighter.cooldown = 0.12;
       fighter.hasHitThisAttack = false;
+      fighter.superHitsDelivered = 0;
     }
   } else if (fighter.hitStun > 0) {
     fighter.pose = "hit";
@@ -351,7 +356,12 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
   const attacker = state.fighters[attackerSlot];
   const defender = state.fighters[defenderSlot];
   const attack = attacker.attack;
-  if (!attack || attacker.hasHitThisAttack) {
+  if (!attack) {
+    return;
+  }
+
+  const isSpecial = attack.kind === "special";
+  if (!isSpecial && attacker.hasHitThisAttack) {
     return;
   }
 
@@ -359,11 +369,26 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
   const facingDefender = attacker.facing === 1 ? defender.x >= attacker.x : defender.x <= attacker.x;
 
   if (active && facingDefender && boxesOverlap(getAttackBox(attacker, attack), getHurtbox(defender))) {
+    if (isSpecial) {
+      if (attacker.superHitsDelivered >= MAX_SUPER_HITS) {
+        return;
+      }
+      const nextHitTime = attack.activeStart + attacker.superHitsDelivered * SUPER_HIT_INTERVAL;
+      if (attacker.attackElapsed < nextHitTime) {
+        return;
+      }
+      attacker.superHitsDelivered += 1;
+      if (attacker.superHitsDelivered >= MAX_SUPER_HITS) {
+        attacker.hasHitThisAttack = true;
+      }
+    } else {
+      attacker.hasHitThisAttack = true;
+    }
+
     const damage = defender.blocking ? Math.ceil(attack.damage * 0.35) : attack.damage;
     defender.health = Math.max(0, defender.health - damage);
     defender.hitStun = defender.blocking ? 0.08 : 0.24;
     defender.pose = "hit";
-    attacker.hasHitThisAttack = true;
     attacker.superMeter = Math.min(SUPER_HITS_REQUIRED, attacker.superMeter + 1);
     state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: state.frame };
   }
@@ -473,6 +498,7 @@ function fighterChecksum(fighter: FighterRuntime) {
     fixed(fighter.attackElapsed),
     fixed(fighter.cooldown),
     fighter.hasHitThisAttack ? 1 : 0,
+    fighter.superHitsDelivered,
     fixed(fighter.hitStun),
   ].join(",");
 }
