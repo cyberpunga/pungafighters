@@ -26,6 +26,7 @@ import {
 } from "./FighterSelectView";
 import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
+import { DEFAULT_LOCAL_BATTLE_MODE, getLocalPlayerControls } from "./localBattleMode";
 import { selectOnlineLocalFighter } from "./onlineSelection";
 import { appRouteFromLocation, appRouteToHref, appRouteToView, type AppRoute, type View } from "./routes";
 import { SettingsView } from "./SettingsView";
@@ -54,6 +55,7 @@ export function App() {
     p1: DEFAULT_FIGHTER_IDS[0],
     p2: DEFAULT_FIGHTER_IDS[1],
     activeSlot: "p1",
+    mode: DEFAULT_LOCAL_BATTLE_MODE,
   });
   const [onlineSelectedFighterId, setOnlineSelectedFighterId] = useState<string>(DEFAULT_FIGHTER_IDS[0]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +84,7 @@ export function App() {
       p1: loaded.some((fighter) => fighter.id === current.p1) ? current.p1 : loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[0],
       p2: loaded.some((fighter) => fighter.id === current.p2) ? current.p2 : loaded[1]?.id ?? loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[1],
       activeSlot: current.activeSlot,
+      mode: current.mode,
     }));
     setOnlineSelectedFighterId((current) => (loaded.some((fighter) => fighter.id === current) ? current : loaded[0]?.id ?? DEFAULT_FIGHTER_IDS[0]));
   }, []);
@@ -179,8 +182,13 @@ export function App() {
     return p1 && p2 ? { p1, p2 } : undefined;
   }, [fighters, localSelection]);
   const localBattleConfig = useMemo(
-    () => ({ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: localSelection.p1, playerTwoFighterId: localSelection.p2 }),
-    [localSelection.p1, localSelection.p2],
+    () => ({
+      ...DEFAULT_BATTLE_CONFIG,
+      playerOneFighterId: localSelection.p1,
+      playerTwoFighterId: localSelection.p2,
+      playerControls: getLocalPlayerControls(localSelection.mode),
+    }),
+    [localSelection.mode, localSelection.p1, localSelection.p2],
   );
   const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, onlineSelectedFighterId), [fighters, onlineSelectedFighterId]);
   const exitLocalBattle = useCallback(() => navigate("fight", { replace: true }), [navigate]);

@@ -1,13 +1,14 @@
-import { ArrowLeft, ArrowRight, Download, Gamepad2, ImagePlus, Monitor, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Cpu, Download, Gamepad2, ImagePlus, Monitor, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import { BATTLE_BACKGROUND_IMPORT_ACCEPT } from "../storage/db";
-import type { LoadedBattleBackground, LoadedFighter, PlayerSlot } from "../types/game";
+import type { LoadedBattleBackground, LoadedFighter, LocalBattleMode, PlayerSlot } from "../types/game";
 
 export interface LocalFighterSelection {
   p1: string;
   p2: string;
   activeSlot: PlayerSlot;
+  mode: LocalBattleMode;
 }
 
 export function FightModeView(props: { onLocal: () => void; onHost: () => void; onJoin: () => void }) {
@@ -24,7 +25,7 @@ export function FightModeView(props: { onLocal: () => void; onHost: () => void; 
         <button className="mode-card" type="button" onClick={props.onLocal}>
           <Users size={28} />
           <strong>Local Fight</strong>
-          <span>Two players choose fighters on this device.</span>
+          <span>Choose 1 vs 2, 1 vs CPU, or CPU vs CPU on this device.</span>
         </button>
         <button className="mode-card" type="button" onClick={props.onHost}>
           <RadioTower size={28} />
@@ -60,6 +61,11 @@ export function LocalFighterSelectView(props: {
         </button>
       </SetupHeader>
 
+      <LocalBattleModePicker
+        mode={props.selected.mode}
+        onModeChange={(mode) => props.onSelected({ ...props.selected, mode })}
+      />
+
       <div className="cursor-panel" aria-label="Active player cursor">
         <span className="field-label-text">Active cursor</span>
         <div className="player-cursor-toggle">
@@ -91,6 +97,42 @@ export function LocalFighterSelectView(props: {
     </section>
   );
 }
+
+function LocalBattleModePicker(props: { mode: LocalBattleMode; onModeChange: (mode: LocalBattleMode) => void }) {
+  return (
+    <div className="local-mode-panel" aria-label="Local battle mode">
+      <span className="field-label-text">Local battle mode</span>
+      <div className="local-mode-options">
+        {LOCAL_BATTLE_MODE_OPTIONS.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              className={props.mode === option.mode ? "local-mode-button active" : "local-mode-button"}
+              type="button"
+              key={option.mode}
+              onClick={() => props.onModeChange(option.mode)}
+            >
+              <Icon size={18} />
+              <span>{option.label}</span>
+              <small>{option.detail}</small>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const LOCAL_BATTLE_MODE_OPTIONS: Array<{
+  mode: LocalBattleMode;
+  label: string;
+  detail: string;
+  icon: typeof Users;
+}> = [
+  { mode: "p1-vs-p2", label: "1 vs 2", detail: "Both sides use local keys.", icon: Users },
+  { mode: "p1-vs-cpu", label: "1 vs CPU", detail: "P1 fights a CPU opponent.", icon: Bot },
+  { mode: "cpu-vs-cpu", label: "CPU vs CPU", detail: "Watch two CPU fighters spar.", icon: Cpu },
+];
 
 export function OnlineFighterSelectView(props: {
   role: "host" | "guest";

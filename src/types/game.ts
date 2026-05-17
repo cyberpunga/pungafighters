@@ -19,6 +19,9 @@ export type InputAction =
   | "pause";
 
 export type PlayerSlot = "p1" | "p2";
+export type PlayerControl = "human" | "cpu";
+export type PlayerControls = Record<PlayerSlot, PlayerControl>;
+export type LocalBattleMode = "p1-vs-p2" | "p1-vs-cpu" | "cpu-vs-cpu";
 
 export interface FrameAnchor {
   x: number;
@@ -48,6 +51,7 @@ export interface FighterProfile {
 export interface BattleConfig {
   playerOneFighterId: string;
   playerTwoFighterId: string;
+  playerControls?: PlayerControls;
   roundCount: 3;
   timerSeconds: 60;
   stageId: "dojo-v1";

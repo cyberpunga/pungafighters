@@ -26,7 +26,7 @@ Open the local Vite URL shown in the terminal.
 
 - Route-backed React shell for menus, fighter creator, staged fight setup, settings, online invites, and battle mount.
 - Phaser 3 battle runtime embedded inside React.
-- Local same-device 1v1 battle with deterministic health, timer, rounds, hitboxes, and keyboard controls.
+- Local 1v1 battle with 1 vs 2, 1 vs CPU, and CPU vs CPU modes, deterministic health, timer, rounds, hitboxes, and keyboard controls.
 - WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
@@ -65,6 +65,7 @@ Player 2:
 - `3`: special
 
 Online guests can also use Player 1 controls while playing from the Player 2 corner.
+CPU-controlled slots synthesize deterministic actions and ignore keyboard input.
 
 ## Online Matches
 

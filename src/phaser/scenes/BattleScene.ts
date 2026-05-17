@@ -11,6 +11,7 @@ import {
   type VoiceClipType,
 } from "../../types/game";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../../game/input/actions";
+import { createCpuActions } from "../../game/input/cpu";
 import {
   BATTLE_TICK_SECONDS,
   createBattleState,
@@ -341,7 +342,7 @@ export class BattleScene extends Phaser.Scene {
   private readLocalInputs(): PlayerInputSnapshot {
     const inputs: PlayerInputSnapshot = { p1: createEmptyActions(), p2: createEmptyActions() };
     (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
-      inputs[slot] = this.readActionsForSlot(slot);
+      inputs[slot] = this.configData.playerControls?.[slot] === "cpu" ? createCpuActions(this.state, slot) : this.readActionsForSlot(slot);
     });
     return inputs;
   }

@@ -690,6 +690,56 @@ button:disabled {
   background: #111018;
 }
 
+.local-mode-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.local-mode-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.local-mode-button {
+  min-height: 70px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(29, 26, 40, 0.82);
+  color: var(--text);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px;
+  text-align: left;
+}
+
+.local-mode-button svg {
+  grid-row: 1 / span 2;
+  color: var(--gold);
+}
+
+.local-mode-button span {
+  font-weight: 900;
+}
+
+.local-mode-button small {
+  color: var(--muted);
+  line-height: 1.25;
+}
+
+.local-mode-button.active {
+  border-color: var(--aqua);
+  background: rgba(46, 196, 182, 0.16);
+}
+
 .player-cursor-toggle {
   display: inline-grid;
   grid-template-columns: repeat(2, 54px);
@@ -1214,6 +1264,10 @@ button:disabled {
 
   .status-strip {
     padding: 0 clamp(28px, 5vw, 64px) 24px;
+  }
+
+  .local-mode-options {
+    grid-template-columns: 1fr;
   }
 
   .duel-header {

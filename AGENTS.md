@@ -26,7 +26,7 @@
 - `src/creator/`: capture, segmentation, image normalization, and audio recording helpers.
 - `src/creator/segmentation/`: pluggable cutout providers. Keep new engines behind the `SegmentationProvider` interface.
 - `src/game/simulation/`: deterministic gameplay state and systems.
-- `src/game/input/`: action names and keyboard mappings.
+- `src/game/input/`: action names, keyboard mappings, and CPU input helpers.
 - `src/game/content/`: default fighters and authored content.
 - `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
@@ -37,6 +37,7 @@
 
 - Keep gameplay state serializable and independent from Phaser objects.
 - Keep online combat lockstep-friendly: fixed ticks, frame-indexed inputs, deterministic event ids, and no renderer-owned gameplay rules.
+- Keep local CPU behavior as deterministic input synthesis; do not bake CPU combat behavior into Phaser render callbacks or simulation hit resolution.
 - Keep Phaser render objects disposable; never treat sprites or tweens as source-of-truth state.
 - Use DOM for text-heavy UI and controls.
 - Keep center playfield readable during battle.
