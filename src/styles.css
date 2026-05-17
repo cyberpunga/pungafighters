@@ -161,16 +161,26 @@ button:disabled {
   width: 100%;
 }
 
-.menu-stage {
+.home-view {
   min-height: calc(100vh - 73px);
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
-  grid-template-rows: auto auto;
-  gap: clamp(24px, 5vw, 72px);
+  gap: clamp(20px, 4vw, 36px);
+  padding: clamp(18px, 4vw, 48px);
+}
+
+.home-hero-band {
+  min-height: clamp(520px, calc(100vh - 190px), 780px);
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
+  gap: clamp(24px, 5vw, 64px);
   align-items: center;
-  padding: clamp(28px, 5vw, 64px);
-  padding-bottom: clamp(82px, 10vw, 108px);
-  position: relative;
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-copy {
+  display: grid;
+  gap: 18px;
+  align-content: center;
 }
 
 .hero-copy h1,
@@ -183,6 +193,7 @@ button:disabled {
 }
 
 .hero-copy p {
+  margin: 0;
   max-width: 560px;
   color: var(--muted);
   font-size: 18px;
@@ -197,9 +208,180 @@ button:disabled {
   font-size: 13px;
 }
 
+.home-quick-actions,
+.home-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-stat-row {
+  padding-top: 6px;
+}
+
+.home-stat-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 128px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(29, 26, 40, 0.64);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.home-stat-row strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.home-versus-stage {
+  position: relative;
+  min-height: clamp(360px, 48vw, 620px);
+  display: grid;
+  align-items: end;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.home-versus-stage::before {
+  content: "";
+  position: absolute;
+  inset: 9% 6% 16%;
+  z-index: -2;
+  border: 1px solid rgba(248, 244, 223, 0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(46, 196, 182, 0.16), transparent 30% 70%, rgba(244, 91, 105, 0.18)),
+    linear-gradient(180deg, rgba(40, 35, 55, 0.92), rgba(17, 16, 24, 0.92));
+  transform: skewX(-4deg);
+}
+
+.home-versus-stage::after {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 13%;
+  z-index: -1;
+  height: 30%;
+  border-top: 2px solid rgba(247, 178, 103, 0.32);
+  background:
+    repeating-linear-gradient(90deg, rgba(248, 244, 223, 0.14) 0 1px, transparent 1px 38px),
+    linear-gradient(180deg, rgba(247, 178, 103, 0.08), rgba(17, 16, 24, 0.58));
+  transform: perspective(520px) rotateX(58deg);
+  transform-origin: bottom;
+}
+
+.versus-grid {
+  min-height: inherit;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  gap: clamp(6px, 2vw, 18px);
+  padding: clamp(18px, 4vw, 36px);
+  padding-bottom: clamp(54px, 8vw, 88px);
+}
+
+.featured-fighter {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: end;
+  min-width: 0;
+}
+
+.featured-fighter.right {
+  transform: scaleX(-1);
+}
+
+.featured-fighter img {
+  width: min(100%, 270px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 20px 22px rgba(0, 0, 0, 0.36));
+}
+
+.featured-fighter-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.82);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.featured-fighter-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.featured-fighter.right .featured-fighter-name {
+  transform: scaleX(-1);
+}
+
+.featured-fighter-name svg {
+  flex: 0 0 auto;
+  color: var(--gold);
+}
+
+.versus-badge {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: clamp(58px, 7vw, 86px);
+  aspect-ratio: 1;
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.9);
+  color: var(--gold);
+  font-weight: 1000;
+  font-size: clamp(22px, 3vw, 34px);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.28);
+  transform: rotate(-5deg);
+}
+
+.stage-lines {
+  position: absolute;
+  inset: 13% 8% 18%;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, transparent 0 49.5%, rgba(247, 178, 103, 0.34) 49.5% 50.5%, transparent 50.5% 100%),
+    repeating-linear-gradient(0deg, transparent 0 56px, rgba(248, 244, 223, 0.08) 56px 57px);
+  opacity: 0.72;
+}
+
+.home-lobby-grid,
+.home-roster-band {
+  display: grid;
+  gap: 16px;
+}
+
+.home-panel-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.home-panel-heading h2 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1;
+}
+
 .fighter-marquee {
   display: grid;
-  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 14px;
   align-items: stretch;
 }
@@ -209,7 +391,7 @@ button:disabled {
 }
 
 .home-fight-options .mode-card {
-  min-height: 156px;
+  min-height: 164px;
 }
 
 .fighter-card {
@@ -219,11 +401,14 @@ button:disabled {
   overflow: hidden;
 }
 
-.marquee-card {
-  min-height: 240px;
+.fighter-card.marquee-card {
+  min-height: 210px;
   display: grid;
   place-items: center;
+  align-content: center;
+  gap: 8px;
   padding: 18px;
+  text-align: center;
 }
 
 .fighter-card img {
@@ -232,17 +417,10 @@ button:disabled {
   object-fit: contain;
 }
 
-.status-strip {
-  position: absolute;
-  left: clamp(16px, 4vw, 48px);
-  right: clamp(16px, 4vw, 48px);
-  bottom: 16px;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 10px;
+.fighter-card.marquee-card span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .creator-grid {
@@ -654,7 +832,9 @@ button:disabled {
   min-height: 220px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(17, 16, 24, 0.72);
+  background:
+    linear-gradient(135deg, rgba(248, 244, 223, 0.04), transparent 42%),
+    rgba(17, 16, 24, 0.72);
   color: var(--text);
   display: grid;
   gap: 12px;
@@ -662,10 +842,39 @@ button:disabled {
   justify-items: start;
   text-align: left;
   padding: clamp(18px, 3vw, 28px);
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.mode-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(248, 244, 223, 0.35);
+}
+
+.mode-card.local-card {
+  border-color: rgba(46, 196, 182, 0.34);
+}
+
+.mode-card.host-card {
+  border-color: rgba(247, 178, 103, 0.34);
+}
+
+.mode-card.join-card {
+  border-color: rgba(244, 91, 105, 0.34);
 }
 
 .mode-card svg {
   color: var(--gold);
+}
+
+.mode-card.local-card svg {
+  color: var(--aqua);
+}
+
+.mode-card.join-card svg {
+  color: var(--hot);
 }
 
 .mode-card strong {
@@ -1245,7 +1454,7 @@ button:disabled {
 }
 
 @media (max-width: 860px) {
-  .menu-stage,
+  .home-hero-band,
   .creator-grid,
   .fight-mode-grid,
   .online-grid,
@@ -1253,26 +1462,82 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
-  .menu-stage {
-    padding-bottom: clamp(28px, 5vw, 64px);
+  .home-view {
+    padding: clamp(18px, 5vw, 28px);
+  }
+
+  .home-hero-band {
+    min-height: auto;
+    gap: 16px;
+    padding-bottom: 18px;
+  }
+
+  .hero-copy {
+    gap: 13px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(46px, 13vw, 58px);
+    line-height: 0.96;
+  }
+
+  .hero-copy p {
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .home-quick-actions {
+    gap: 8px;
+  }
+
+  .home-quick-actions .primary-button,
+  .home-quick-actions .secondary-button {
+    padding: 0 14px;
+  }
+
+  .home-stat-row {
+    gap: 8px;
+  }
+
+  .home-stat-row span {
+    min-width: 104px;
+    padding: 8px 10px;
+  }
+
+  .home-versus-stage {
+    min-height: 250px;
+  }
+
+  .versus-grid {
+    padding-inline: 8px;
+    padding-bottom: 42px;
+  }
+
+  .featured-fighter img {
+    width: min(100%, 150px);
+  }
+
+  .featured-fighter-name {
+    max-width: 126px;
+    font-size: 12px;
+  }
+
+  .versus-badge {
+    width: 54px;
+    font-size: 20px;
+  }
+
+  .fighter-marquee {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .settings-control-card {
     grid-column: auto;
   }
 
-  .online-header,
-  .status-strip {
-    align-items: start;
-    position: static;
-  }
-
   .online-header {
+    align-items: start;
     flex-direction: column;
-  }
-
-  .status-strip {
-    padding: 0 clamp(28px, 5vw, 64px) 24px;
   }
 
   .local-mode-options {
