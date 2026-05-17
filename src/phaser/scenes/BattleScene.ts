@@ -65,6 +65,11 @@ const CUSTOM_STAGE_OVERSCAN = 1.08;
 const CUSTOM_STAGE_HORIZONTAL_DRIFT = 0.12;
 const CUSTOM_STAGE_VERTICAL_DRIFT = 0.04;
 const CUSTOM_STAGE_PAN_EASE = 4.5;
+const FIGHTER_BASE_DEPTH = 2;
+const FIGHTER_DEFAULT_DEPTH_STEP = 0.01;
+const FIGHTER_FOREGROUND_DEPTH = 3;
+const FIGHTER_PREVIOUS_DEPTH_OFFSET = 0.1;
+const FIGHTER_HIT_FOREGROUND_FRAMES = Math.ceil(0.24 / BATTLE_TICK_SECONDS);
 const SUPER_FLASH_DEPTH = 30;
 const SUPER_BACKDROP_COLOR = 0x8f3dff;
 const SUPER_BACKDROP_SIZE = FIGHTER_DISPLAY_SIZE * 4;
@@ -324,17 +329,18 @@ export class BattleScene extends Phaser.Scene {
   private createFighterView(slot: PlayerSlot, hudX: number, hudY: number): FighterView {
     const runtime = this.state.fighters[slot];
     const isP1 = slot === "p1";
+    const defaultDepth = this.getDefaultFighterDepth(slot);
     const previousSprite = this.add
       .image(runtime.x, runtime.y, `${slot}-idle`)
       .setOrigin(0.5, 0.9)
       .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
       .setAlpha(0)
-      .setDepth(1);
+      .setDepth(defaultDepth - FIGHTER_PREVIOUS_DEPTH_OFFSET);
     const sprite = this.add
       .image(runtime.x, runtime.y, `${slot}-idle`)
       .setOrigin(0.5, 0.9)
       .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
-      .setDepth(2);
+      .setDepth(defaultDepth);
     if (!isP1) {
       previousSprite.setFlipX(true);
       sprite.setFlipX(true);
@@ -792,6 +798,7 @@ export class BattleScene extends Phaser.Scene {
       view.setName(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
     });
+    this.syncFighterDepths();
 
     if (this.state.lastSuper && this.state.lastSuper.at !== this.lastSuperAt) {
       this.lastSuperAt = this.state.lastSuper.at;
@@ -810,6 +817,36 @@ export class BattleScene extends Phaser.Scene {
     this.messageText?.setText(message);
     this.messageText?.setAlpha(message ? 1 : 0);
     this.restartHint?.setAlpha(this.state.status === "matchOver" ? 1 : 0);
+  }
+
+  private syncFighterDepths() {
+    const views = this.views;
+    if (!views) {
+      return;
+    }
+
+    const hitIsRecent = this.state.lastHit
+      ? this.state.frame - this.state.lastHit.at <= FIGHTER_HIT_FOREGROUND_FRAMES
+      : false;
+    const activeAttackers = (["p1", "p2"] as PlayerSlot[]).filter((slot) =>
+      Boolean(this.state.fighters[slot].attack),
+    );
+    const foregroundSlot = hitIsRecent
+      ? this.state.lastHit?.attacker
+      : activeAttackers.length === 1
+        ? activeAttackers[0]
+        : undefined;
+
+    (["p1", "p2"] as PlayerSlot[]).forEach((slot) => {
+      const defaultDepth = this.getDefaultFighterDepth(slot);
+      const depth = foregroundSlot === slot ? FIGHTER_FOREGROUND_DEPTH : defaultDepth;
+      views[slot].sprite.setDepth(depth);
+      views[slot].previousSprite.setDepth(depth - FIGHTER_PREVIOUS_DEPTH_OFFSET);
+    });
+  }
+
+  private getDefaultFighterDepth(slot: PlayerSlot) {
+    return FIGHTER_BASE_DEPTH + (slot === "p2" ? FIGHTER_DEFAULT_DEPTH_STEP : 0);
   }
 
   private updateStageParallax(deltaSeconds: number) {
@@ -1115,7 +1152,7 @@ export class BattleScene extends Phaser.Scene {
         .setRotation(attackerView.sprite.rotation)
         .setAlpha(0.34)
         .setTint(0xf7b267)
-        .setDepth(1);
+        .setDepth(FIGHTER_FOREGROUND_DEPTH - FIGHTER_PREVIOUS_DEPTH_OFFSET);
       this.tweens.add({
         targets: afterimage,
         x: afterimage.x - attacker.facing * 34,
