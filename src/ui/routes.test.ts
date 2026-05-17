@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { appRouteFromPathname, appRouteToHref, normalizeBasePath } from "./routes";
+import { appRouteFromPathname, appRouteToHref, creatorEditFighterIdFromPathname, creatorEditRouteToHref, normalizeBasePath } from "./routes";
 
 describe("app routes", () => {
   it("maps view paths to app routes", () => {
     expect(appRouteFromPathname("/", "/")).toBe("menu");
     expect(appRouteFromPathname("/creator", "/")).toBe("creator");
+    expect(appRouteFromPathname("/creator/edit/custom-fighter", "/")).toBe("creator");
     expect(appRouteFromPathname("/fight", "/")).toBe("menu");
     expect(appRouteFromPathname("/select", "/")).toBe("menu");
     expect(appRouteFromPathname("/local/fighters", "/")).toBe("localFighters");
@@ -23,6 +24,8 @@ describe("app routes", () => {
     expect(appRouteFromPathname("/pungafighters/online/join", "/pungafighters/")).toBe("onlineGuest");
     expect(appRouteToHref("settings", "/pungafighters/")).toBe("/pungafighters/settings");
     expect(appRouteToHref("localFighters", "/pungafighters/")).toBe("/pungafighters/local/fighters");
+    expect(creatorEditRouteToHref("custom-fighter", "/pungafighters/")).toBe("/pungafighters/creator/edit/custom-fighter");
+    expect(creatorEditFighterIdFromPathname("/pungafighters/creator/edit/custom-fighter", "/pungafighters/")).toBe("custom-fighter");
   });
 
   it("keeps legacy fight setup links routable without a canonical /fight route", () => {

@@ -32,7 +32,7 @@ Open the local Vite URL shown in the terminal.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.
 - Creator-side segmentation controls for per-action capture delays, MediaPipe mask tuning, and Transformers.js model selection.
 - Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips that play during battle.
-- Character export for local `.pungafighter.json` files, with creator-side imports for character files, simple spritesheet images, and single action images.
+- Character editing and export for local fighters, with creator-side imports for `.pungafighter.json` files, simple spritesheet images, and single action images.
 - Custom battle background image import for local fights and host-selected online arenas.
 - Reorderable Pixel, CRT, Bad TV, and Static battle display effect stacks stored in local settings.
 - Local-only persistence in IndexedDB.
@@ -40,7 +40,7 @@ Open the local Vite URL shown in the terminal.
 
 ## Character Files
 
-Use the fight setup roster to export any fighter as a `.pungafighter.json` file. The file contains the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
+Use the fight setup roster to edit or export fighters. Editing opens the fighter in the creator; saved custom fighters update in place, while default fighters load as editable copies. Export creates a `.pungafighter.json` file containing the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
 
 Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Use the top-level fighter import for `.pungafighter.json` files, the strip import for a PNG, JPEG, or WebP spritesheet, or each action card's import button for one pose at a time. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom.
 

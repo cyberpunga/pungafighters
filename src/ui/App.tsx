@@ -26,7 +26,15 @@ import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
 import { DEFAULT_LOCAL_BATTLE_MODE, getLocalPlayerControls } from "./localBattleMode";
 import { selectOnlineLocalFighter } from "./onlineSelection";
-import { appRouteFromLocation, appRouteToHref, appRouteToView, type AppRoute, type View } from "./routes";
+import {
+  appRouteFromLocation,
+  appRouteToHref,
+  appRouteToView,
+  creatorEditFighterIdFromPathname,
+  creatorEditRouteToHref,
+  type AppRoute,
+  type View,
+} from "./routes";
 import { SettingsView } from "./SettingsView";
 
 type OnlineRole = "host" | "guest";
@@ -46,8 +54,9 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
 };
 
 export function App() {
-  const [route, navigate] = useAppRoute();
+  const [route, navigate, pathname] = useAppRoute();
   const view = appRouteToView(route);
+  const editFighterId = view === "creator" ? creatorEditFighterIdFromPathname(pathname) : undefined;
   const [fighters, setFighters] = useState<LoadedFighter[]>([]);
   const [localSelection, setLocalSelection] = useState<LocalFighterSelection>({
     p1: DEFAULT_FIGHTER_IDS[0],
@@ -173,6 +182,12 @@ export function App() {
     },
     [refreshFighters],
   );
+  const editFighter = useCallback(
+    (id: string) => {
+      navigate("creator", { href: creatorEditRouteToHref(id) });
+    },
+    [navigate],
+  );
 
   const battleFighters = useMemo(() => {
     const p1 = fighters.find((fighter) => fighter.id === localSelection.p1);
@@ -209,7 +224,7 @@ export function App() {
           onJoin={() => navigate("remoteJoinFighter")}
         />
       )}
-      {view === "creator" && <CreatorView onSaved={refreshFighters} />}
+      {view === "creator" && <CreatorView editFighterId={editFighterId} onSaved={refreshFighters} />}
       {route === "localFighters" && (
         <LocalFighterSelectView
           fighters={fighters}
@@ -219,6 +234,7 @@ export function App() {
           battleBackground={battleBackground}
           onSelected={setLocalSelection}
           onExport={exportFighterFile}
+          onEdit={editFighter}
           onDelete={deleteFighterFile}
           onImportBackgroundFile={importBattleBackgroundFile}
           onClearBackground={clearBattleBackground}
@@ -241,6 +257,7 @@ export function App() {
           battleBackground={battleBackground}
           onSelected={setOnlineSelectedFighterId}
           onExport={exportFighterFile}
+          onEdit={editFighter}
           onDelete={deleteFighterFile}
           onImportBackgroundFile={importBattleBackgroundFile}
           onClearBackground={clearBattleBackground}
@@ -256,6 +273,7 @@ export function App() {
           fileStatus={fileStatus}
           onSelected={setOnlineSelectedFighterId}
           onExport={exportFighterFile}
+          onEdit={editFighter}
           onDelete={deleteFighterFile}
           onBack={() => navigate("menu")}
           onNext={() => navigate("onlineGuest")}
@@ -364,30 +382,41 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
   );
 }
 
-function useAppRoute(): [AppRoute, (route: AppRoute, options?: { replace?: boolean }) => void] {
-  const [route, setRoute] = useState<AppRoute>(() => appRouteFromLocation(window.location));
+function useAppRoute(): [AppRoute, (route: AppRoute, options?: { href?: string; replace?: boolean }) => void, string] {
+  const [locationState, setLocationState] = useState(() => ({
+    route: appRouteFromLocation(window.location),
+    pathname: window.location.pathname,
+  }));
+  const { route, pathname } = locationState;
 
   useEffect(() => {
-    const onPopState = () => setRoute(appRouteFromLocation(window.location));
+    const onPopState = () =>
+      setLocationState({
+        route: appRouteFromLocation(window.location),
+        pathname: window.location.pathname,
+      });
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
+    if (route === "creator" && creatorEditFighterIdFromPathname(window.location.pathname)) {
+      return;
+    }
     const href = appRouteToHref(route);
     if (window.location.pathname !== href) {
       window.history.replaceState({ appRoute: route }, "", href);
     }
   }, [route]);
 
-  const navigate = useCallback((nextRoute: AppRoute, options?: { replace?: boolean }) => {
-    const href = appRouteToHref(nextRoute);
+  const navigate = useCallback((nextRoute: AppRoute, options?: { href?: string; replace?: boolean }) => {
+    const href = options?.href ?? appRouteToHref(nextRoute);
     if (window.location.pathname !== href) {
       const method = options?.replace ? "replaceState" : "pushState";
       window.history[method]({ appRoute: nextRoute }, "", href);
     }
-    setRoute(nextRoute);
+    setLocationState({ route: nextRoute, pathname: window.location.pathname });
   }, []);
 
-  return [route, navigate];
+  return [route, navigate, pathname];
 }

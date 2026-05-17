@@ -25,7 +25,7 @@ import type {
   SegmentationProviderState,
   TransformersModelId,
 } from "../creator/segmentation/types";
-import { saveFighterDraft, getSetting, setSetting } from "../storage/db";
+import { loadEditableFighterDraft, saveFighterDraft, getSetting, setSetting } from "../storage/db";
 import type { FighterPose, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 
@@ -50,9 +50,9 @@ type VoiceDrafts = Partial<Record<VoiceClipType, DraftAsset>>;
 
 type CreatorOperation =
   | { type: "start-camera" | "capture" | "import" | "process"; pose: FighterPose }
-  | { type: "import-character" | "import-spritesheet" | "process-all" };
+  | { type: "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
 
-export function CreatorView(props: { onSaved: () => Promise<void> }) {
+export function CreatorView(props: { editFighterId?: string; onSaved: () => Promise<void> }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const characterImportInputRef = useRef<HTMLInputElement | null>(null);
   const spritesheetImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -65,7 +65,9 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
   const providerLoadIdRef = useRef(0);
   const countdownTimeoutRef = useRef<number | undefined>();
   const countdownActiveRef = useRef(false);
+  const previousEditIdRef = useRef<string | undefined>(props.editFighterId);
   const [name, setName] = useState("New Fighter");
+  const [editingFighterId, setEditingFighterId] = useState<string | undefined>();
   const [drafts, setDrafts] = useState<PoseDrafts>({});
   const [voiceDrafts, setVoiceDrafts] = useState<VoiceDrafts>({});
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
@@ -178,6 +180,66 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
       revokeVoiceDrafts(voiceDraftsRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!props.editFighterId) {
+      if (previousEditIdRef.current) {
+        previousEditIdRef.current = undefined;
+        setEditingFighterId(undefined);
+        setName("New Fighter");
+        replaceDrafts({});
+        replaceVoiceDrafts({});
+        setPreviewPose(undefined);
+        setCameraStatus("Camera is off.");
+      }
+      return;
+    }
+
+    let cancelled = false;
+    previousEditIdRef.current = props.editFighterId;
+    setActiveOperation({ type: "load-fighter" });
+    setCameraStatus("Loading fighter for editing...");
+    void loadEditableFighterDraft(props.editFighterId)
+      .then((draft) => {
+        if (cancelled) {
+          return;
+        }
+        if (!draft) {
+          setEditingFighterId(undefined);
+          setCameraStatus("That fighter could not be found.");
+          return;
+        }
+        recorderRef.current?.cancel();
+        recorderRef.current = null;
+        setRecording(undefined);
+        setPlayingClip(undefined);
+        audioRef.current?.pause();
+        replaceDrafts(createDraftsFromFrameBlobs(draft.frameBlobs, true));
+        replaceVoiceDrafts(createVoiceDrafts(draft.voiceBlobs));
+        setName(draft.name);
+        setPreviewPose(undefined);
+        setEditingFighterId(draft.isDefault ? undefined : draft.id);
+        setCameraStatus(
+          draft.isDefault
+            ? "Default fighter loaded as an editable copy. Press Save fighter when ready."
+            : "Fighter loaded for editing. Press Update fighter when ready.",
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setEditingFighterId(undefined);
+          setCameraStatus(error instanceof Error ? error.message : "Could not load fighter for editing.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setActiveOperation(undefined);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.editFighterId, replaceDrafts, replaceVoiceDrafts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -400,6 +462,7 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
       setPreviewPose(undefined);
       replaceVoiceDrafts(createVoiceDrafts(imported.voiceBlobs));
       setName(imported.name);
+      setEditingFighterId(undefined);
       setCameraStatus("Fighter draft imported. Press Save fighter when ready.");
     } catch (error) {
       setCameraStatus(error instanceof Error ? error.message : "Could not import fighter.");
@@ -420,6 +483,7 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
       setName(imported.name);
+      setEditingFighterId(undefined);
       setCameraStatus("Spritesheet imported. Process actions for cutouts or save them as-is.");
     } catch (error) {
       setCameraStatus(error instanceof Error ? error.message : "Could not import spritesheet.");
@@ -508,13 +572,15 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
     }
     setSaving(true);
     try {
-      await saveFighterDraft({
+      const saved = await saveFighterDraft({
+        id: editingFighterId,
         name,
         frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drafts[pose]!.frame!.blob])) as Record<FighterPose, Blob>,
         voiceBlobs: createVoiceBlobRecord(voiceDrafts),
       });
       await props.onSaved();
-      setCameraStatus("Fighter saved locally.");
+      setEditingFighterId(saved.id);
+      setCameraStatus(editingFighterId ? "Fighter updated locally." : "Fighter saved locally.");
     } catch (error) {
       setCameraStatus(error instanceof Error ? error.message : "Could not save fighter.");
     } finally {
@@ -791,7 +857,7 @@ export function CreatorView(props: { onSaved: () => Promise<void> }) {
             </p>
           </div>
           <button className="primary-button" type="button" onClick={() => void saveFighter()} disabled={creatorBusy || !saveComplete}>
-            {saving ? "Saving..." : "Save fighter"}
+            {saving ? (editingFighterId ? "Updating..." : "Saving...") : editingFighterId ? "Update fighter" : "Save fighter"}
           </button>
         </div>
       </div>

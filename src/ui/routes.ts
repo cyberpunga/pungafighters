@@ -42,6 +42,12 @@ export function appRouteToHref(route: AppRoute, basePath = getAppBasePath()): st
   return base === "/" ? routePath : `${base.slice(0, -1)}${routePath}`;
 }
 
+export function creatorEditRouteToHref(fighterId: string, basePath = getAppBasePath()): string {
+  const base = normalizeBasePath(basePath);
+  const routePath = `/creator/edit/${encodeURIComponent(fighterId)}`;
+  return base === "/" ? routePath : `${base.slice(0, -1)}${routePath}`;
+}
+
 export function appRouteToView(route: AppRoute): View {
   if (route === "localFighters" || route === "remoteHostFighter" || route === "remoteJoinFighter") {
     return "fighterSelect";
@@ -62,6 +68,14 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
       return "menu";
     case "/creator":
       return "creator";
+    default:
+      if (routePath.startsWith("/creator/edit/")) {
+        return "creator";
+      }
+      break;
+  }
+
+  switch (routePath) {
     case "/local/fighters":
     case "/local/background":
     case "/fight/local/fighters":
@@ -90,6 +104,23 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
 
 export function appRouteFromLocation(location: Pick<Location, "pathname">, basePath = getAppBasePath()): AppRoute {
   return appRouteFromPathname(location.pathname, basePath);
+}
+
+export function creatorEditFighterIdFromPathname(pathname: string, basePath = getAppBasePath()): string | undefined {
+  const routePath = normalizeRoutePath(stripBasePath(pathname, basePath));
+  const prefix = "/creator/edit/";
+  if (!routePath.startsWith(prefix)) {
+    return undefined;
+  }
+  const encodedId = routePath.slice(prefix.length);
+  if (!encodedId) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(encodedId);
+  } catch {
+    return undefined;
+  }
 }
 
 export function normalizeBasePath(basePath: string): string {

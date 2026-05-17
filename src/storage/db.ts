@@ -31,6 +31,14 @@ interface BattleBackgroundRecord {
   updatedAt: string;
 }
 
+export interface EditableFighterDraft {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  frameBlobs: Record<FighterPose, Blob>;
+  voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
+}
+
 interface PungaFightersDb extends DBSchema {
   fighters: {
     key: string;
@@ -84,6 +92,7 @@ export async function getLoadedFighter(id: string): Promise<LoadedFighter | unde
 }
 
 export async function saveFighterDraft(input: {
+  id?: string;
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
@@ -104,12 +113,14 @@ export async function saveImportedFighter(input: {
 }
 
 async function saveFighterAssets(input: {
+  id?: string;
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   const db = await getDb();
-  const id = crypto.randomUUID();
+  const existing = input.id ? await db.get("fighters", input.id) : undefined;
+  const id = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
   const tx = db.transaction(["fighters", "imageBlobs", "audioBlobs"], "readwrite");
 
@@ -145,10 +156,18 @@ async function saveFighterAssets(input: {
     }),
   );
 
+  await Promise.all(
+    Object.entries(existing?.voiceClips ?? {}).map(async ([clip, blobId]) => {
+      if (blobId && !voiceClips[clip as VoiceClipType]) {
+        await tx.objectStore("audioBlobs").delete(blobId);
+      }
+    }),
+  );
+
   const fighter: FighterProfile = {
     id,
     name: input.name.trim() || "New Fighter",
-    createdAt: now,
+    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     frames,
     voiceClips,
@@ -158,6 +177,57 @@ async function saveFighterAssets(input: {
   await tx.objectStore("fighters").put(fighter);
   await tx.done;
   return fighter;
+}
+
+export async function loadEditableFighterDraft(id: string): Promise<EditableFighterDraft | undefined> {
+  const defaultFighter = getDefaultFighters().find((fighter) => fighter.id === id);
+  if (defaultFighter) {
+    return {
+      id: defaultFighter.id,
+      name: defaultFighter.name,
+      isDefault: true,
+      frameBlobs: Object.fromEntries(
+        await Promise.all(FIGHTER_POSES.map(async (pose) => [pose, await fighterFrameToBlob(defaultFighter.frames[pose])] as const)),
+      ) as Record<FighterPose, Blob>,
+      voiceBlobs: {},
+    };
+  }
+
+  const db = await getDb();
+  const fighter = await db.get("fighters", id);
+  if (!fighter) {
+    return undefined;
+  }
+
+  const frameBlobs = Object.fromEntries(
+    await Promise.all(
+      FIGHTER_POSES.map(async (pose) => {
+        const blob = await fighterFrameToBlob(fighter.frames[pose]);
+        return [pose, blob] as const;
+      }),
+    ),
+  ) as Record<FighterPose, Blob>;
+  const voiceBlobs = Object.fromEntries(
+    (
+      await Promise.all(
+        Object.entries(fighter.voiceClips).map(async ([clip, blobId]) => {
+          if (!blobId) {
+            return undefined;
+          }
+          const blob = await db.get("audioBlobs", blobId);
+          return blob ? ([clip, blob] as const) : undefined;
+        }),
+      )
+    ).filter(Boolean) as Array<readonly [string, Blob]>
+  ) as Partial<Record<VoiceClipType, Blob>>;
+
+  return {
+    id: fighter.id,
+    name: fighter.name,
+    isDefault: false,
+    frameBlobs,
+    voiceBlobs,
+  };
 }
 
 export async function deleteFighter(id: string) {
@@ -337,6 +407,29 @@ function cleanBackgroundName(filename: string) {
   const basename = filename.replace(/\.[^.]+$/, "");
   const cleaned = basename.trim().replace(/\s+/g, " ");
   return cleaned ? cleaned.slice(0, 48) : "Custom Background";
+}
+
+async function fighterFrameToBlob(frame: FighterProfile["frames"][FighterPose]): Promise<Blob> {
+  if (frame.dataUrl) {
+    return dataUrlToBlob(frame.dataUrl);
+  }
+  if (!frame.blobId) {
+    throw new Error(`Missing ${frame.pose} image.`);
+  }
+  const db = await getDb();
+  const blob = await db.get("imageBlobs", frame.blobId);
+  if (!blob) {
+    throw new Error(`Missing ${frame.pose} image.`);
+  }
+  return blob;
+}
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const response = await fetch(dataUrl);
+  if (!response.ok) {
+    throw new Error("Could not read fighter image.");
+  }
+  return response.blob();
 }
 
 function isBattleBackgroundRecord(value: unknown): value is BattleBackgroundRecord {
