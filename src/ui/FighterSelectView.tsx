@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Bot, Cpu, Download, Gamepad2, ImagePlus, Monitor, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Bot, Cpu, Download, Gamepad2, ImagePlus, Monitor, RadioTower, RotateCcw, Trash2, Users } from "lucide-react";
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import { BATTLE_BACKGROUND_IMPORT_ACCEPT } from "../storage/db";
@@ -46,9 +46,13 @@ export function LocalFighterSelectView(props: {
   fighters: LoadedFighter[];
   selected: LocalFighterSelection;
   fileStatus: string;
+  backgroundStatus: string;
+  battleBackground?: LoadedBattleBackground;
   onSelected: (next: LocalFighterSelection) => void;
   onExport: (fighter: LoadedFighter) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onImportBackgroundFile: (file: File) => Promise<void>;
+  onClearBackground: () => Promise<void>;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -56,8 +60,8 @@ export function LocalFighterSelectView(props: {
     <section className="select-view">
       <SetupHeader eyebrow="Local fight" title="Choose Fighters" onBack={props.onBack}>
         <button className="primary-button" type="button" onClick={props.onNext}>
-          <ArrowRight size={18} />
-          Background
+          <Gamepad2 size={18} />
+          Start Battle
         </button>
       </SetupHeader>
 
@@ -85,6 +89,13 @@ export function LocalFighterSelectView(props: {
           </button>
         </div>
       </div>
+
+      <StagePicker
+        battleBackground={props.battleBackground}
+        backgroundStatus={props.backgroundStatus}
+        onImportBackgroundFile={props.onImportBackgroundFile}
+        onClearBackground={props.onClearBackground}
+      />
 
       {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}
       <FighterGrid
@@ -139,9 +150,13 @@ export function OnlineFighterSelectView(props: {
   fighters: LoadedFighter[];
   selectedId: string;
   fileStatus: string;
+  backgroundStatus?: string;
+  battleBackground?: LoadedBattleBackground;
   onSelected: (id: string) => void;
   onExport: (fighter: LoadedFighter) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onImportBackgroundFile?: (file: File) => Promise<void>;
+  onClearBackground?: () => Promise<void>;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -149,8 +164,8 @@ export function OnlineFighterSelectView(props: {
     <section className="select-view">
       <SetupHeader eyebrow={props.role === "host" ? "Remote host" : "Remote guest"} title="Choose Fighter" onBack={props.onBack}>
         <button className="primary-button" type="button" onClick={props.onNext}>
-          {props.role === "host" ? <ArrowRight size={18} /> : <RadioTower size={18} />}
-          {props.role === "host" ? "Background" : "Join Invite"}
+          <RadioTower size={18} />
+          {props.role === "host" ? "Create Invite" : "Join Invite"}
         </button>
       </SetupHeader>
 
@@ -158,6 +173,15 @@ export function OnlineFighterSelectView(props: {
         <span className="field-label-text">{props.role === "host" ? "Host fighter" : "Guest fighter"}</span>
         <span className="cursor-badge online">{props.role === "host" ? "P1" : "P2"}</span>
       </div>
+
+      {props.role === "host" && props.onImportBackgroundFile && props.onClearBackground && (
+        <StagePicker
+          battleBackground={props.battleBackground}
+          backgroundStatus={props.backgroundStatus ?? ""}
+          onImportBackgroundFile={props.onImportBackgroundFile}
+          onClearBackground={props.onClearBackground}
+        />
+      )}
 
       {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}
       <FighterGrid
@@ -167,34 +191,6 @@ export function OnlineFighterSelectView(props: {
         onSelect={props.onSelected}
         onExport={props.onExport}
         onDelete={props.onDelete}
-      />
-    </section>
-  );
-}
-
-export function BackgroundSelectView(props: {
-  mode: "local" | "remoteHost";
-  backgroundStatus: string;
-  battleBackground?: LoadedBattleBackground;
-  onImportBackgroundFile: (file: File) => Promise<void>;
-  onClearBackground: () => Promise<void>;
-  onBack: () => void;
-  onNext: () => void;
-}) {
-  return (
-    <section className="select-view">
-      <SetupHeader eyebrow={props.mode === "local" ? "Local arena" : "Host arena"} title="Choose Background" onBack={props.onBack}>
-        <button className="primary-button" type="button" onClick={props.onNext}>
-          {props.mode === "local" ? <Gamepad2 size={18} /> : <RadioTower size={18} />}
-          {props.mode === "local" ? "Start Battle" : "Create Invite"}
-        </button>
-      </SetupHeader>
-
-      <StagePicker
-        battleBackground={props.battleBackground}
-        backgroundStatus={props.backgroundStatus}
-        onImportBackgroundFile={props.onImportBackgroundFile}
-        onClearBackground={props.onClearBackground}
       />
     </section>
   );
@@ -227,7 +223,7 @@ function StagePicker(props: {
   const backgroundInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="stage-picker stage-picker-large">
+    <div className="stage-picker">
       <div className="stage-preview" aria-hidden="true">
         {props.battleBackground ? <img src={props.battleBackground.imageUrl} alt="" /> : <div className="stage-preview-default" />}
       </div>

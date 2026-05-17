@@ -809,11 +809,6 @@ button:disabled {
   background: #111018;
 }
 
-.stage-picker-large {
-  grid-template-columns: minmax(260px, 420px) minmax(0, 1fr);
-  margin-bottom: 0;
-}
-
 .stage-preview {
   width: 100%;
   aspect-ratio: 16 / 9;

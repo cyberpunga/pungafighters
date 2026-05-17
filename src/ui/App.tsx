@@ -18,7 +18,6 @@ import {
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import {
-  BackgroundSelectView,
   FightModeView,
   LocalFighterSelectView,
   OnlineFighterSelectView,
@@ -215,11 +214,20 @@ export function App() {
           fighters={fighters}
           selected={localSelection}
           fileStatus={fileStatus}
+          backgroundStatus={backgroundStatus}
+          battleBackground={battleBackground}
           onSelected={setLocalSelection}
           onExport={exportFighterFile}
           onDelete={deleteFighterFile}
+          onImportBackgroundFile={importBattleBackgroundFile}
+          onClearBackground={clearBattleBackground}
           onBack={() => navigate("fight")}
-          onNext={() => navigate("localBackground")}
+          onNext={() => {
+            setOnlineBattle(undefined);
+            if (battleFighters) {
+              navigate("battle");
+            }
+          }}
         />
       )}
       {route === "remoteHostFighter" && (
@@ -228,11 +236,15 @@ export function App() {
           fighters={fighters}
           selectedId={onlineSelectedFighterId}
           fileStatus={fileStatus}
+          backgroundStatus={backgroundStatus}
+          battleBackground={battleBackground}
           onSelected={setOnlineSelectedFighterId}
           onExport={exportFighterFile}
           onDelete={deleteFighterFile}
+          onImportBackgroundFile={importBattleBackgroundFile}
+          onClearBackground={clearBattleBackground}
           onBack={() => navigate("fight")}
-          onNext={() => navigate("remoteHostBackground")}
+          onNext={() => navigate("onlineHost")}
         />
       )}
       {route === "remoteJoinFighter" && (
@@ -248,39 +260,12 @@ export function App() {
           onNext={() => navigate("onlineGuest")}
         />
       )}
-      {route === "localBackground" && (
-        <BackgroundSelectView
-          mode="local"
-          backgroundStatus={backgroundStatus}
-          battleBackground={battleBackground}
-          onImportBackgroundFile={importBattleBackgroundFile}
-          onClearBackground={clearBattleBackground}
-          onBack={() => navigate("localFighters")}
-          onNext={() => {
-            setOnlineBattle(undefined);
-            if (battleFighters) {
-              navigate("battle");
-            }
-          }}
-        />
-      )}
-      {route === "remoteHostBackground" && (
-        <BackgroundSelectView
-          mode="remoteHost"
-          backgroundStatus={backgroundStatus}
-          battleBackground={battleBackground}
-          onImportBackgroundFile={importBattleBackgroundFile}
-          onClearBackground={clearBattleBackground}
-          onBack={() => navigate("remoteHostFighter")}
-          onNext={() => navigate("onlineHost")}
-        />
-      )}
       {view === "online" && onlineLocalFighter && (
         <OnlineMatchView
           role={onlineRole}
           localFighter={onlineLocalFighter}
           background={onlineRole === "host" ? battleBackground : undefined}
-          onCancel={() => navigate(onlineRole === "host" ? "remoteHostBackground" : "remoteJoinFighter")}
+          onCancel={() => navigate(onlineRole === "host" ? "remoteHostFighter" : "remoteJoinFighter")}
           onReady={(match) => {
             setOnlineBattle({
               config: {
@@ -334,7 +319,7 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
     props.onNavigate(route);
   };
 
-  const fightActive = props.view === "fightMode" || props.view === "fighterSelect" || props.view === "backgroundSelect" || props.view === "online";
+  const fightActive = props.view === "fightMode" || props.view === "fighterSelect" || props.view === "online";
 
   return (
     <header className="topbar">

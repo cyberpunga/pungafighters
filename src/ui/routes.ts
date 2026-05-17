@@ -1,13 +1,11 @@
-export type View = "menu" | "creator" | "fightMode" | "fighterSelect" | "backgroundSelect" | "settings" | "online" | "battle";
+export type View = "menu" | "creator" | "fightMode" | "fighterSelect" | "settings" | "online" | "battle";
 
 export type AppRoute =
   | "menu"
   | "creator"
   | "fight"
   | "localFighters"
-  | "localBackground"
   | "remoteHostFighter"
-  | "remoteHostBackground"
   | "remoteJoinFighter"
   | "settings"
   | "onlineHost"
@@ -19,9 +17,7 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   creator: "/creator",
   fight: "/fight",
   localFighters: "/fight/local/fighters",
-  localBackground: "/fight/local/background",
   remoteHostFighter: "/fight/remote/host/fighter",
-  remoteHostBackground: "/fight/remote/host/background",
   remoteJoinFighter: "/fight/remote/join/fighter",
   settings: "/settings",
   onlineHost: "/online/host",
@@ -55,9 +51,6 @@ export function appRouteToView(route: AppRoute): View {
   if (route === "localFighters" || route === "remoteHostFighter" || route === "remoteJoinFighter") {
     return "fighterSelect";
   }
-  if (route === "localBackground" || route === "remoteHostBackground") {
-    return "backgroundSelect";
-  }
   if (route === "onlineHost" || route === "onlineGuest") {
     return "online";
   }
@@ -76,13 +69,11 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
     case "/select":
       return "fight";
     case "/fight/local/fighters":
-      return "localFighters";
     case "/fight/local/background":
-      return "localBackground";
+      return "localFighters";
     case "/fight/remote/host/fighter":
-      return "remoteHostFighter";
     case "/fight/remote/host/background":
-      return "remoteHostBackground";
+      return "remoteHostFighter";
     case "/fight/remote/join/fighter":
       return "remoteJoinFighter";
     case "/settings":
