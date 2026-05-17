@@ -58,6 +58,8 @@ const CUSTOM_STAGE_HORIZONTAL_DRIFT = 0.12;
 const CUSTOM_STAGE_VERTICAL_DRIFT = 0.04;
 const CUSTOM_STAGE_PAN_EASE = 4.5;
 const SUPER_FLASH_DEPTH = 30;
+const SUPER_BACKDROP_COLOR = 0x8f3dff;
+const SUPER_BACKDROP_SIZE = FIGHTER_DISPLAY_SIZE * 4;
 const VOICE_VOLUME: Record<VoiceClipType, number> = {
   attack: 0.82,
   hit: 0.76,
@@ -549,6 +551,15 @@ export class BattleScene extends Phaser.Scene {
     const portraitX = fromLeft ? 288 : 672;
     const portraitY = 486;
     const portraitFlip = attacker.facing === -1;
+    const portraitBackdrop = this.add
+      .image(portraitStartX - slide * 42, portraitY + 18, texture)
+      .setOrigin(0.5, 0.9)
+      .setDisplaySize(SUPER_BACKDROP_SIZE, SUPER_BACKDROP_SIZE)
+      .setFlipX(portraitFlip)
+      .setTint(SUPER_BACKDROP_COLOR)
+      .setAlpha(0.24);
+    const portraitBackdropScaleX = portraitBackdrop.scaleX;
+    const portraitBackdropScaleY = portraitBackdrop.scaleY;
     const portraitShadow = this.add
       .image(portraitStartX - slide * 24, portraitY + 12, texture)
       .setOrigin(0.5, 0.9)
@@ -603,6 +614,7 @@ export class BattleScene extends Phaser.Scene {
       slash,
       flash,
       impactFlash,
+      portraitBackdrop,
       portraitShadow,
       portraitGlow,
       portrait,
@@ -619,6 +631,22 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: speedLines, x: slide * 150, alpha: 0, duration: 760, ease: "Cubic.easeOut" });
     this.tweens.add({ targets: slash, x: slide * 80, alpha: 0, delay: 420, duration: 250, ease: "Cubic.easeIn" });
 
+    this.tweens.add({
+      targets: portraitBackdrop,
+      x: portraitX - slide * 42,
+      duration: 175,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: portraitBackdrop,
+      alpha: 0.34,
+      scaleX: portraitBackdropScaleX * 1.04,
+      scaleY: portraitBackdropScaleY * 1.04,
+      delay: 170,
+      duration: 180,
+      yoyo: true,
+      ease: "Sine.easeInOut",
+    });
     this.tweens.add({
       targets: portraitShadow,
       x: portraitX - slide * 24,
@@ -638,7 +666,7 @@ export class BattleScene extends Phaser.Scene {
       ease: "Back.easeOut",
     });
     this.tweens.add({
-      targets: [portraitShadow, portraitGlow, portrait],
+      targets: [portraitBackdrop, portraitShadow, portraitGlow, portrait],
       alpha: 0,
       x: portraitX + slide * 78,
       delay: 565,
