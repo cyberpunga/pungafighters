@@ -35,7 +35,7 @@ const DEFAULT_PIXEL_CONFIG: PixelPostFxConfig = {
 
 const PIXEL_CONFIGS: Record<PixelDisplayEffect, PixelPostFxConfig> = {
   pixel: {
-    pixelSize: 2,
+    pixelSize: 4,
   },
 };
 
