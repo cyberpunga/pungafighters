@@ -90,13 +90,6 @@ export function LocalFighterSelectView(props: {
         </div>
       </div>
 
-      <StagePicker
-        battleBackground={props.battleBackground}
-        backgroundStatus={props.backgroundStatus}
-        onImportBackgroundFile={props.onImportBackgroundFile}
-        onClearBackground={props.onClearBackground}
-      />
-
       {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}
       <FighterGrid
         fighters={props.fighters}
@@ -104,6 +97,13 @@ export function LocalFighterSelectView(props: {
         onSelect={(id) => props.onSelected({ ...props.selected, [props.selected.activeSlot]: id })}
         onExport={props.onExport}
         onDelete={props.onDelete}
+      />
+
+      <StagePicker
+        battleBackground={props.battleBackground}
+        backgroundStatus={props.backgroundStatus}
+        onImportBackgroundFile={props.onImportBackgroundFile}
+        onClearBackground={props.onClearBackground}
       />
     </section>
   );
@@ -174,15 +174,6 @@ export function OnlineFighterSelectView(props: {
         <span className="cursor-badge online">{props.role === "host" ? "P1" : "P2"}</span>
       </div>
 
-      {props.role === "host" && props.onImportBackgroundFile && props.onClearBackground && (
-        <StagePicker
-          battleBackground={props.battleBackground}
-          backgroundStatus={props.backgroundStatus ?? ""}
-          onImportBackgroundFile={props.onImportBackgroundFile}
-          onClearBackground={props.onClearBackground}
-        />
-      )}
-
       {props.fileStatus && <p className="helper-text select-status">{props.fileStatus}</p>}
       <FighterGrid
         fighters={props.fighters}
@@ -192,6 +183,15 @@ export function OnlineFighterSelectView(props: {
         onExport={props.onExport}
         onDelete={props.onDelete}
       />
+
+      {props.role === "host" && props.onImportBackgroundFile && props.onClearBackground && (
+        <StagePicker
+          battleBackground={props.battleBackground}
+          backgroundStatus={props.backgroundStatus ?? ""}
+          onImportBackgroundFile={props.onImportBackgroundFile}
+          onClearBackground={props.onClearBackground}
+        />
+      )}
     </section>
   );
 }

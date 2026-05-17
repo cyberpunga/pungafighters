@@ -7,7 +7,6 @@ export const ACTIONS: InputAction[] = [
   "block",
   "punch",
   "kick",
-  "special",
   "pause",
 ];
 
@@ -18,7 +17,6 @@ export const EMPTY_ACTIONS: ActionSnapshot = {
   block: false,
   punch: false,
   kick: false,
-  special: false,
   pause: false,
 };
 
@@ -30,7 +28,6 @@ export const KEYBOARD_BINDINGS: Record<PlayerSlot, Record<string, InputAction>> 
     KeyS: "block",
     KeyJ: "punch",
     KeyK: "kick",
-    KeyL: "special",
     Escape: "pause",
   },
   p2: {
@@ -40,7 +37,6 @@ export const KEYBOARD_BINDINGS: Record<PlayerSlot, Record<string, InputAction>> 
     ArrowDown: "block",
     Digit1: "punch",
     Digit2: "kick",
-    Digit3: "special",
     Escape: "pause",
   },
 };

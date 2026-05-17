@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BattleConfig } from "../../types/game";
-import { createBattleState, stepBattleFrame } from "../simulation/battle";
+import { createBattleState, stepBattleFrame, SUPER_HITS_REQUIRED } from "../simulation/battle";
 import { createEmptyActions } from "./actions";
 import { createCpuActions } from "./cpu";
 
@@ -47,5 +47,15 @@ describe("CPU input", () => {
     state.fighters.p2 = { ...state.fighters.p2, x: 430, y: state.groundY };
 
     expect(createCpuActions(state, "p1")).toEqual(createCpuActions(state, "p1"));
+  });
+
+  it("presses punch and kick together for a charged super", () => {
+    const state = createBattleState(config, fighters);
+    state.status = "running";
+    state.frame = 64;
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY, superMeter: SUPER_HITS_REQUIRED };
+    state.fighters.p2 = { ...state.fighters.p2, x: 430, y: state.groundY };
+
+    expect(createCpuActions(state, "p1")).toMatchObject({ punch: true, kick: true });
   });
 });

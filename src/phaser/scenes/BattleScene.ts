@@ -18,6 +18,7 @@ import {
   getBattleChecksum,
   restartMatch,
   stepBattleFrame,
+  SUPER_HITS_REQUIRED,
   type BattleState,
 } from "../../game/simulation/battle";
 import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
@@ -40,6 +41,7 @@ interface FighterView {
   renderState: FighterRenderState;
   name: Phaser.GameObjects.Text;
   health: Phaser.GameObjects.Rectangle;
+  superMeter: Phaser.GameObjects.Rectangle;
   rounds: Phaser.GameObjects.Text;
 }
 
@@ -314,12 +316,21 @@ export class BattleScene extends Phaser.Scene {
     const healthBack = this.add.rectangle(hudX, hudY + 34, 300, 16, 0x0d0d12, 0.8).setOrigin(slot === "p1" ? 0 : 1, 0);
     const health = this.add.rectangle(hudX, hudY + 34, 300, 16, slot === "p1" ? 0xf45b69 : 0x2ec4b6, 1).setOrigin(slot === "p1" ? 0 : 1, 0);
     healthBack.setStrokeStyle(1, 0xf8f4df, 0.3);
-    const rounds = this.add.text(hudX, hudY + 58, "Rounds: 0", {
+    const superBack = this.add.rectangle(hudX, hudY + 54, 300, 8, 0x0d0d12, 0.8).setOrigin(slot === "p1" ? 0 : 1, 0);
+    const superMeter = this.add.rectangle(hudX, hudY + 54, 300, 8, 0xf7b267, 0.86).setOrigin(slot === "p1" ? 0 : 1, 0);
+    superBack.setStrokeStyle(1, 0xf7b267, 0.34);
+    const superLabel = this.add.text(hudX, hudY + 66, "Super", {
+      fontFamily: "Arial Black, Arial, sans-serif",
+      fontSize: "11px",
+      color: "#f7b267",
+    }).setOrigin(slot === "p1" ? 0 : 1, 0);
+    const rounds = this.add.text(hudX, hudY + 82, "Rounds: 0", {
       fontFamily: "Arial, sans-serif",
       fontSize: "14px",
       color: "#d9d2b6",
     }).setOrigin(slot === "p1" ? 0 : 1, 0);
-    return { sprite, previousSprite, renderState: createFighterRenderState(runtime, slot === "p1" ? 0 : 0.7), name, health, rounds };
+    superLabel.setAlpha(0.9);
+    return { sprite, previousSprite, renderState: createFighterRenderState(runtime, slot === "p1" ? 0 : 0.7), name, health, superMeter, rounds };
   }
 
   private stepFixedFrames(deltaSeconds: number) {
@@ -490,6 +501,8 @@ export class BattleScene extends Phaser.Scene {
         view.previousSprite.setAlpha(0);
       }
       view.health.displayWidth = 300 * (runtime.health / 100);
+      view.superMeter.displayWidth = 300 * (runtime.superMeter / SUPER_HITS_REQUIRED);
+      view.superMeter.setAlpha(runtime.superMeter >= SUPER_HITS_REQUIRED ? 1 : 0.82);
       view.name.setText(runtime.name);
       view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
     });

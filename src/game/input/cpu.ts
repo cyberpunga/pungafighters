@@ -1,5 +1,5 @@
 import type { ActionSnapshot, PlayerSlot } from "../../types/game";
-import type { BattleState, FighterRuntime } from "../simulation/battle";
+import { SUPER_HITS_REQUIRED, type BattleState, type FighterRuntime } from "../simulation/battle";
 import { createEmptyActions } from "./actions";
 
 const APPROACH_DISTANCE = 128;
@@ -49,8 +49,9 @@ export function createCpuActions(state: BattleState, slot: PlayerSlot): ActionSn
       actions.punch = true;
     } else if (distance < KICK_DISTANCE && cycle >= 28 && cycle < 40) {
       actions.kick = true;
-    } else if (distance < SPECIAL_DISTANCE && cycle >= 64 && cycle < 70) {
-      actions.special = true;
+    } else if (fighter.superMeter >= SUPER_HITS_REQUIRED && distance < SPECIAL_DISTANCE && cycle >= 64 && cycle < 70) {
+      actions.punch = true;
+      actions.kick = true;
     }
   }
 

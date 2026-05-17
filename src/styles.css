@@ -802,7 +802,7 @@ button:disabled {
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   gap: 16px;
   align-items: center;
-  margin-bottom: 18px;
+  margin-top: 18px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;

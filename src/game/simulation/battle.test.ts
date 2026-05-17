@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BattleConfig, PlayerInputSnapshot } from "../../types/game";
 import { createEmptyActions } from "../input/actions";
-import { createBattleState, getBattleChecksum, stepBattleFrame } from "./battle";
+import { createBattleState, getBattleChecksum, stepBattleFrame, SUPER_HITS_REQUIRED, type BattleState } from "./battle";
 
 const config: BattleConfig = {
   playerOneFighterId: "p1",
@@ -44,12 +44,28 @@ describe("battle simulation", () => {
     expect(state.lastHit?.at).toBeLessThan(state.frame);
   });
 
-  it("freezes the simulation when a special starts before the active attack advances", () => {
+  it("fills the super meter after five delivered hits", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 380, y: state.groundY };
+
+    for (let hitCount = 1; hitCount <= SUPER_HITS_REQUIRED; hitCount += 1) {
+      state = landPunch(state);
+      expect(state.fighters.p1.superMeter).toBe(hitCount);
+      state = waitUntilReady(state, "p1");
+    }
+
+    expect(state.fighters.p1.superMeter).toBe(SUPER_HITS_REQUIRED);
+  });
+
+  it("freezes the simulation when a charged punch-and-kick super starts before the active attack advances", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, superMeter: SUPER_HITS_REQUIRED };
 
     state = stepBattleFrame(state, {
-      p1: { ...createEmptyActions(), special: true },
+      p1: { ...createEmptyActions(), punch: true, kick: true },
       p2: createEmptyActions(),
     });
     const attackElapsedAtFreezeStart = state.fighters.p1.attackElapsed;
@@ -58,12 +74,26 @@ describe("battle simulation", () => {
     expect(state.lastSuper).toMatchObject({ attacker: "p1", at: 0 });
     expect(state.superFreeze?.attacker).toBe("p1");
     expect(state.fighters.p1.attack?.kind).toBe("special");
+    expect(state.fighters.p1.superMeter).toBe(0);
 
     state = stepBattleFrame(state, emptyInputs());
 
     expect(state.fighters.p1.attackElapsed).toBe(attackElapsedAtFreezeStart);
     expect(state.timer).toBe(timerAtFreezeStart);
     expect(state.superFreeze?.remainingFrames).toBeGreaterThan(0);
+  });
+
+  it("does not start a super from punch and kick before the meter is full", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), punch: true, kick: true },
+      p2: createEmptyActions(),
+    });
+
+    expect(state.fighters.p1.attack).toBeUndefined();
+    expect(state.lastSuper).toBeUndefined();
   });
 
   it("does not hit through transparent fighter padding", () => {
@@ -104,4 +134,30 @@ describe("battle simulation", () => {
 
 function emptyInputs(): PlayerInputSnapshot {
   return { p1: createEmptyActions(), p2: createEmptyActions() };
+}
+
+function landPunch(state: BattleState): BattleState {
+  const previousHitAt = state.lastHit?.at ?? -1;
+  let next = state;
+  for (let frame = 0; frame < 30; frame += 1) {
+    next = stepBattleFrame(next, {
+      p1: { ...createEmptyActions(), punch: frame === 0 },
+      p2: createEmptyActions(),
+    });
+    if (next.lastHit?.at !== undefined && next.lastHit.at !== previousHitAt) {
+      return next;
+    }
+  }
+  throw new Error("Expected punch to land.");
+}
+
+function waitUntilReady(state: BattleState, slot: "p1" | "p2"): BattleState {
+  let next = state;
+  for (let frame = 0; frame < 60; frame += 1) {
+    if (!next.fighters[slot].attack && next.fighters[slot].cooldown <= 0) {
+      return next;
+    }
+    next = stepBattleFrame(next, emptyInputs());
+  }
+  throw new Error("Expected fighter to recover.");
 }

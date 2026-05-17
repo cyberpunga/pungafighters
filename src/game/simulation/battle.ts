@@ -15,6 +15,7 @@ const HURTBOX = {
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
+export const SUPER_HITS_REQUIRED = 5;
 const SUPER_FREEZE_FRAMES = 42;
 
 type AttackKind = "punch" | "kick" | "special";
@@ -88,6 +89,7 @@ export interface FighterRuntime {
   velocityY: number;
   facing: 1 | -1;
   health: number;
+  superMeter: number;
   roundsWon: number;
   pose: FighterPose;
   blocking: boolean;
@@ -261,6 +263,7 @@ function createRuntime(
     velocityY: 0,
     facing,
     health: 100,
+    superMeter: 0,
     roundsWon: 0,
     pose: "idle",
     blocking: false,
@@ -309,7 +312,7 @@ function updateFighter(
   } else if (fighter.hitStun > 0) {
     fighter.pose = "hit";
   } else {
-    const requestedAttack = input.special ? ATTACKS.special : input.kick ? ATTACKS.kick : input.punch ? ATTACKS.punch : undefined;
+    const requestedAttack = getRequestedAttack(fighter, input);
     if (requestedAttack && fighter.cooldown <= 0) {
       fighter.attack = requestedAttack;
       fighter.attackElapsed = 0;
@@ -317,6 +320,9 @@ function updateFighter(
       fighter.hasHitThisAttack = false;
       fighter.pose = requestedAttack.pose;
       startedAttack = requestedAttack.kind;
+      if (requestedAttack.kind === "special") {
+        fighter.superMeter = 0;
+      }
     } else {
       fighter.pose = "idle";
     }
@@ -358,8 +364,17 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
     defender.hitStun = defender.blocking ? 0.08 : 0.24;
     defender.pose = "hit";
     attacker.hasHitThisAttack = true;
+    attacker.superMeter = Math.min(SUPER_HITS_REQUIRED, attacker.superMeter + 1);
     state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: state.frame };
   }
+}
+
+function getRequestedAttack(fighter: FighterRuntime, input: ReturnType<typeof createEmptyActions>): AttackDef | undefined {
+  const wantsSuper = input.punch && input.kick;
+  if (wantsSuper) {
+    return fighter.superMeter >= SUPER_HITS_REQUIRED ? ATTACKS.special : undefined;
+  }
+  return input.kick ? ATTACKS.kick : input.punch ? ATTACKS.punch : undefined;
 }
 
 function getHurtbox(fighter: FighterRuntime): Box {
@@ -450,6 +465,7 @@ function fighterChecksum(fighter: FighterRuntime) {
     fixed(fighter.velocityY),
     fighter.facing,
     fighter.health,
+    fighter.superMeter,
     fighter.roundsWon,
     fighter.pose,
     fighter.blocking ? 1 : 0,
