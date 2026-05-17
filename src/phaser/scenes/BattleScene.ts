@@ -25,6 +25,7 @@ import { BAD_TV_POST_FX_PIPELINE_KEY, getBadTvPostFxConfig } from "../effects/Ba
 import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPostFxPipeline";
 import { PIXEL_POST_FX_PIPELINE_KEY, getPixelPostFxConfig } from "../effects/PixelPostFxPipeline";
 import { STATIC_POST_FX_PIPELINE_KEY, getStaticPostFxConfig } from "../effects/StaticPostFxPipeline";
+import { playPunchImpactSfx } from "../audio/punchImpactSfx";
 import {
   createFighterRenderState,
   updateFighterRenderState,
@@ -500,6 +501,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.state.lastHit && this.state.lastHit.at !== this.lastHitAt) {
       this.lastHitAt = this.state.lastHit.at;
       this.cameras.main.shake(90, 0.004);
+      this.playHitSound();
       this.createHitEffects();
     }
 
@@ -811,5 +813,18 @@ export class BattleScene extends Phaser.Scene {
         onComplete: () => afterimage.destroy(),
       });
     }
+  }
+
+  private playHitSound() {
+    if (!this.state.lastHit) {
+      return;
+    }
+
+    const defender = this.state.fighters[this.state.lastHit.defender];
+    playPunchImpactSfx(this.sound, {
+      damage: this.state.lastHit.damage,
+      x: defender.x,
+      arenaWidth: ARENA_WIDTH,
+    });
   }
 }
