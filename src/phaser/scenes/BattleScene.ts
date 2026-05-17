@@ -28,6 +28,7 @@ import { CRT_POST_FX_PIPELINE_KEY, getCrtPostFxConfig } from "../effects/CrtPost
 import { PIXEL_POST_FX_PIPELINE_KEY, getPixelPostFxConfig } from "../effects/PixelPostFxPipeline";
 import { STATIC_POST_FX_PIPELINE_KEY, getStaticPostFxConfig } from "../effects/StaticPostFxPipeline";
 import { playPunchImpactSfx } from "../audio/punchImpactSfx";
+import { playSuperSfx } from "../audio/superSfx";
 import {
   createFighterRenderState,
   updateFighterRenderState,
@@ -802,6 +803,7 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.state.lastSuper && this.state.lastSuper.at !== this.lastSuperAt) {
       this.lastSuperAt = this.state.lastSuper.at;
+      this.playSuperSound(this.state.lastSuper.attacker);
       this.createSuperFlash(this.state.lastSuper.attacker);
     }
 
@@ -1173,6 +1175,14 @@ export class BattleScene extends Phaser.Scene {
     playPunchImpactSfx(this.sound, {
       damage: this.state.lastHit.damage,
       x: defender.x,
+      arenaWidth: ARENA_WIDTH,
+    });
+  }
+
+  private playSuperSound(attackerSlot: PlayerSlot) {
+    const attacker = this.state.fighters[attackerSlot];
+    playSuperSfx(this.sound, {
+      x: attacker.x,
       arenaWidth: ARENA_WIDTH,
     });
   }

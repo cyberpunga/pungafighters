@@ -1,14 +1,10 @@
 import type Phaser from "phaser";
+import { createStereoPanner, getWebAudioSoundManager, prepareWebAudioContext } from "./webAudio";
 
 interface PunchImpactSfxOptions {
   damage: number;
   x: number;
   arenaWidth: number;
-}
-
-interface WebAudioSoundManagerLike {
-  context: AudioContext;
-  destination: AudioNode;
 }
 
 const IMPACT_DURATION_SECONDS = 0.12;
@@ -18,19 +14,11 @@ const PAN_LIMIT = 0.68;
 
 export function playPunchImpactSfx(sound: Phaser.Sound.BaseSoundManager, options: PunchImpactSfxOptions) {
   const webAudio = getWebAudioSoundManager(sound);
-  if (!webAudio) {
+  if (!webAudio || !prepareWebAudioContext(webAudio.context)) {
     return;
   }
 
   const { context, destination } = webAudio;
-  if (context.state === "closed") {
-    return;
-  }
-
-  if (context.state === "suspended") {
-    void context.resume().catch(() => undefined);
-  }
-
   const now = context.currentTime;
   const intensity = clamp((options.damage - 3) / 15, 0, 1);
   const pan = clamp((options.x / options.arenaWidth) * 2 - 1, -PAN_LIMIT, PAN_LIMIT);
@@ -61,17 +49,6 @@ export function playPunchImpactSfx(sound: Phaser.Sound.BaseSoundManager, options
     output.disconnect();
     panner?.disconnect();
   }, (IMPACT_DURATION_SECONDS + 0.08) * 1000);
-}
-
-function getWebAudioSoundManager(sound: Phaser.Sound.BaseSoundManager): WebAudioSoundManagerLike | undefined {
-  const candidate = sound as unknown as Partial<Phaser.Sound.WebAudioSoundManager>;
-  if (candidate.context && candidate.destination && typeof candidate.context.createBuffer === "function") {
-    return {
-      context: candidate.context,
-      destination: candidate.destination,
-    };
-  }
-  return undefined;
 }
 
 function playNoiseLayer(context: AudioContext, destination: AudioNode, startAt: number, intensity: number) {
@@ -170,15 +147,6 @@ function createImpactNoiseBuffer(context: AudioContext, intensity: number) {
   }
 
   return buffer;
-}
-
-function createStereoPanner(context: AudioContext, pan: number) {
-  if (typeof context.createStereoPanner !== "function") {
-    return undefined;
-  }
-  const panner = context.createStereoPanner();
-  panner.pan.value = pan;
-  return panner;
 }
 
 function clamp(value: number, min: number, max: number) {
