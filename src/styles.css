@@ -930,15 +930,82 @@ button:disabled {
   grid-column: span 2;
 }
 
-.settings-effect-control {
+.effect-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.effect-toggle-row {
+  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   margin-top: 2px;
 }
 
-.settings-effect-control .segment-option {
+.effect-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
   min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #111018;
+  color: var(--muted);
   padding: 0 10px;
+  font-weight: 900;
+}
+
+.effect-toggle-button.active {
+  background: rgba(46, 196, 182, 0.18);
+  border-color: var(--aqua);
+  color: var(--text);
+}
+
+.effect-toggle-button span,
+.effect-toggle-button.active span,
+.effect-order-label {
+  color: inherit;
+}
+
+.effect-order-list {
+  display: grid;
+  gap: 6px;
+}
+
+.effect-order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid rgba(248, 244, 223, 0.1);
+  border-radius: 6px;
+  background: rgba(17, 16, 24, 0.58);
+  padding: 5px 6px 5px 10px;
+}
+
+.effect-order-label,
+.effect-order-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.effect-order-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.effect-order-button {
+  width: 30px;
+  min-height: 30px;
+}
+
+.effect-order-button:disabled {
+  cursor: default;
+  opacity: 0.32;
 }
 
 .battle-mount {
@@ -946,10 +1013,56 @@ button:disabled {
   height: 100vh;
   overflow: hidden;
   background: #111018;
+  position: relative;
 }
 
-.battle-mount canvas {
+.battle-canvas-host {
+  width: 100%;
+  height: 100%;
+}
+
+.battle-canvas-host canvas {
   display: block;
+}
+
+.battle-fx-panel {
+  position: absolute;
+  right: clamp(12px, 2vw, 22px);
+  bottom: clamp(12px, 2vw, 22px);
+  z-index: 3;
+  width: min(360px, calc(100vw - 24px));
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(248, 244, 223, 0.18);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.78);
+  padding: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.battle-fx-panel strong {
+  color: var(--aqua);
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.effect-stack--compact {
+  gap: 6px;
+}
+
+.effect-stack--compact .effect-toggle-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.effect-stack--compact .effect-toggle-button {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.effect-stack--compact .effect-order-item {
+  min-height: 32px;
 }
 
 .online-view {
@@ -1144,7 +1257,7 @@ button:disabled {
     flex-direction: column;
   }
 
-  .settings-effect-control {
+  .settings-control-card .effect-toggle-row {
     grid-template-columns: 1fr;
   }
 }

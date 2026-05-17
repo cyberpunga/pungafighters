@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import {
   VOICE_CLIPS,
   type BattleConfig,
-  type BattleDisplayEffect,
+  type BattlePostEffect,
   type FighterPose,
   type LoadedFighter,
   type PlayerInputSnapshot,
@@ -44,7 +44,7 @@ export interface BattleSceneOptions {
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
   background?: RuntimeBattleBackground;
-  displayEffect?: BattleDisplayEffect;
+  displayEffects?: BattlePostEffect[];
 }
 
 const FIGHTER_DISPLAY_SIZE = 190;
@@ -75,7 +75,8 @@ export class BattleScene extends Phaser.Scene {
   private readonly localSlot: PlayerSlot;
   private readonly networkController?: NetworkInputController;
   private readonly background?: RuntimeBattleBackground;
-  private readonly displayEffect: BattleDisplayEffect;
+  private displayEffects: BattlePostEffect[];
+  private hasCreated = false;
   private views?: Record<PlayerSlot, FighterView>;
   private timerText?: Phaser.GameObjects.Text;
   private messageText?: Phaser.GameObjects.Text;
@@ -107,7 +108,7 @@ export class BattleScene extends Phaser.Scene {
     this.localSlot = options.localSlot ?? "p1";
     this.networkController = options.networkController;
     this.background = options.background;
-    this.displayEffect = options.displayEffect ?? "clean";
+    this.displayEffects = options.displayEffects ?? [];
     this.state = createBattleState(config, {
       p1: { id: fighters.p1.id, name: fighters.p1.name },
       p2: { id: fighters.p2.id, name: fighters.p2.name },
@@ -125,7 +126,6 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
-    this.applyDisplayEffect();
     this.createArena();
     this.createInputs();
     this.views = {
@@ -149,21 +149,39 @@ export class BattleScene extends Phaser.Scene {
       fontSize: "16px",
       color: "#d9d2b6",
     }).setOrigin(0.5).setAlpha(0);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.hasCreated = false;
+    });
+    this.hasCreated = true;
+    this.applyDisplayEffects();
   }
 
-  private applyDisplayEffect() {
-    if (this.game.renderer.type !== Phaser.WEBGL) {
-      return;
+  setDisplayEffects(effects: BattlePostEffect[]) {
+    this.displayEffects = effects;
+    if (this.hasCreated) {
+      this.applyDisplayEffects();
     }
-    const crtConfig = getCrtPostFxConfig(this.displayEffect);
-    if (crtConfig) {
-      this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, crtConfig, false);
-      return;
-    }
-    const badTvConfig = getBadTvPostFxConfig(this.displayEffect);
+  }
+
+  private applyDisplayEffect(effect: BattlePostEffect) {
+    const badTvConfig = getBadTvPostFxConfig(effect);
     if (badTvConfig) {
       this.cameras.main.setPostPipeline(BAD_TV_POST_FX_PIPELINE_KEY, badTvConfig, false);
+      return;
     }
+    const crtConfig = getCrtPostFxConfig(effect);
+    if (crtConfig) {
+      this.cameras.main.setPostPipeline(CRT_POST_FX_PIPELINE_KEY, crtConfig, false);
+    }
+  }
+
+  private applyDisplayEffects() {
+    const game = this.game as Phaser.Game | undefined;
+    if (!game || game.renderer.type !== Phaser.WEBGL) {
+      return;
+    }
+    this.cameras.main.resetPostPipeline(true);
+    this.displayEffects.forEach((effect) => this.applyDisplayEffect(effect));
   }
 
   update(_time: number, delta: number) {

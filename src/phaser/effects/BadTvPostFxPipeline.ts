@@ -98,25 +98,25 @@ const BAD_TV_CONFIGS: Record<BadTvDisplayEffect, BadTvPostFxConfig> = {
 };
 
 export class BadTvPostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
-  constructor(game: Phaser.Game) {
+  private readonly effectConfig: BadTvPostFxConfig;
+
+  constructor(game: Phaser.Game, config: Partial<BadTvPostFxConfig> = {}) {
     super({
       game,
       fragShader: BAD_TV_POST_FX_FRAGMENT_SHADER,
     });
+    this.effectConfig = {
+      ...DEFAULT_BAD_TV_CONFIG,
+      ...config,
+    };
   }
 
   onDraw(renderTarget: Phaser.Renderer.WebGL.RenderTarget) {
-    const pipelineTarget = this.gameObject as { postPipelineData?: Partial<BadTvPostFxConfig> } | undefined;
-    const config = {
-      ...DEFAULT_BAD_TV_CONFIG,
-      ...pipelineTarget?.postPipelineData,
-    };
-
     this.set1f("time", this.game.loop.time / 1000);
-    this.set1f("distortion", config.distortion);
-    this.set1f("distortion2", config.distortion2);
-    this.set1f("speed", config.speed);
-    this.set1f("rollSpeed", config.rollSpeed);
+    this.set1f("distortion", this.effectConfig.distortion);
+    this.set1f("distortion2", this.effectConfig.distortion2);
+    this.set1f("speed", this.effectConfig.speed);
+    this.set1f("rollSpeed", this.effectConfig.rollSpeed);
     this.bindAndDraw(renderTarget);
   }
 }

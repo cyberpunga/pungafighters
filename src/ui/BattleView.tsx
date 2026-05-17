@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
-import type { BattleConfig, BattleDisplayEffect, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
+import type { BattleConfig, BattlePostEffect, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { createBattleGame, type BattleGameHandle } from "../phaser/bridge/createBattleGame";
+import { BattleDisplayEffectsControl } from "./BattleDisplayEffectsControl";
 
 export function BattleView(props: {
   config: BattleConfig;
@@ -11,7 +12,8 @@ export function BattleView(props: {
   mode?: "local" | "online";
   localSlot?: PlayerSlot;
   networkController?: NetworkInputController;
-  displayEffect: BattleDisplayEffect;
+  displayEffects: BattlePostEffect[];
+  onDisplayEffectsChange: (effects: BattlePostEffect[]) => void;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<BattleGameHandle | null>(null);
@@ -29,13 +31,25 @@ export function BattleView(props: {
       mode: props.mode,
       localSlot: props.localSlot,
       networkController: props.networkController,
-      displayEffect: props.displayEffect,
+      displayEffects: props.displayEffects,
     });
     return () => {
       gameRef.current?.destroy();
       gameRef.current = null;
     };
-  }, [props]);
+  }, [props.background, props.config, props.fighters, props.localSlot, props.mode, props.networkController, props.onExit]);
 
-  return <section className="battle-mount" ref={mountRef} aria-label="Battle arena" />;
+  useEffect(() => {
+    gameRef.current?.setDisplayEffects(props.displayEffects);
+  }, [props.displayEffects]);
+
+  return (
+    <section className="battle-mount" aria-label="Battle arena">
+      <div className="battle-canvas-host" ref={mountRef} />
+      <aside className="battle-fx-panel" aria-label="Battle display effects">
+        <strong>FX</strong>
+        <BattleDisplayEffectsControl compact effects={props.displayEffects} onChange={props.onDisplayEffectsChange} />
+      </aside>
+    </section>
+  );
 }

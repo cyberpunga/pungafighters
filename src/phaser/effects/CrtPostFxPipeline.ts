@@ -109,30 +109,30 @@ const CRT_CONFIGS: Record<CrtDisplayEffect, CrtPostFxConfig> = {
 };
 
 export class CrtPostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
-  constructor(game: Phaser.Game) {
+  private readonly effectConfig: CrtPostFxConfig;
+
+  constructor(game: Phaser.Game, config: Partial<CrtPostFxConfig> = {}) {
     super({
       game,
       fragShader: CRT_POST_FX_FRAGMENT_SHADER,
     });
+    this.effectConfig = {
+      ...DEFAULT_CRT_CONFIG,
+      ...config,
+    };
   }
 
   onDraw(renderTarget: Phaser.Renderer.WebGL.RenderTarget) {
-    const pipelineTarget = this.gameObject as { postPipelineData?: Partial<CrtPostFxConfig> } | undefined;
-    const config = {
-      ...DEFAULT_CRT_CONFIG,
-      ...pipelineTarget?.postPipelineData,
-    };
-
     this.set2f("resolution", renderTarget.width, renderTarget.height);
     this.set1f("time", this.game.loop.time / 1000);
-    this.set1f("warp", config.warp);
-    this.set1f("scanline", config.scanline);
-    this.set1f("mask", config.mask);
-    this.set1f("vignette", config.vignette);
-    this.set1f("brightness", config.brightness);
-    this.set1f("contrast", config.contrast);
-    this.set1f("saturation", config.saturation);
-    this.set1f("flicker", config.flicker);
+    this.set1f("warp", this.effectConfig.warp);
+    this.set1f("scanline", this.effectConfig.scanline);
+    this.set1f("mask", this.effectConfig.mask);
+    this.set1f("vignette", this.effectConfig.vignette);
+    this.set1f("brightness", this.effectConfig.brightness);
+    this.set1f("contrast", this.effectConfig.contrast);
+    this.set1f("saturation", this.effectConfig.saturation);
+    this.set1f("flicker", this.effectConfig.flicker);
     this.bindAndDraw(renderTarget);
   }
 }

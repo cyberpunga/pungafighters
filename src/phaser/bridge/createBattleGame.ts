@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { BattleConfig, BattleDisplayEffect, LoadedFighter, RuntimeBattleBackground } from "../../types/game";
+import type { BattleConfig, BattlePostEffect, LoadedFighter, RuntimeBattleBackground } from "../../types/game";
 import type { NetworkInputController } from "../../game/network/networkInputController";
 import { BAD_TV_POST_FX_PIPELINE_KEY, BadTvPostFxPipeline } from "../effects/BadTvPostFxPipeline";
 import { CRT_POST_FX_PIPELINE_KEY, CrtPostFxPipeline } from "../effects/CrtPostFxPipeline";
@@ -7,6 +7,7 @@ import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
 
 export interface BattleGameHandle {
   game: Phaser.Game;
+  setDisplayEffects: (effects: BattlePostEffect[]) => void;
   destroy: () => void;
 }
 
@@ -19,14 +20,14 @@ export function createBattleGame(input: {
   mode?: BattleSceneOptions["mode"];
   localSlot?: BattleSceneOptions["localSlot"];
   networkController?: NetworkInputController;
-  displayEffect?: BattleDisplayEffect;
+  displayEffects?: BattlePostEffect[];
 }): BattleGameHandle {
   const scene = new BattleScene(input.config, input.fighters, input.onExit, {
     background: input.background,
     mode: input.mode,
     localSlot: input.localSlot,
     networkController: input.networkController,
-    displayEffect: input.displayEffect,
+    displayEffects: input.displayEffects,
   });
   const game = new Phaser.Game({
     type: Phaser.AUTO,
@@ -50,6 +51,7 @@ export function createBattleGame(input: {
 
   return {
     game,
+    setDisplayEffects: (effects) => scene.setDisplayEffects(effects),
     destroy: () => game.destroy(true),
   };
 }

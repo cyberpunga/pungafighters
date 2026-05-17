@@ -1,13 +1,23 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { BattleDisplayEffect, FighterPose, FighterProfile, LoadedBattleBackground, LoadedFighter, VoiceClipType } from "../types/game";
-import { BATTLE_DISPLAY_EFFECTS, FIGHTER_POSES } from "../types/game";
+import type {
+  BattleDisplayEffect,
+  BattlePostEffect,
+  FighterPose,
+  FighterProfile,
+  LoadedBattleBackground,
+  LoadedFighter,
+  VoiceClipType,
+} from "../types/game";
+import { BATTLE_POST_EFFECTS, FIGHTER_POSES } from "../types/game";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 
 export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
 export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "crt-soft";
+export const DEFAULT_BATTLE_POST_EFFECTS: BattlePostEffect[] = [DEFAULT_BATTLE_DISPLAY_EFFECT];
 
 const BATTLE_BACKGROUND_SETTING_KEY = "battle-background";
 const BATTLE_DISPLAY_EFFECT_SETTING_KEY = "battle-display-effect";
+const BATTLE_POST_EFFECTS_SETTING_KEY = "battle-post-effects";
 const BATTLE_BACKGROUND_BLOB_ID = "battle-background:current";
 const BATTLE_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
 const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -216,14 +226,35 @@ export async function clearBattleBackgroundImage(): Promise<void> {
 }
 
 export async function getBattleDisplayEffect(): Promise<BattleDisplayEffect> {
+  const effects = await getBattlePostEffects();
+  return effects[0] ?? "clean";
+}
+
+export async function getBattlePostEffects(): Promise<BattlePostEffect[]> {
   const db = await getDb();
+  const effectsValue = await db.get("settings", BATTLE_POST_EFFECTS_SETTING_KEY);
+  if (Array.isArray(effectsValue)) {
+    const effects = dedupePostEffects(effectsValue);
+    return effects.length > 0 ? effects : [];
+  }
+
   const value = await db.get("settings", BATTLE_DISPLAY_EFFECT_SETTING_KEY);
-  return isBattleDisplayEffect(value) ? value : DEFAULT_BATTLE_DISPLAY_EFFECT;
+  if (isBattlePostEffect(value)) {
+    return [value];
+  }
+  if (value === "clean") {
+    return [];
+  }
+  return DEFAULT_BATTLE_POST_EFFECTS;
 }
 
 export async function setBattleDisplayEffect(effect: BattleDisplayEffect): Promise<void> {
+  await setBattlePostEffects(effect === "clean" ? [] : [effect]);
+}
+
+export async function setBattlePostEffects(effects: BattlePostEffect[]): Promise<void> {
   const db = await getDb();
-  await db.put("settings", effect, BATTLE_DISPLAY_EFFECT_SETTING_KEY);
+  await db.put("settings", dedupePostEffects(effects), BATTLE_POST_EFFECTS_SETTING_KEY);
 }
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
@@ -281,8 +312,12 @@ function isSupportedBattleBackgroundFile(file: File) {
   return BATTLE_BACKGROUND_MIME_TYPES.has(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
 }
 
-function isBattleDisplayEffect(value: unknown): value is BattleDisplayEffect {
-  return typeof value === "string" && BATTLE_DISPLAY_EFFECTS.includes(value as BattleDisplayEffect);
+function isBattlePostEffect(value: unknown): value is BattlePostEffect {
+  return typeof value === "string" && BATTLE_POST_EFFECTS.includes(value as BattlePostEffect);
+}
+
+function dedupePostEffects(values: unknown[]): BattlePostEffect[] {
+  return values.filter(isBattlePostEffect).filter((effect, index, effects) => effects.indexOf(effect) === index);
 }
 
 function getImageMimeTypeFromName(filename: string) {

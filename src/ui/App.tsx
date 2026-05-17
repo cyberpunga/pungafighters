@@ -1,19 +1,19 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { BattleConfig, BattleDisplayEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
+import type { BattleConfig, BattlePostEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import {
   clearBattleBackgroundImage,
   deleteFighter,
-  DEFAULT_BATTLE_DISPLAY_EFFECT,
-  getBattleDisplayEffect,
+  DEFAULT_BATTLE_POST_EFFECTS,
+  getBattlePostEffects,
   getLoadedBattleBackground,
   listLoadedFighters,
   saveBattleBackgroundImage,
-  setBattleDisplayEffect as saveBattleDisplayEffect,
+  setBattlePostEffects as saveBattlePostEffects,
 } from "../storage/db";
 import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
@@ -61,7 +61,7 @@ export function App() {
   const [fileStatus, setFileStatus] = useState("");
   const [backgroundStatus, setBackgroundStatus] = useState("");
   const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
-  const [battleDisplayEffect, setBattleDisplayEffect] = useState<BattleDisplayEffect>(DEFAULT_BATTLE_DISPLAY_EFFECT);
+  const [battlePostEffects, setBattlePostEffects] = useState<BattlePostEffect[]>(DEFAULT_BATTLE_POST_EFFECTS);
   const battleBackgroundUrlRef = useRef<string | undefined>();
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
@@ -100,9 +100,9 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    void getBattleDisplayEffect().then((effect) => {
+    void getBattlePostEffects().then((effects) => {
       if (active) {
-        setBattleDisplayEffect(effect);
+        setBattlePostEffects(effects);
       }
     });
     return () => {
@@ -149,9 +149,9 @@ export function App() {
     }
   }, [setLoadedBattleBackground]);
 
-  const updateBattleDisplayEffect = useCallback((effect: BattleDisplayEffect) => {
-    setBattleDisplayEffect(effect);
-    void saveBattleDisplayEffect(effect);
+  const updateBattlePostEffects = useCallback((effects: BattlePostEffect[]) => {
+    setBattlePostEffects(effects);
+    void saveBattlePostEffects(effects);
   }, []);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
@@ -178,7 +178,16 @@ export function App() {
     const p2 = fighters.find((fighter) => fighter.id === localSelection.p2);
     return p1 && p2 ? { p1, p2 } : undefined;
   }, [fighters, localSelection]);
+  const localBattleConfig = useMemo(
+    () => ({ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: localSelection.p1, playerTwoFighterId: localSelection.p2 }),
+    [localSelection.p1, localSelection.p2],
+  );
   const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, onlineSelectedFighterId), [fighters, onlineSelectedFighterId]);
+  const exitLocalBattle = useCallback(() => navigate("fight", { replace: true }), [navigate]);
+  const exitOnlineBattle = useCallback(() => {
+    setOnlineBattle(undefined);
+    navigate("fight", { replace: true });
+  }, [navigate]);
 
   return (
     <main className="app-shell">
@@ -280,7 +289,7 @@ export function App() {
           }}
         />
       )}
-      {view === "settings" && <SettingsView battleDisplayEffect={battleDisplayEffect} onBattleDisplayEffectChange={updateBattleDisplayEffect} />}
+      {view === "settings" && <SettingsView battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />}
       {view === "battle" && onlineBattle && (
         <BattleView
           mode="online"
@@ -289,20 +298,19 @@ export function App() {
           config={onlineBattle.config}
           fighters={onlineBattle.fighters}
           background={onlineBattle.background}
-          displayEffect={battleDisplayEffect}
-          onExit={() => {
-            setOnlineBattle(undefined);
-            navigate("fight", { replace: true });
-          }}
+          displayEffects={battlePostEffects}
+          onDisplayEffectsChange={updateBattlePostEffects}
+          onExit={exitOnlineBattle}
         />
       )}
       {view === "battle" && !onlineBattle && battleFighters && (
         <BattleView
-          config={{ ...DEFAULT_BATTLE_CONFIG, playerOneFighterId: localSelection.p1, playerTwoFighterId: localSelection.p2 }}
+          config={localBattleConfig}
           fighters={battleFighters}
           background={battleBackground}
-          displayEffect={battleDisplayEffect}
-          onExit={() => navigate("fight", { replace: true })}
+          displayEffects={battlePostEffects}
+          onDisplayEffectsChange={updateBattlePostEffects}
+          onExit={exitLocalBattle}
         />
       )}
     </main>
