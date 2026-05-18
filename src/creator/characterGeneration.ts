@@ -1,7 +1,5 @@
 import { AppError } from "../i18n/errors";
 
-const DEFAULT_CHARACTER_GENERATION_URL = "https://punga-turn-credentials.hola-011.workers.dev/generate";
-
 type Env = Record<string, string | boolean | undefined>;
 
 export interface CharacterGenerationReferenceImage {
@@ -27,7 +25,11 @@ export interface GeneratedCharacterSpritesheet {
 }
 
 export function getCharacterGenerationEndpoint() {
-  return getEnvString("VITE_CHARACTER_GENERATION_URL") ?? DEFAULT_CHARACTER_GENERATION_URL;
+  const endpoint = getEnvString("VITE_CHARACTER_GENERATION_URL");
+  if (!endpoint) {
+    throw new AppError("error.generationEndpoint");
+  }
+  return endpoint;
 }
 
 export async function generateCharacterSpritesheet(input: GenerateCharacterSpritesheetInput): Promise<GeneratedCharacterSpritesheet> {

@@ -88,21 +88,21 @@ VITE_RTC_ICE_SERVERS_URL=https://your-credentials-endpoint.example/ice-servers
 
 The endpoint should return either Cloudflare's generated `{ "iceServers": [...] }` response or an `iceServers` array. Keep Cloudflare TURN keys and API tokens server-side; the browser should only receive expiring credentials. For quick local testing only, you can paste a generated response into `VITE_RTC_ICE_SERVERS_JSON`. Set `VITE_RTC_FORCE_TURN=true` to force relay candidates while testing whether TURN is actually being used.
 
-This repo includes a Cloudflare Worker in `server/` for that endpoint. Configure its secrets with `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`, then deploy it:
+This repo includes a dedicated Cloudflare Worker in `workers/turn/` for that endpoint. Configure its secrets with `TURN_KEY_ID` and `TURN_KEY_API_TOKEN`, then deploy it:
 
 ```bash
-cd server
+cd workers/turn
 pnpm install
 pnpm wrangler secret put TURN_KEY_ID
 pnpm wrangler secret put TURN_KEY_API_TOKEN
 pnpm deploy
 ```
 
-Set `ALLOWED_ORIGINS` in `server/wrangler.toml` to the deployed game origin and any local dev origins you need.
+Set `ALLOWED_ORIGINS` in `workers/turn/wrangler.toml` to the deployed game origin and any local dev origins you need.
 
 ### Character Generation Worker
 
-The same Worker exposes `POST /generate` for server-side Gemini spritesheet generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `prompt`, `model`, and optional reference `image` or `images` entries:
+This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `prompt`, `model`, and optional reference `image` or `images` entries:
 
 ```json
 {
@@ -114,7 +114,18 @@ The same Worker exposes `POST /generate` for server-side Gemini spritesheet gene
 
 Supported model aliases are `nano-banana`, `nano-banana-2`, and `nano-banana-pro`; direct `gemini-*` image model ids are also accepted for testing. The response includes the generated image as base64 and a `dataUrl`, ready to feed into the creator spritesheet import flow.
 
-The browser creator calls `https://punga-turn-credentials.hola-011.workers.dev/generate` by default. Use `VITE_CHARACTER_GENERATION_URL` to point local development or a fork at a different Worker.
+```bash
+cd workers/generation
+pnpm install
+pnpm wrangler secret put GEMINI_API_KEY
+pnpm deploy
+```
+
+Set `ALLOWED_ORIGINS` in `workers/generation/wrangler.toml` to the deployed game origin and any local dev origins you need. Configure the browser app with the deployed endpoint:
+
+```bash
+VITE_CHARACTER_GENERATION_URL=https://your-generation-worker.example/generate
+```
 
 ## Browser Requirements
 

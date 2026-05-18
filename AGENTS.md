@@ -32,7 +32,8 @@
 - `src/i18n/`: typed locale dictionaries, browser-language detection, translation helpers, and React i18n provider.
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
-- `server/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials and proxies server-side Gemini character spritesheet generation.
+- `workers/turn/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials.
+- `workers/generation/`: Cloudflare Worker that proxies server-side Gemini character spritesheet generation.
 
 ## Engineering Rules
 

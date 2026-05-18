@@ -323,6 +323,7 @@ export const en = {
   "error.backgroundPrepare": "Could not prepare the battle background for online play.",
   "error.backgroundLoad": "Could not load battle background.",
   "error.referenceImageRead": "Could not read the reference image.",
+  "error.generationEndpoint": "Character generation is not configured.",
   "error.generationService": "Could not generate a fighter spritesheet.",
   "error.generationInvalidResponse": "The generation service returned an invalid spritesheet response.",
 } as const;
@@ -652,6 +653,7 @@ export const es: Record<keyof typeof en, string> = {
   "error.backgroundPrepare": "No se pudo preparar el fondo de combate para jugar en línea.",
   "error.backgroundLoad": "No se pudo cargar el fondo de combate.",
   "error.referenceImageRead": "No se pudo leer la imagen de referencia.",
+  "error.generationEndpoint": "La generación de luchadores no está configurada.",
   "error.generationService": "No se pudo generar una tira de luchador.",
   "error.generationInvalidResponse": "El servicio de generación devolvió una respuesta de tira inválida.",
 };

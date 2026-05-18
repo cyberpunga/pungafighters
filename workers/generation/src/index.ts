@@ -1,16 +1,12 @@
 export interface Env {
-  TURN_KEY_ID: string;
-  TURN_KEY_API_TOKEN: string;
   ALLOWED_ORIGIN?: string;
   ALLOWED_ORIGINS?: string;
-  TURN_TTL_SECONDS?: string;
   GEMINI_API_KEY?: string;
   GEMINI_IMAGE_MODEL?: string;
   GEMINI_IMAGE_ASPECT_RATIO?: string;
   GEMINI_IMAGE_SIZE?: string;
 }
 
-const CLOUDFLARE_TURN_API = "https://rtc.live.cloudflare.com/v1/turn/keys";
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const MAX_REFERENCE_IMAGES = 14;
@@ -56,58 +52,17 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (url.pathname === "/ice-servers") {
-      if (request.method !== "GET") {
-        return json({ error: "Method not allowed" }, 405, corsHeaders);
-      }
-      return getIceServers(env, corsHeaders);
+    if (url.pathname !== "/generate") {
+      return json({ error: "Not found" }, 404, corsHeaders);
     }
 
-    if (url.pathname === "/generate") {
-      if (request.method !== "POST") {
-        return json({ error: "Method not allowed" }, 405, corsHeaders);
-      }
-      return generateCharacterSpritesheet(request, env, corsHeaders);
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed" }, 405, corsHeaders);
     }
 
-    return json({ error: "Not found" }, 404, corsHeaders);
+    return generateCharacterSpritesheet(request, env, corsHeaders);
   },
 };
-
-async function getIceServers(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
-  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) {
-    return json({ error: "TURN credentials are not configured" }, 500, corsHeaders);
-  }
-
-  const ttl = Number(env.TURN_TTL_SECONDS ?? 86400);
-
-  const response = await fetch(`${CLOUDFLARE_TURN_API}/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ ttl }),
-  });
-
-  if (!response.ok) {
-    return json(
-      {
-        error: "Could not generate TURN credentials",
-        status: response.status,
-      },
-      502,
-      corsHeaders,
-    );
-  }
-
-  const body = await response.json();
-
-  return json(filterBrowserBlockedPort53(body), 200, {
-    ...corsHeaders,
-    "Cache-Control": "no-store",
-  });
-}
 
 async function generateCharacterSpritesheet(request: Request, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   if (!env.GEMINI_API_KEY) {
@@ -209,7 +164,7 @@ async function generateCharacterSpritesheet(request: Request, env: Env, corsHead
 function getCorsHeaders(allowedOrigin: string) {
   return {
     "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     Vary: "Origin",
   };
@@ -223,29 +178,6 @@ function json(body: unknown, status: number, headers: Record<string, string>) {
       "Content-Type": "application/json",
     },
   });
-}
-
-function filterBrowserBlockedPort53(body: any) {
-  if (!Array.isArray(body?.iceServers)) {
-    return body;
-  }
-
-  return {
-    ...body,
-    iceServers: body.iceServers
-      .map((server: any) => {
-        const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-        const filteredUrls = urls.filter((url: unknown) => typeof url === "string" && !/:53(\?|$)/.test(url));
-
-        return filteredUrls.length > 0
-          ? {
-              ...server,
-              urls: filteredUrls.length === 1 ? filteredUrls[0] : filteredUrls,
-            }
-          : undefined;
-      })
-      .filter(Boolean),
-  };
 }
 
 function getAllowedOrigin(origin: string, env: Env) {
