@@ -1,5 +1,6 @@
 import type { FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../../types/game";
+import { AppError } from "../../i18n/errors";
 import type { NetworkAssetChunkHeader, NetworkFighterManifest } from "./protocol";
 
 export const NETWORK_ASSET_CHUNK_BYTES = 16 * 1024;
@@ -366,7 +367,7 @@ async function decodeImageBlob(blob: Blob): Promise<{ source: CanvasImageSource;
   image.decoding = "async";
   await new Promise<void>((resolve, reject) => {
     image.addEventListener("load", () => resolve(), { once: true });
-    image.addEventListener("error", () => reject(new Error("Could not read fighter frame.")), { once: true });
+    image.addEventListener("error", () => reject(new AppError("error.fighterFrameRead")), { once: true });
     image.src = url;
   });
   return {
@@ -386,7 +387,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: numb
 async function urlToBlob(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error("Could not load fighter asset.");
+    throw new AppError("error.fighterAssetLoad");
   }
   return response.blob();
 }

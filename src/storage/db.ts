@@ -10,6 +10,7 @@ import type {
 } from "../types/game";
 import { BATTLE_POST_EFFECTS, FIGHTER_POSES } from "../types/game";
 import { getDefaultFighters } from "../game/content/defaultFighters";
+import { AppError, missingPoseImageError } from "../i18n/errors";
 
 export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
 export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "crt-soft";
@@ -260,10 +261,10 @@ export async function getLoadedBattleBackground(): Promise<LoadedBattleBackgroun
 
 export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattleBackground> {
   if (!isSupportedBattleBackgroundFile(file)) {
-    throw new Error("Choose a PNG, JPEG, or WebP background image.");
+    throw new AppError("error.backgroundType");
   }
   if (file.size > BATTLE_BACKGROUND_MAX_BYTES) {
-    throw new Error("Choose a background image under 10 MB.");
+    throw new AppError("error.backgroundSize");
   }
 
   const db = await getDb();
@@ -414,12 +415,12 @@ async function fighterFrameToBlob(frame: FighterProfile["frames"][FighterPose]):
     return dataUrlToBlob(frame.dataUrl);
   }
   if (!frame.blobId) {
-    throw new Error(`Missing ${frame.pose} image.`);
+    throw missingPoseImageError(frame.pose);
   }
   const db = await getDb();
   const blob = await db.get("imageBlobs", frame.blobId);
   if (!blob) {
-    throw new Error(`Missing ${frame.pose} image.`);
+    throw missingPoseImageError(frame.pose);
   }
   return blob;
 }
@@ -427,7 +428,7 @@ async function fighterFrameToBlob(frame: FighterProfile["frames"][FighterPose]):
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const response = await fetch(dataUrl);
   if (!response.ok) {
-    throw new Error("Could not read fighter image.");
+    throw new AppError("error.fighterImageRead");
   }
   return response.blob();
 }

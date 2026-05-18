@@ -1,4 +1,5 @@
 import type { RuntimeBattleBackground } from "../../types/game";
+import { AppError } from "../../i18n/errors";
 import type { NetworkAssetChunkHeader, NetworkBattleBackgroundManifest } from "./protocol";
 
 export const NETWORK_BACKGROUND_ASSET_ID = "stage:background";
@@ -42,7 +43,7 @@ export async function serializeBattleBackgroundForNetwork(background?: RuntimeBa
   const mimeType = blob.type || background.mimeType;
   const asset = createTransferAsset(NETWORK_BACKGROUND_ASSET_ID, blob, mimeType);
   if (asset.byteLength <= 0) {
-    throw new Error("Could not prepare the battle background for online play.");
+    throw new AppError("error.backgroundPrepare");
   }
   if (!isSupportedBackgroundMimeType(asset.mimeType)) {
     throw new Error("Online battle backgrounds must be PNG, JPEG, or WebP images.");
@@ -233,7 +234,7 @@ function cleanBackgroundName(name: string) {
 async function urlToBlob(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error("Could not load battle background.");
+    throw new AppError("error.backgroundLoad");
   }
   return response.blob();
 }

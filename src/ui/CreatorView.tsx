@@ -58,16 +58,10 @@ import { useI18n } from "../i18n/react";
 const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
-const GENERATION_MODEL_OPTIONS = [
-  { value: "", label: "Server default" },
-  { value: "nano-banana-2", label: "Nano Banana 2" },
-  { value: "nano-banana-pro", label: "Nano Banana Pro" },
-  { value: "nano-banana", label: "Nano Banana" },
-  { value: "custom", label: "Custom model" },
-] as const;
+const GENERATION_MODEL_OPTIONS = ["", "nano-banana-2", "nano-banana-pro", "nano-banana", "custom"] as const;
 
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
-type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number]["value"];
+type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number];
 
 interface DraftAsset {
   blob: Blob;
@@ -541,13 +535,13 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       return;
     }
     if (!generationPrompt.trim() && !generationReferenceFile) {
-      setCameraStatus("Add a prompt or reference image before generating.");
+      setCameraStatus(t("creator.generationNeedsPromptOrReference"));
       return;
     }
 
     setActiveOperation({ type: "generate" });
     try {
-      setCameraStatus("Generating fighter strip...");
+      setCameraStatus(t("creator.generatingStripStatus"));
       const referenceImage = generationReferenceFile ? await fileToReferenceImage(generationReferenceFile) : undefined;
       const result = await generateCharacterSpritesheet({
         prompt: generationPrompt.trim(),
@@ -559,12 +553,12 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
-      setName(createGeneratedFighterName(generationPrompt));
+      setName(createGeneratedFighterName(generationPrompt, t("creator.generatedFighterName")));
       setEditingFighterId(undefined);
       setGenerationOpen(false);
-      setCameraStatus(`Generated strip loaded with ${result.model}. Process actions for cutouts or save them as-is.`);
+      setCameraStatus(t("creator.generatedStripLoaded", { model: result.model }));
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not generate fighter strip.");
+      setCameraStatus(localizeError(error, t, "creator.generateFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -944,7 +938,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
             disabled={creatorBusy}
           >
             <Sparkles size={18} />
-            Generate
+            {t("creator.generate")}
           </button>
           <button
             className="secondary-button source-action"
@@ -1037,43 +1031,48 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
             className="creator-drawer-backdrop"
             type="button"
             onClick={() => setGenerationOpen(false)}
-            aria-label="Close generator"
+            aria-label={t("creator.closeGenerator")}
           />
-          <aside className="creator-settings-drawer" role="dialog" aria-modal="true" aria-label="Generate fighter">
+          <aside
+            className="creator-settings-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("creator.generateFighter")}
+          >
             <div className="drawer-header">
-              <strong>Generate fighter</strong>
+              <strong>{t("creator.generateFighter")}</strong>
               <button
                 className="icon-button"
                 type="button"
                 onClick={() => setGenerationOpen(false)}
-                title="Close generator"
+                title={t("creator.closeGenerator")}
               >
                 <X size={18} />
-                <span className="sr-only">Close generator</span>
+                <span className="sr-only">{t("creator.closeGenerator")}</span>
               </button>
             </div>
 
             <label className="field-label">
-              Character prompt
+              {t("creator.characterPrompt")}
               <textarea
                 value={generationPrompt}
                 onChange={(event) => setGenerationPrompt(event.target.value)}
-                placeholder="cardboard robot boxer with red gloves"
+                placeholder={t("creator.characterPromptPlaceholder")}
                 disabled={creatorBusy}
                 maxLength={700}
               />
             </label>
 
             <label className="field-label">
-              Model
+              {t("creator.model")}
               <select
                 value={generationModel}
                 onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
                 disabled={creatorBusy}
               >
                 {GENERATION_MODEL_OPTIONS.map((option) => (
-                  <option key={option.value || "default"} value={option.value}>
-                    {option.label}
+                  <option key={option || "default"} value={option}>
+                    {getGenerationModelLabel(t, option)}
                   </option>
                 ))}
               </select>
@@ -1081,7 +1080,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
 
             {generationModel === "custom" && (
               <label className="field-label">
-                Model id
+                {t("creator.modelId")}
                 <input
                   value={generationCustomModel}
                   onChange={(event) => setGenerationCustomModel(event.target.value)}
@@ -1092,7 +1091,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
             )}
 
             <label className="field-label">
-              Reference image
+              {t("creator.referenceImage")}
               <input
                 type="file"
                 accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
@@ -1112,10 +1111,10 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                   type="button"
                   onClick={() => setGenerationReferenceFile(undefined)}
                   disabled={creatorBusy}
-                  title="Remove reference"
+                  title={t("creator.removeReference")}
                 >
                   <X size={16} />
-                  <span className="sr-only">Remove reference</span>
+                  <span className="sr-only">{t("creator.removeReference")}</span>
                 </button>
               </div>
             )}
@@ -1127,7 +1126,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
               disabled={creatorBusy}
             >
               <Sparkles size={18} />
-              {activeOperation?.type === "generate" ? "Generating..." : "Generate strip"}
+              {activeOperation?.type === "generate" ? t("creator.generating") : t("creator.generateStrip")}
             </button>
           </aside>
         </div>
@@ -1376,6 +1375,17 @@ function getTransformersModelDescription(t: Translate, modelId: TransformersMode
   }
 }
 
+function getGenerationModelLabel(t: Translate, model: GenerationModelOption) {
+  switch (model) {
+    case "":
+      return t("creator.serverDefaultModel");
+    case "custom":
+      return t("creator.customModel");
+    default:
+      return model;
+  }
+}
+
 function getSelectedGenerationModel(model: GenerationModelOption, customModel: string) {
   if (model === "custom") {
     return customModel.trim() || undefined;
@@ -1383,7 +1393,7 @@ function getSelectedGenerationModel(model: GenerationModelOption, customModel: s
   return model || undefined;
 }
 
-function createGeneratedFighterName(prompt: string) {
+function createGeneratedFighterName(prompt: string, fallbackName: string) {
   const words = prompt
     .trim()
     .replace(/[^a-z0-9\s-]/gi, "")
@@ -1391,7 +1401,7 @@ function createGeneratedFighterName(prompt: string) {
     .filter(Boolean)
     .slice(0, 4);
 
-  return words.length ? words.join(" ").slice(0, 32) : "Generated Fighter";
+  return words.length ? words.join(" ").slice(0, 32) : fallbackName;
 }
 
 function waitForVideoReady(video: HTMLVideoElement) {

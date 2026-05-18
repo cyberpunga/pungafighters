@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AppError, localizeError, missingPoseImageError } from "./errors";
 import { createTranslator, detectLocale, dictionaries, normalizeLocalePreference, resolveLocale, translate } from "./index";
 
 describe("i18n", () => {
@@ -23,6 +24,16 @@ describe("i18n", () => {
   it("interpolates values", () => {
     expect(translate("en", "battle.wins", { name: "Mint Guard" })).toBe("Mint Guard wins");
     expect(createTranslator("es")("battle.roundsWon", { count: 2 })).toBe("Rondas: 2");
+  });
+
+  it("localizes app errors by key", () => {
+    expect(localizeError(new AppError("error.backgroundType"), createTranslator("es"))).toBe(
+      "Elige una imagen de fondo PNG, JPEG o WebP.",
+    );
+  });
+
+  it("localizes app error values", () => {
+    expect(localizeError(missingPoseImageError("kick"), createTranslator("es"))).toBe("Falta la imagen de patada.");
   });
 
   it("keeps dictionary keys in parity", () => {

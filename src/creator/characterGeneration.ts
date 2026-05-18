@@ -1,3 +1,5 @@
+import { AppError } from "../i18n/errors";
+
 const DEFAULT_CHARACTER_GENERATION_URL = "https://punga-turn-credentials.hola-011.workers.dev/generate";
 
 type Env = Record<string, string | boolean | undefined>;
@@ -24,11 +26,6 @@ export interface GeneratedCharacterSpritesheet {
   text?: string;
 }
 
-interface GenerateCharacterErrorResponse {
-  error?: string;
-  details?: string;
-}
-
 export function getCharacterGenerationEndpoint() {
   return getEnvString("VITE_CHARACTER_GENERATION_URL") ?? DEFAULT_CHARACTER_GENERATION_URL;
 }
@@ -50,12 +47,11 @@ export async function generateCharacterSpritesheet(input: GenerateCharacterSprit
 
   const payload = (await response.json().catch(() => undefined)) as unknown;
   if (!response.ok) {
-    const errorPayload = isRecord(payload) ? (payload as GenerateCharacterErrorResponse) : undefined;
-    throw new Error(errorPayload?.details || errorPayload?.error || "Could not generate a fighter spritesheet.");
+    throw new AppError("error.generationService");
   }
 
   if (!isGeneratedCharacterSpritesheet(payload)) {
-    throw new Error("The generation service returned an invalid spritesheet response.");
+    throw new AppError("error.generationInvalidResponse");
   }
 
   return payload;
@@ -82,7 +78,7 @@ export function fileToReferenceImage(file: File): Promise<CharacterGenerationRef
         data: dataUrl,
       });
     });
-    reader.addEventListener("error", () => reject(new Error("Could not read the reference image.")));
+    reader.addEventListener("error", () => reject(new AppError("error.referenceImageRead")));
     reader.readAsDataURL(file);
   });
 }
