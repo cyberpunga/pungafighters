@@ -496,13 +496,18 @@ button:disabled {
   font-weight: 800;
 }
 
-.field-label input {
+.field-label input,
+.field-label select {
   border: 1px solid var(--line);
   background: #111018;
   color: var(--text);
   min-height: 44px;
   padding: 0 12px;
   border-radius: 8px;
+}
+
+.field-label input[type="file"] {
+  padding: 9px 12px;
 }
 
 .field-label textarea {
@@ -789,6 +794,26 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.generation-reference-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.generation-reference-row span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .helper-text {

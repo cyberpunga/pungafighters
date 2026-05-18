@@ -1,6 +1,7 @@
-import { Camera, FileJson, Images, Mic, Pause, Play, Settings, Trash2, Upload, Volume2, Wand2, X } from "lucide-react";
+import { Camera, FileJson, ImagePlus, Images, Mic, Pause, Play, Settings, Sparkles, Trash2, Upload, Volume2, Wand2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
+import { dataUrlToFile, fileToReferenceImage, generateCharacterSpritesheet } from "../creator/characterGeneration";
 import {
   FIGHTER_CHARACTER_IMPORT_ACCEPT,
   FIGHTER_IMAGE_IMPORT_ACCEPT,
@@ -32,7 +33,16 @@ import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
+const GENERATION_MODEL_OPTIONS = [
+  { value: "", label: "Server default" },
+  { value: "nano-banana-2", label: "Nano Banana 2" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro" },
+  { value: "nano-banana", label: "Nano Banana" },
+  { value: "custom", label: "Custom model" },
+] as const;
+
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
+type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number]["value"];
 
 interface DraftAsset {
   blob: Blob;
@@ -50,7 +60,7 @@ type VoiceDrafts = Partial<Record<VoiceClipType, DraftAsset>>;
 
 type CreatorOperation =
   | { type: "start-camera" | "capture" | "import" | "process"; pose: FighterPose }
-  | { type: "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
+  | { type: "generate" | "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
 
 export function CreatorView(props: { editFighterId?: string; onSaved: () => Promise<void> }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -73,6 +83,11 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
   const [playingClip, setPlayingClip] = useState<VoiceClipType | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [generationOpen, setGenerationOpen] = useState(false);
+  const [generationPrompt, setGenerationPrompt] = useState("");
+  const [generationModel, setGenerationModel] = useState<GenerationModelOption>("");
+  const [generationCustomModel, setGenerationCustomModel] = useState("");
+  const [generationReferenceFile, setGenerationReferenceFile] = useState<File | undefined>();
   const [cameraStatus, setCameraStatus] = useState("Camera is off.");
   const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
   const [segmentationOptions, setSegmentationOptions] =
@@ -492,6 +507,40 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
   };
 
+  const generateFighterDraft = async () => {
+    if (creatorBusy) {
+      return;
+    }
+    if (!generationPrompt.trim() && !generationReferenceFile) {
+      setCameraStatus("Add a prompt or reference image before generating.");
+      return;
+    }
+
+    setActiveOperation({ type: "generate" });
+    try {
+      setCameraStatus("Generating fighter strip...");
+      const referenceImage = generationReferenceFile ? await fileToReferenceImage(generationReferenceFile) : undefined;
+      const result = await generateCharacterSpritesheet({
+        prompt: generationPrompt.trim(),
+        model: getSelectedGenerationModel(generationModel, generationCustomModel),
+        images: referenceImage ? [referenceImage] : undefined,
+      });
+      const file = dataUrlToFile(result.image.dataUrl, "generated-fighter-strip.png");
+      const imported = await readSpritesheetDraftFile(file);
+      replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
+      setPreviewPose(undefined);
+      replaceVoiceDrafts({});
+      setName(createGeneratedFighterName(generationPrompt));
+      setEditingFighterId(undefined);
+      setGenerationOpen(false);
+      setCameraStatus(`Generated strip loaded with ${result.model}. Process actions for cutouts or save them as-is.`);
+    } catch (error) {
+      setCameraStatus(error instanceof Error ? error.message : "Could not generate fighter strip.");
+    } finally {
+      setActiveOperation(undefined);
+    }
+  };
+
   const processPose = async (pose: FighterPose) => {
     if (creatorBusy) {
       return;
@@ -801,6 +850,18 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         </section>
 
         <div className="creator-source-row" aria-label="Fighter source">
+          <button
+            className="secondary-button source-action"
+            type="button"
+            onClick={() => {
+              setSettingsOpen(false);
+              setGenerationOpen(true);
+            }}
+            disabled={creatorBusy}
+          >
+            <Sparkles size={18} />
+            Generate
+          </button>
           <button className="secondary-button source-action" type="button" onClick={() => characterImportInputRef.current?.click()} disabled={creatorBusy}>
             <FileJson size={18} />
             Import fighter
@@ -861,6 +922,87 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           </button>
         </div>
       </div>
+
+      {generationOpen && (
+        <div className="creator-drawer-shell">
+          <button className="creator-drawer-backdrop" type="button" onClick={() => setGenerationOpen(false)} aria-label="Close generator" />
+          <aside className="creator-settings-drawer" role="dialog" aria-modal="true" aria-label="Generate fighter">
+            <div className="drawer-header">
+              <strong>Generate fighter</strong>
+              <button className="icon-button" type="button" onClick={() => setGenerationOpen(false)} title="Close generator">
+                <X size={18} />
+                <span className="sr-only">Close generator</span>
+              </button>
+            </div>
+
+            <label className="field-label">
+              Character prompt
+              <textarea
+                value={generationPrompt}
+                onChange={(event) => setGenerationPrompt(event.target.value)}
+                placeholder="cardboard robot boxer with red gloves"
+                disabled={creatorBusy}
+                maxLength={700}
+              />
+            </label>
+
+            <label className="field-label">
+              Model
+              <select
+                value={generationModel}
+                onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
+                disabled={creatorBusy}
+              >
+                {GENERATION_MODEL_OPTIONS.map((option) => (
+                  <option key={option.value || "default"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {generationModel === "custom" && (
+              <label className="field-label">
+                Model id
+                <input
+                  value={generationCustomModel}
+                  onChange={(event) => setGenerationCustomModel(event.target.value)}
+                  placeholder="gemini-3-pro-image-preview"
+                  disabled={creatorBusy}
+                />
+              </label>
+            )}
+
+            <label className="field-label">
+              Reference image
+              <input
+                type="file"
+                accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
+                disabled={creatorBusy}
+                onChange={(event) => {
+                  setGenerationReferenceFile(event.currentTarget.files?.[0]);
+                }}
+              />
+            </label>
+
+            {generationReferenceFile && (
+              <div className="generation-reference-row">
+                <ImagePlus size={18} />
+                <span>{generationReferenceFile.name}</span>
+                <button className="icon-button" type="button" onClick={() => setGenerationReferenceFile(undefined)} disabled={creatorBusy} title="Remove reference">
+                  <X size={16} />
+                  <span className="sr-only">Remove reference</span>
+                </button>
+              </div>
+            )}
+
+            <button className="primary-button full-width" type="button" onClick={() => void generateFighterDraft()} disabled={creatorBusy}>
+              <Sparkles size={18} />
+              {activeOperation?.type === "generate" ? "Generating..." : "Generate strip"}
+            </button>
+          </aside>
+        </div>
+      )}
 
       {settingsOpen && (
         <div className="creator-drawer-shell">
@@ -1054,6 +1196,24 @@ function getCaptureButtonLabel(
     return "Wait";
   }
   return cameraReady ? "Capture" : "Start";
+}
+
+function getSelectedGenerationModel(model: GenerationModelOption, customModel: string) {
+  if (model === "custom") {
+    return customModel.trim() || undefined;
+  }
+  return model || undefined;
+}
+
+function createGeneratedFighterName(prompt: string) {
+  const words = prompt
+    .trim()
+    .replace(/[^a-z0-9\s-]/gi, "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return words.length ? words.join(" ").slice(0, 32) : "Generated Fighter";
 }
 
 function waitForVideoReady(video: HTMLVideoElement) {
