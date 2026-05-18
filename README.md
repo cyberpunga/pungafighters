@@ -114,6 +114,8 @@ The same Worker exposes `POST /generate` for server-side Gemini spritesheet gene
 
 Supported model aliases are `nano-banana`, `nano-banana-2`, and `nano-banana-pro`; direct `gemini-*` image model ids are also accepted for testing. The response includes the generated image as base64 and a `dataUrl`, ready to feed into the creator spritesheet import flow.
 
+The browser creator calls `https://punga-turn-credentials.hola-011.workers.dev/generate` by default. Use `VITE_CHARACTER_GENERATION_URL` to point local development or a fork at a different Worker.
+
 ## Browser Requirements
 
 - Modern Chromium, Firefox, or Safari.
