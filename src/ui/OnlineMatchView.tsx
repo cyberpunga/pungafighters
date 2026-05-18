@@ -6,8 +6,12 @@ import {
   createHostInviteSession,
   type GuestInviteSession,
   type HostInviteSession,
+  type OnlineSessionCopy,
   type OnlineReadyMatch,
 } from "../game/network/inviteSession";
+import { localizeError } from "../i18n/errors";
+import type { Translate } from "../i18n";
+import { useI18n } from "../i18n/react";
 
 type OnlineSession = HostInviteSession | GuestInviteSession;
 
@@ -18,11 +22,12 @@ export function OnlineMatchView(props: {
   onReady: (match: OnlineReadyMatch) => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [offerCode, setOfferCode] = useState("");
   const [answerCode, setAnswerCode] = useState("");
   const [pastedOffer, setPastedOffer] = useState("");
   const [pastedAnswer, setPastedAnswer] = useState("");
-  const [status, setStatus] = useState("Preparing invite...");
+  const [status, setStatus] = useState(() => t("online.preparingInvite"));
   const [busy, setBusy] = useState(props.role === "host");
   const [error, setError] = useState("");
   const sessionRef = useRef<OnlineSession | null>(null);
@@ -44,7 +49,7 @@ export function OnlineMatchView(props: {
     setError("");
     if (props.role === "host") {
       setBusy(true);
-      setStatus("Creating invite...");
+      setStatus(t("online.creatingInvite"));
       void createHostInviteSession(props.localFighter, props.background, {
         onStatus: setStatus,
         onError: setError,
@@ -52,18 +57,18 @@ export function OnlineMatchView(props: {
           handedOffRef.current = true;
           onReadyRef.current(match);
         },
-      })
+      }, createOnlineSessionCopy(t))
         .then((session) => {
           sessionRef.current = session;
           setOfferCode(session.offerCode);
           setBusy(false);
         })
         .catch((nextError: unknown) => {
-          setError(nextError instanceof Error ? nextError.message : "Could not create host invite.");
+          setError(localizeError(nextError, t, "online.createHostInviteFailed"));
           setBusy(false);
         });
     } else {
-      setStatus("Paste a host offer.");
+      setStatus(t("online.pasteHostOfferStatus"));
       setBusy(false);
     }
 
@@ -72,7 +77,7 @@ export function OnlineMatchView(props: {
         sessionRef.current?.destroy();
       }
     };
-  }, [props.role, props.localFighter, props.background]);
+  }, [props.role, props.localFighter, props.background, t]);
 
   const acceptAnswer = async () => {
     const session = sessionRef.current;
@@ -84,7 +89,7 @@ export function OnlineMatchView(props: {
     try {
       await session.acceptAnswerCode(pastedAnswer);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not accept answer.");
+      setError(localizeError(nextError, t, "online.acceptAnswerFailed"));
     } finally {
       setBusy(false);
     }
@@ -101,11 +106,11 @@ export function OnlineMatchView(props: {
           handedOffRef.current = true;
           onReadyRef.current(match);
         },
-      });
+      }, createOnlineSessionCopy(t));
       sessionRef.current = session;
       setAnswerCode(session.answerCode);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Could not create guest answer.");
+      setError(localizeError(nextError, t, "online.createGuestAnswerFailed"));
     } finally {
       setBusy(false);
     }
@@ -115,12 +120,12 @@ export function OnlineMatchView(props: {
     <section className="online-view">
       <div className="online-header">
         <div>
-          <p className="eyebrow">{props.role === "host" ? "Host invite" : "Join invite"}</p>
-          <h2>Online Match</h2>
+          <p className="eyebrow">{props.role === "host" ? t("online.hostInvite") : t("online.joinInvite")}</p>
+          <h2>{t("online.onlineMatch")}</h2>
         </div>
         <button className="secondary-button" type="button" onClick={props.onCancel}>
           <Swords size={18} />
-          Back
+          {t("common.back")}
         </button>
       </div>
 
@@ -129,7 +134,7 @@ export function OnlineMatchView(props: {
           <div className="online-fighter">
             <img src={props.localFighter.frameUrls.idle} alt="" />
             <div>
-              <span>{props.role === "host" ? "Player 1" : "Player 2"}</span>
+              <span>{props.role === "host" ? t("common.player1") : t("common.player2")}</span>
               <strong>{props.localFighter.name}</strong>
             </div>
           </div>
@@ -137,8 +142,8 @@ export function OnlineMatchView(props: {
             <div className="online-stage">
               {props.background ? <img src={props.background.imageUrl} alt="" /> : <div className="stage-preview-default" />}
               <div>
-                <span>Shared arena</span>
-                <strong>{props.background?.name ?? "Default Arena"}</strong>
+                <span>{t("online.sharedArena")}</span>
+                <strong>{props.background?.name ?? t("common.defaultArena")}</strong>
               </div>
             </div>
           )}
@@ -150,27 +155,27 @@ export function OnlineMatchView(props: {
 
         {props.role === "host" ? (
           <section className="online-panel invite-steps">
-            <CodeBox label="Offer code" value={offerCode} onCopy={() => copyText(offerCode)} readonly />
+            <CodeBox label={t("online.offerCode")} value={offerCode} onCopy={() => copyText(offerCode)} readonly />
             <label className="field-label">
-              Paste guest answer
+              {t("online.pasteGuestAnswer")}
               <textarea value={pastedAnswer} onChange={(event) => setPastedAnswer(event.target.value)} spellCheck={false} />
             </label>
             <button className="primary-button" type="button" disabled={busy || !pastedAnswer.trim()} onClick={() => void acceptAnswer()}>
               <Link2 size={18} />
-              Connect
+              {t("common.connect")}
             </button>
           </section>
         ) : (
           <section className="online-panel invite-steps">
             <label className="field-label">
-              Paste host offer
+              {t("online.pasteHostOffer")}
               <textarea value={pastedOffer} onChange={(event) => setPastedOffer(event.target.value)} spellCheck={false} />
             </label>
             <button className="primary-button" type="button" disabled={busy || !pastedOffer.trim()} onClick={() => void createAnswer()}>
               <Link2 size={18} />
-              Create Answer
+              {t("online.createAnswer")}
             </button>
-            <CodeBox label="Answer code" value={answerCode} onCopy={() => copyText(answerCode)} readonly />
+            <CodeBox label={t("online.answerCode")} value={answerCode} onCopy={() => copyText(answerCode)} readonly />
           </section>
         )}
       </div>
@@ -179,6 +184,7 @@ export function OnlineMatchView(props: {
 }
 
 function CodeBox(props: { label: string; value: string; readonly?: boolean; onCopy: () => Promise<void> }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await props.onCopy();
@@ -191,12 +197,66 @@ function CodeBox(props: { label: string; value: string; readonly?: boolean; onCo
       {props.label}
       <div className="code-box">
         <textarea value={props.value} readOnly={props.readonly} spellCheck={false} />
-        <button className="icon-button" type="button" title="Copy code" disabled={!props.value} onClick={() => void copy()}>
+        <button className="icon-button" type="button" title={t("common.copyCode")} disabled={!props.value} onClick={() => void copy()}>
           {copied ? <Check size={17} /> : <Clipboard size={17} />}
         </button>
       </div>
     </label>
   );
+}
+
+function createOnlineSessionCopy(t: Translate): OnlineSessionCopy {
+  return {
+    expectedHostOffer: t("online.expectedHostOffer"),
+    expectedGuestAnswer: t("online.expectedGuestAnswer"),
+    peerEstablished: t("online.peerEstablished"),
+    answerReadyWaiting: t("online.answerReadyWaiting"),
+    connectionFailed: t("online.connectionFailed"),
+    creatingInviteOffer: t("online.creatingInviteOffer"),
+    inviteOfferFailed: t("online.inviteOfferFailed"),
+    offerReady: t("online.offerReady"),
+    connectingGuest: t("online.connectingGuest"),
+    readingHostInvite: t("online.readingHostInvite"),
+    inviteAnswerFailed: t("online.inviteAnswerFailed"),
+    answerReady: t("online.answerReady"),
+    setupChannelOpen: t("online.setupChannelOpen"),
+    inputChannelOpen: t("online.inputChannelOpen"),
+    sendingFighterManifest: t("online.sendingFighterManifest"),
+    localFighterSent: t("online.localFighterSent"),
+    sendFighterFailed: t("online.sendFighterFailed"),
+    sendingBattleBackground: t("online.sendingBattleBackground"),
+    backgroundManifestChannelClosed: t("online.backgroundManifestChannelClosed"),
+    setupChannelClosedBeforeAssets: (label) => t("online.setupChannelClosedBeforeAssets", { label }),
+    assetChunkTooLarge: (label) => t("online.assetChunkTooLarge", { label }),
+    sendingAssetsProgress: (label, progress) => t("online.sendingAssetsProgress", { label, progress }),
+    incompatibleSetupMessage: t("online.incompatibleSetupMessage"),
+    opponentReady: t("online.opponentReady"),
+    incompatibleProtocol: t("online.incompatibleProtocol"),
+    receivingOpponentAssets: t("online.receivingOpponentAssets"),
+    readOpponentManifestFailed: t("online.readOpponentManifestFailed"),
+    onlyHostBackground: t("online.onlyHostBackground"),
+    receivingHostBackground: t("online.receivingHostBackground"),
+    readHostBackgroundManifestFailed: t("online.readHostBackgroundManifestFailed"),
+    malformedAssetChunk: t("online.malformedAssetChunk"),
+    receivingHostBackgroundProgress: (progress) => t("online.receivingHostBackgroundProgress", { progress }),
+    fighterDataBeforeManifest: t("online.fighterDataBeforeManifest"),
+    receivingOpponentAssetsProgress: (progress) => t("online.receivingOpponentAssetsProgress", { progress }),
+    receiveSetupAssetFailed: t("online.receiveSetupAssetFailed"),
+    opponentFighterReceived: t("online.opponentFighterReceived"),
+    loadRemoteFighterFailed: t("online.loadRemoteFighterFailed"),
+    hostBackgroundReceived: t("online.hostBackgroundReceived"),
+    hostDefaultArena: t("online.hostDefaultArena"),
+    loadHostBackgroundFailed: t("online.loadHostBackgroundFailed"),
+    remoteTransferTimedOut: t("online.remoteTransferTimedOut"),
+    localSetupReady: t("online.localSetupReady"),
+    bothReady: t("online.bothReady"),
+    sendSetupFailed: t("online.sendSetupFailed"),
+    setupChannelClosedWhileSending: t("online.setupChannelClosedWhileSending"),
+    sendFighterTimedOut: t("online.sendFighterTimedOut"),
+    assetsTooLarge: t("online.assetsTooLarge"),
+    fighterLabel: t("online.labelFighter"),
+    backgroundLabel: t("online.labelBackground"),
+  };
 }
 
 async function copyText(value: string) {

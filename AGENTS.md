@@ -29,6 +29,7 @@
 - `src/game/input/`: action names, keyboard mappings, and CPU input helpers.
 - `src/game/content/`: default fighters and authored content.
 - `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
+- `src/i18n/`: typed locale dictionaries, browser-language detection, translation helpers, and React i18n provider.
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
 - `server/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials and proxies server-side Gemini character spritesheet generation.
@@ -48,6 +49,7 @@
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
 - Keep provider-specific controls near the provider implementation and pass them through the shared `SegmentationProvider` options shape.
+- Keep user-facing app copy behind the `src/i18n/` dictionaries; stable ids, routes, saved fighter names, imported background names, and export data must remain locale-independent.
 - Use TypeScript types for new interfaces and keep `pnpm lint` clean.
 
 ## Verification

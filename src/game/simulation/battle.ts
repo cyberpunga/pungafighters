@@ -109,6 +109,12 @@ export interface SuperFreezeState {
   startedAt: number;
 }
 
+export type BattleMessage =
+  | { type: "ready" }
+  | { type: "fight" }
+  | { type: "match-winner"; winner: PlayerSlot }
+  | { type: "round-winner"; winner: PlayerSlot };
+
 export interface BattleState {
   frame: number;
   status: "countdown" | "running" | "roundOver" | "matchOver";
@@ -121,7 +127,7 @@ export interface BattleState {
   countdown: number;
   winner?: PlayerSlot;
   roundWinner?: PlayerSlot;
-  message: string;
+  message?: BattleMessage;
   lastHit?: { attacker: PlayerSlot; defender: PlayerSlot; damage: number; at: number };
   lastSuper?: { attacker: PlayerSlot; at: number };
   superFreeze?: SuperFreezeState;
@@ -147,7 +153,7 @@ export function createBattleState(
     round: 1,
     timer: config.timerSeconds,
     countdown: 2,
-    message: "Ready",
+    message: { type: "ready" },
     fighters: {
       p1: createRuntime("p1", fighters.p1, 250, 1),
       p2: createRuntime("p2", fighters.p2, 710, -1),
@@ -170,10 +176,10 @@ export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot)
 
   if (next.status === "countdown") {
     next.countdown -= dt;
-    next.message = next.countdown > 0.7 ? "Ready" : "Fight";
+    next.message = next.countdown > 0.7 ? { type: "ready" } : { type: "fight" };
     if (next.countdown <= 0) {
       next.status = "running";
-      next.message = "";
+      next.message = undefined;
     }
     return advanceFrame(next);
   }
@@ -183,7 +189,7 @@ export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot)
     if (next.countdown <= 0) {
       if (next.winner) {
         next.status = "matchOver";
-        next.message = `${next.fighters[next.winner].name} wins`;
+        next.message = { type: "match-winner", winner: next.winner };
       } else {
         resetRound(next);
       }
@@ -435,7 +441,7 @@ function finishRound(state: BattleState) {
   state.status = "roundOver";
   state.roundWinner = roundWinner;
   state.fighters[roundWinner].roundsWon += 1;
-  state.message = `${state.fighters[roundWinner].name} takes the round`;
+  state.message = { type: "round-winner", winner: roundWinner };
   state.countdown = 2.25;
   state.superFreeze = undefined;
 
@@ -460,7 +466,7 @@ function resetRound(state: BattleState) {
   state.lastHit = undefined;
   state.lastSuper = undefined;
   state.superFreeze = undefined;
-  state.message = "Ready";
+  state.message = { type: "ready" };
 }
 
 function startSuperFreeze(state: BattleState, attacker: PlayerSlot) {

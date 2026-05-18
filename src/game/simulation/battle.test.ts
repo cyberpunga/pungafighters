@@ -22,6 +22,7 @@ describe("battle simulation", () => {
     const next = stepBattleFrame(state, emptyInputs());
 
     expect(state.frame).toBe(0);
+    expect(state.message).toEqual({ type: "ready" });
     expect(next.frame).toBe(1);
     expect(getBattleChecksum(next)).toBe(getBattleChecksum(stepBattleFrame(state, emptyInputs())));
   });

@@ -1,15 +1,17 @@
 import { ArrowDown, ArrowUp, CircleOff, Grid3X3, ScanLine, Sparkles, TvMinimal, Zap } from "lucide-react";
+import type { MessageKey } from "../i18n";
+import { useI18n } from "../i18n/react";
 import type { BattlePostEffect } from "../types/game";
 
 const DISPLAY_EFFECT_OPTIONS = [
-  { value: "pixel", label: "Pixel", Icon: Grid3X3 },
-  { value: "bad-tv", label: "Bad TV", Icon: Zap },
-  { value: "static", label: "Static", Icon: Sparkles },
-  { value: "crt-soft", label: "CRT Soft", Icon: TvMinimal },
-  { value: "crt-strong", label: "CRT Max", Icon: ScanLine },
+  { value: "pixel", labelKey: "effects.pixel", Icon: Grid3X3 },
+  { value: "bad-tv", labelKey: "effects.bad-tv", Icon: Zap },
+  { value: "static", labelKey: "effects.static", Icon: Sparkles },
+  { value: "crt-soft", labelKey: "effects.crt-soft", Icon: TvMinimal },
+  { value: "crt-strong", labelKey: "effects.crt-strong", Icon: ScanLine },
 ] as const satisfies ReadonlyArray<{
   value: BattlePostEffect;
-  label: string;
+  labelKey: MessageKey;
   Icon: typeof CircleOff;
 }>;
 
@@ -18,6 +20,7 @@ export function BattleDisplayEffectsControl(props: {
   onChange: (effects: BattlePostEffect[]) => void;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const setClean = () => props.onChange([]);
   const toggleEffect = (effect: BattlePostEffect) => {
     props.onChange(props.effects.includes(effect) ? props.effects.filter((current) => current !== effect) : [...props.effects, effect]);
@@ -35,12 +38,12 @@ export function BattleDisplayEffectsControl(props: {
 
   return (
     <div className={props.compact ? "effect-stack effect-stack--compact" : "effect-stack"}>
-      <div className="effect-toggle-row" role="group" aria-label="Battle display effects">
+      <div className="effect-toggle-row" role="group" aria-label={t("effects.battleDisplayEffects")}>
         <button className={props.effects.length === 0 ? "effect-toggle-button active" : "effect-toggle-button"} type="button" onClick={setClean}>
           <CircleOff size={16} aria-hidden="true" />
-          <span>Clean</span>
+          <span>{t("effects.clean")}</span>
         </button>
-        {DISPLAY_EFFECT_OPTIONS.map(({ value, label, Icon }) => (
+        {DISPLAY_EFFECT_OPTIONS.map(({ value, labelKey, Icon }) => (
           <button
             key={value}
             className={props.effects.includes(value) ? "effect-toggle-button active" : "effect-toggle-button"}
@@ -49,19 +52,20 @@ export function BattleDisplayEffectsControl(props: {
             onClick={() => toggleEffect(value)}
           >
             <Icon size={16} aria-hidden="true" />
-            <span>{label}</span>
+            <span>{t(labelKey)}</span>
           </button>
         ))}
       </div>
 
       {props.effects.length > 0 && (
-        <div className="effect-order-list" aria-label="Battle display effect order">
+        <div className="effect-order-list" aria-label={t("effects.battleDisplayEffectOrder")}>
           {props.effects.map((effect, index) => {
             const option = DISPLAY_EFFECT_OPTIONS.find((current) => current.value === effect);
             if (!option) {
               return null;
             }
-            const { label, Icon } = option;
+            const { labelKey, Icon } = option;
+            const label = t(labelKey);
             return (
               <div className="effect-order-item" key={effect}>
                 <span className="effect-order-label">
@@ -72,8 +76,8 @@ export function BattleDisplayEffectsControl(props: {
                   <button
                     className="icon-button effect-order-button"
                     type="button"
-                    title="Move earlier"
-                    aria-label={`Move ${label} earlier`}
+                    title={t("effects.moveEarlier")}
+                    aria-label={t("effects.moveEffectEarlier", { effect: label })}
                     disabled={index === 0}
                     onClick={() => moveEffect(effect, -1)}
                   >
@@ -82,8 +86,8 @@ export function BattleDisplayEffectsControl(props: {
                   <button
                     className="icon-button effect-order-button"
                     type="button"
-                    title="Move later"
-                    aria-label={`Move ${label} later`}
+                    title={t("effects.moveLater")}
+                    aria-label={t("effects.moveEffectLater", { effect: label })}
                     disabled={index === props.effects.length - 1}
                     onClick={() => moveEffect(effect, 1)}
                   >
