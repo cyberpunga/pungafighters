@@ -36,6 +36,8 @@ import {
   type View,
 } from "./routes";
 import { SettingsView } from "./SettingsView";
+import { useI18n } from "../i18n/react";
+import { localizeError } from "../i18n/errors";
 
 type OnlineRole = "host" | "guest";
 
@@ -54,6 +56,7 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
 };
 
 export function App() {
+  const { t } = useI18n();
   const [route, navigate, pathname] = useAppRoute();
   const view = appRouteToView(route);
   const editFighterId = view === "creator" ? creatorEditFighterIdFromPathname(pathname) : undefined;
@@ -137,27 +140,27 @@ export function App() {
 
   const importBattleBackgroundFile = useCallback(
     async (file: File) => {
-      setBackgroundStatus(`Importing ${file.name}...`);
+      setBackgroundStatus(t("appStatus.importingFile", { name: file.name }));
       try {
         const background = await saveBattleBackgroundImage(file);
         setLoadedBattleBackground(background);
-        setBackgroundStatus(`${background.name} set as battle background.`);
+        setBackgroundStatus(t("appStatus.backgroundSet", { name: background.name }));
       } catch (error) {
-        setBackgroundStatus(error instanceof Error ? error.message : "Could not import background.");
+        setBackgroundStatus(localizeError(error, t, "appStatus.backgroundImportFailed"));
       }
     },
-    [setLoadedBattleBackground],
+    [setLoadedBattleBackground, t],
   );
 
   const clearBattleBackground = useCallback(async () => {
     try {
       await clearBattleBackgroundImage();
       setLoadedBattleBackground(undefined);
-      setBackgroundStatus("Default arena restored.");
+      setBackgroundStatus(t("appStatus.defaultArenaRestored"));
     } catch (error) {
-      setBackgroundStatus(error instanceof Error ? error.message : "Could not reset background.");
+      setBackgroundStatus(localizeError(error, t, "appStatus.backgroundResetFailed"));
     }
-  }, [setLoadedBattleBackground]);
+  }, [setLoadedBattleBackground, t]);
 
   const updateBattlePostEffects = useCallback((effects: BattlePostEffect[]) => {
     setBattlePostEffects(effects);
@@ -165,22 +168,22 @@ export function App() {
   }, []);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
-    setFileStatus(`Exporting ${fighter.name}...`);
+    setFileStatus(t("appStatus.exportingFighter", { name: fighter.name }));
     try {
       await downloadFighterExport(fighter);
-      setFileStatus(`${fighter.name} exported.`);
+      setFileStatus(t("appStatus.fighterExported", { name: fighter.name }));
     } catch (error) {
-      setFileStatus(error instanceof Error ? error.message : "Could not export fighter.");
+      setFileStatus(localizeError(error, t, "appStatus.fighterExportFailed"));
     }
-  }, []);
+  }, [t]);
 
   const deleteFighterFile = useCallback(
     async (id: string) => {
       await deleteFighter(id);
       await refreshFighters();
-      setFileStatus("Fighter deleted.");
+      setFileStatus(t("appStatus.fighterDeleted"));
     },
-    [refreshFighters],
+    [refreshFighters, t],
   );
   const editFighter = useCallback(
     (id: string) => {
@@ -330,6 +333,7 @@ export function App() {
 }
 
 function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
+  const { t } = useI18n();
   const onRouteClick = (event: MouseEvent<HTMLAnchorElement>, route: AppRoute) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
       return;
@@ -344,16 +348,16 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
     <header className="topbar">
       <a className="brand-button" href={appRouteToHref("menu")} onClick={(event) => onRouteClick(event, "menu")}>
         <span className="brand-mark">PF</span>
-        <span>Punga Fighters</span>
+        <span>{t("app.brand")}</span>
       </a>
-      <nav className="nav-cluster" aria-label="Primary">
+      <nav className="nav-cluster" aria-label={t("nav.primary")}>
         <a
           className={props.view === "creator" ? "icon-button active" : "icon-button"}
           href={appRouteToHref("creator")}
           onClick={(event) => onRouteClick(event, "creator")}
           aria-current={props.view === "creator" ? "page" : undefined}
-          aria-label="Create fighter"
-          title="Create fighter"
+          aria-label={t("nav.createFighter")}
+          title={t("nav.createFighter")}
         >
           <Camera size={19} />
         </a>
@@ -362,8 +366,8 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
           href={appRouteToHref("menu")}
           onClick={(event) => onRouteClick(event, "menu")}
           aria-current={fightActive ? "page" : undefined}
-          aria-label="Fight options"
-          title="Fight options"
+          aria-label={t("nav.fightOptions")}
+          title={t("nav.fightOptions")}
         >
           <Gamepad2 size={19} />
         </a>
@@ -372,8 +376,8 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
           href={appRouteToHref("settings")}
           onClick={(event) => onRouteClick(event, "settings")}
           aria-current={props.view === "settings" ? "page" : undefined}
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t("nav.settings")}
+          title={t("nav.settings")}
         >
           <Settings size={19} />
         </a>

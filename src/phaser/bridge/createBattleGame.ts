@@ -5,7 +5,7 @@ import { BAD_TV_POST_FX_PIPELINE_KEY, BadTvPostFxPipeline } from "../effects/Bad
 import { CRT_POST_FX_PIPELINE_KEY, CrtPostFxPipeline } from "../effects/CrtPostFxPipeline";
 import { PIXEL_POST_FX_PIPELINE_KEY, PixelPostFxPipeline } from "../effects/PixelPostFxPipeline";
 import { STATIC_POST_FX_PIPELINE_KEY, StaticPostFxPipeline } from "../effects/StaticPostFxPipeline";
-import { BattleScene, type BattleSceneOptions } from "../scenes/BattleScene";
+import { BattleScene, type BattleSceneCopy, type BattleSceneOptions } from "../scenes/BattleScene";
 
 export interface BattleGameHandle {
   game: Phaser.Game;
@@ -23,6 +23,7 @@ export function createBattleGame(input: {
   localSlot?: BattleSceneOptions["localSlot"];
   networkController?: NetworkInputController;
   displayEffects?: BattlePostEffect[];
+  copy?: BattleSceneCopy;
 }): BattleGameHandle {
   const scene = new BattleScene(input.config, input.fighters, input.onExit, {
     background: input.background,
@@ -30,6 +31,7 @@ export function createBattleGame(input: {
     localSlot: input.localSlot,
     networkController: input.networkController,
     displayEffects: input.displayEffects,
+    copy: input.copy,
   });
   const game = new Phaser.Game({
     type: Phaser.AUTO,

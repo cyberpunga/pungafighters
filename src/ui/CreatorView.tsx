@@ -1,4 +1,19 @@
-import { Camera, FileJson, ImagePlus, Images, Mic, Pause, Play, Settings, Sparkles, Trash2, Upload, Volume2, Wand2, X } from "lucide-react";
+import {
+  Camera,
+  FileJson,
+  ImagePlus,
+  Images,
+  Mic,
+  Pause,
+  Play,
+  Settings,
+  Sparkles,
+  Trash2,
+  Upload,
+  Volume2,
+  Wand2,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
 import { dataUrlToFile, fileToReferenceImage, generateCharacterSpritesheet } from "../creator/characterGeneration";
@@ -9,7 +24,13 @@ import {
   readSpritesheetDraftFile,
   SPRITESHEET_IMPORT_ACCEPT,
 } from "../creator/fighterFiles";
-import { canvasToPngBlob, decodeImageBlob, imageSourceToCanvas, normalizeCanvas, videoToSourceCanvas } from "../creator/imageProcessing";
+import {
+  canvasToPngBlob,
+  decodeImageBlob,
+  imageSourceToCanvas,
+  normalizeCanvas,
+  videoToSourceCanvas,
+} from "../creator/imageProcessing";
 import {
   DEFAULT_SEGMENTATION_OPTIONS,
   DEFAULT_SEGMENTATION_PROVIDER_ID,
@@ -29,6 +50,10 @@ import type {
 import { loadEditableFighterDraft, saveFighterDraft, getSetting, setSetting } from "../storage/db";
 import type { FighterPose, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
+import { localizeError } from "../i18n/errors";
+import { poseLabel, voiceClipLabel } from "../i18n";
+import type { Translate } from "../i18n";
+import { useI18n } from "../i18n/react";
 
 const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
@@ -63,6 +88,7 @@ type CreatorOperation =
   | { type: "generate" | "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
 
 export function CreatorView(props: { editFighterId?: string; onSaved: () => Promise<void> }) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const characterImportInputRef = useRef<HTMLInputElement | null>(null);
   const spritesheetImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,7 +102,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const countdownTimeoutRef = useRef<number | undefined>();
   const countdownActiveRef = useRef(false);
   const previousEditIdRef = useRef<string | undefined>(props.editFighterId);
-  const [name, setName] = useState("New Fighter");
+  const [name, setName] = useState(() => t("creator.newFighter"));
   const [editingFighterId, setEditingFighterId] = useState<string | undefined>();
   const [drafts, setDrafts] = useState<PoseDrafts>({});
   const [voiceDrafts, setVoiceDrafts] = useState<VoiceDrafts>({});
@@ -88,7 +114,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [generationModel, setGenerationModel] = useState<GenerationModelOption>("");
   const [generationCustomModel, setGenerationCustomModel] = useState("");
   const [generationReferenceFile, setGenerationReferenceFile] = useState<File | undefined>();
-  const [cameraStatus, setCameraStatus] = useState("Camera is off.");
+  const [cameraStatus, setCameraStatus] = useState(() => t("creator.cameraOff"));
   const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
   const [segmentationOptions, setSegmentationOptions] =
     useState<SegmentationProviderOptions>(DEFAULT_SEGMENTATION_OPTIONS);
@@ -201,11 +227,11 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       if (previousEditIdRef.current) {
         previousEditIdRef.current = undefined;
         setEditingFighterId(undefined);
-        setName("New Fighter");
+        setName(t("creator.newFighter"));
         replaceDrafts({});
         replaceVoiceDrafts({});
         setPreviewPose(undefined);
-        setCameraStatus("Camera is off.");
+        setCameraStatus(t("creator.cameraOff"));
       }
       return;
     }
@@ -213,7 +239,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     let cancelled = false;
     previousEditIdRef.current = props.editFighterId;
     setActiveOperation({ type: "load-fighter" });
-    setCameraStatus("Loading fighter for editing...");
+    setCameraStatus(t("creator.loadingFighter"));
     void loadEditableFighterDraft(props.editFighterId)
       .then((draft) => {
         if (cancelled) {
@@ -221,7 +247,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         }
         if (!draft) {
           setEditingFighterId(undefined);
-          setCameraStatus("That fighter could not be found.");
+          setCameraStatus(t("creator.fighterNotFound"));
           return;
         }
         recorderRef.current?.cancel();
@@ -234,16 +260,12 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         setName(draft.name);
         setPreviewPose(undefined);
         setEditingFighterId(draft.isDefault ? undefined : draft.id);
-        setCameraStatus(
-          draft.isDefault
-            ? "Default fighter loaded as an editable copy. Press Save fighter when ready."
-            : "Fighter loaded for editing. Press Update fighter when ready.",
-        );
+        setCameraStatus(draft.isDefault ? t("creator.defaultLoaded") : t("creator.fighterLoaded"));
       })
       .catch((error) => {
         if (!cancelled) {
           setEditingFighterId(undefined);
-          setCameraStatus(error instanceof Error ? error.message : "Could not load fighter for editing.");
+          setCameraStatus(localizeError(error, t, "creator.loadFailed"));
         }
       })
       .finally(() => {
@@ -254,7 +276,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     return () => {
       cancelled = true;
     };
-  }, [props.editFighterId, replaceDrafts, replaceVoiceDrafts]);
+  }, [props.editFighterId, replaceDrafts, replaceVoiceDrafts, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -275,23 +297,26 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     };
   }, []);
 
-  const loadProvider = useCallback(async (provider: SegmentationProvider, options: SegmentationProviderOptions[SegmentationProviderId]) => {
-    const loadId = providerLoadIdRef.current + 1;
-    providerLoadIdRef.current = loadId;
-    setProviderStatus("loading");
-    setProviderError("");
-    try {
-      await provider.load(options);
-      if (providerLoadIdRef.current === loadId) {
-        setProviderStatus("ready");
+  const loadProvider = useCallback(
+    async (provider: SegmentationProvider, options: SegmentationProviderOptions[SegmentationProviderId]) => {
+      const loadId = providerLoadIdRef.current + 1;
+      providerLoadIdRef.current = loadId;
+      setProviderStatus("loading");
+      setProviderError("");
+      try {
+        await provider.load(options);
+        if (providerLoadIdRef.current === loadId) {
+          setProviderStatus("ready");
+        }
+      } catch (error) {
+        if (providerLoadIdRef.current === loadId) {
+          setProviderStatus("error");
+          setProviderError(localizeError(error, t, "creator.providerLoadFailed"));
+        }
       }
-    } catch (error) {
-      if (providerLoadIdRef.current === loadId) {
-        setProviderStatus("error");
-        setProviderError(error instanceof Error ? error.message : "Segmentation provider failed to load.");
-      }
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useEffect(() => {
     if (hasProcessableSources && providerStatus === "idle") {
@@ -351,12 +376,16 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       streamRef.current = stream;
       attachCameraStream(stream);
       setCameraReady(true);
-      setCameraStatus("Camera ready.");
+      setCameraStatus(t("creator.cameraReady"));
       void loadProvider(selectedProvider, selectedOptions);
       return true;
     } catch (error) {
       setCameraReady(false);
-      setCameraStatus(error instanceof Error ? `Camera unavailable: ${error.message}` : "Camera unavailable.");
+      setCameraStatus(
+        error instanceof Error
+          ? t("creator.cameraUnavailableWithReason", { reason: error.message })
+          : t("creator.cameraUnavailable"),
+      );
       return false;
     }
   };
@@ -371,7 +400,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const started = await startCamera();
       setActiveOperation(undefined);
       if (started) {
-        setCameraStatus(`${pose} camera ready. Press Capture again when your pose is set.`);
+        setCameraStatus(t("creator.poseCameraReady", { pose: poseLabel(t, pose) }));
       } else {
         setPreviewPose(undefined);
       }
@@ -387,7 +416,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       }
     }
     if (!video || !video.videoWidth) {
-      setCameraStatus("Camera is warming up. Try Capture again in a moment.");
+      setCameraStatus(t("creator.cameraWarming"));
       return;
     }
 
@@ -397,7 +426,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       if (captureDelay > 0) {
         countdownActiveRef.current = true;
         setCountdown({ pose, remaining: captureDelay });
-        setCameraStatus(`Capturing ${pose} in ${captureDelay} seconds.`);
+        setCameraStatus(t("creator.capturingPoseIn", { pose: poseLabel(t, pose), seconds: captureDelay }));
         for (let remaining = captureDelay - 1; remaining >= 0; remaining -= 1) {
           await waitOneSecond();
           if (!countdownActiveRef.current) {
@@ -405,21 +434,21 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           }
           setCountdown(remaining > 0 ? { pose, remaining } : undefined);
           if (remaining > 0) {
-            setCameraStatus(`Capturing ${pose} in ${remaining} seconds.`);
+            setCameraStatus(t("creator.capturingPoseIn", { pose: poseLabel(t, pose), seconds: remaining }));
           }
         }
         countdownActiveRef.current = false;
       } else {
-        setCameraStatus(`Capturing ${pose}.`);
+        setCameraStatus(t("creator.capturingPose", { pose: poseLabel(t, pose) }));
       }
 
       const sourceCanvas = videoToSourceCanvas(video);
       const sourceBlob = await canvasToPngBlob(sourceCanvas);
       const frameBlob = await canvasToPngBlob(normalizeCanvas(sourceCanvas));
       replacePoseDraft(pose, createPoseDraft(sourceBlob, frameBlob, false));
-      setCameraStatus(`${pose} source captured. Process it for a cutout or save it as-is.`);
+      setCameraStatus(t("creator.poseSourceCaptured", { pose: poseLabel(t, pose) }));
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not capture this action.");
+      setCameraStatus(localizeError(error, t, "creator.captureFailed"));
     } finally {
       countdownActiveRef.current = false;
       setCountdown(undefined);
@@ -446,17 +475,17 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
     setActiveOperation({ type: "import", pose });
     try {
-      const image = await decodeImageBlob(file, "Could not read action image.");
+      const image = await decodeImageBlob(file, t("creator.actionImageReadFailed"));
       try {
         const frameBlob = await canvasToPngBlob(normalizeCanvas(image.source));
         replacePoseDraft(pose, createPoseDraft(file, frameBlob, false));
         setPreviewPose((current) => (current === pose ? undefined : current));
-        setCameraStatus(`${pose} image imported. Process it for a cutout or save it as-is.`);
+        setCameraStatus(t("creator.poseImageImported", { pose: poseLabel(t, pose) }));
       } finally {
         image.close();
       }
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not import action image.");
+      setCameraStatus(localizeError(error, t, "creator.actionImageImportFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -468,7 +497,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
     setActiveOperation({ type: "import-character" });
     try {
-      setCameraStatus(`Importing ${file.name}...`);
+      setCameraStatus(t("appStatus.importingFile", { name: file.name }));
       const imported = await readFighterCharacterFile(file);
       recorderRef.current?.cancel();
       recorderRef.current = null;
@@ -478,9 +507,9 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       replaceVoiceDrafts(createVoiceDrafts(imported.voiceBlobs));
       setName(imported.name);
       setEditingFighterId(undefined);
-      setCameraStatus("Fighter draft imported. Press Save fighter when ready.");
+      setCameraStatus(t("creator.fighterDraftImported"));
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not import fighter.");
+      setCameraStatus(localizeError(error, t, "creator.fighterImportFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -492,16 +521,16 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
     setActiveOperation({ type: "import-spritesheet" });
     try {
-      setCameraStatus(`Importing ${file.name}...`);
+      setCameraStatus(t("appStatus.importingFile", { name: file.name }));
       const imported = await readSpritesheetDraftFile(file);
       replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
       setName(imported.name);
       setEditingFighterId(undefined);
-      setCameraStatus("Spritesheet imported. Process actions for cutouts or save them as-is.");
+      setCameraStatus(t("creator.spritesheetImported"));
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not import spritesheet.");
+      setCameraStatus(localizeError(error, t, "creator.spritesheetImportFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -546,12 +575,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       return;
     }
     if (providerStatus !== "ready") {
-      setCameraStatus(providerStatus === "error" ? "Segmentation failed to load, so processing is unavailable." : "Wait for segmentation before processing.");
+      setCameraStatus(
+        providerStatus === "error" ? t("creator.segmentationLoadUnavailable") : t("creator.waitForSegmentation"),
+      );
       return;
     }
     const draft = draftsRef.current[pose];
     if (!draft?.source) {
-      setCameraStatus(`Import or capture ${pose} before processing.`);
+      setCameraStatus(t("creator.importOrCapturePose", { pose: poseLabel(t, pose) }));
       return;
     }
 
@@ -560,9 +591,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const frameBlob = await processSourceBlob(draft.source.blob);
       replacePoseFrame(pose, frameBlob, true);
       setPreviewPose((current) => (current === pose ? undefined : current));
-      setCameraStatus(`${pose} processed with ${selectedProvider.label}.`);
+      setCameraStatus(
+        t("creator.poseProcessed", {
+          pose: poseLabel(t, pose),
+          provider: getSegmentationProviderLabel(t, selectedProvider),
+        }),
+      );
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not process this action.");
+      setCameraStatus(localizeError(error, t, "creator.processFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -573,12 +609,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       return;
     }
     if (providerStatus !== "ready") {
-      setCameraStatus(providerStatus === "error" ? "Segmentation failed to load, so processing is unavailable." : "Wait for segmentation before processing.");
+      setCameraStatus(
+        providerStatus === "error" ? t("creator.segmentationLoadUnavailable") : t("creator.waitForSegmentation"),
+      );
       return;
     }
     const posesWithSources = FIGHTER_POSES.filter((pose) => Boolean(draftsRef.current[pose]?.source));
     if (!posesWithSources.length) {
-      setCameraStatus("Import or capture at least one action before processing.");
+      setCameraStatus(t("creator.importOrCaptureOne"));
       return;
     }
 
@@ -593,16 +631,21 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         replacePoseFrame(pose, frameBlob, true);
       }
       setPreviewPose(undefined);
-      setCameraStatus(`Processed ${posesWithSources.length} actions with ${selectedProvider.label}.`);
+      setCameraStatus(
+        t("creator.processedActions", {
+          count: posesWithSources.length,
+          provider: getSegmentationProviderLabel(t, selectedProvider),
+        }),
+      );
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not process every action.");
+      setCameraStatus(localizeError(error, t, "creator.processAllFailed"));
     } finally {
       setActiveOperation(undefined);
     }
   };
 
   const processSourceBlob = async (blob: Blob) => {
-    const image = await decodeImageBlob(blob, "Could not read source image.");
+    const image = await decodeImageBlob(blob, t("creator.sourceImageReadFailed"));
     try {
       const sourceCanvas = imageSourceToCanvas(image.source);
       const cutout = await selectedProvider.segment(sourceCanvas, selectedOptions);
@@ -616,7 +659,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const saveFighter = async () => {
     const complete = FIGHTER_POSES.every((pose) => drafts[pose]?.frame);
     if (!complete) {
-      setCameraStatus("Capture or import every required action before saving.");
+      setCameraStatus(t("creator.saveIncomplete"));
       return;
     }
     setSaving(true);
@@ -624,14 +667,17 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const saved = await saveFighterDraft({
         id: editingFighterId,
         name,
-        frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drafts[pose]!.frame!.blob])) as Record<FighterPose, Blob>,
+        frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drafts[pose]!.frame!.blob])) as Record<
+          FighterPose,
+          Blob
+        >,
         voiceBlobs: createVoiceBlobRecord(voiceDrafts),
       });
       await props.onSaved();
       setEditingFighterId(saved.id);
-      setCameraStatus(editingFighterId ? "Fighter updated locally." : "Fighter saved locally.");
+      setCameraStatus(editingFighterId ? t("creator.fighterUpdated") : t("creator.fighterSaved"));
     } catch (error) {
-      setCameraStatus(error instanceof Error ? error.message : "Could not save fighter.");
+      setCameraStatus(localizeError(error, t, "creator.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -643,7 +689,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       recorderRef.current = null;
       if (blob) {
         replaceVoiceDraft(recording, blob);
-        setCameraStatus(`${recording} sound recorded.`);
+        setCameraStatus(t("creator.soundRecorded", { clip: voiceClipLabel(t, recording) }));
       }
       setRecording(undefined);
       return;
@@ -652,7 +698,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     setRecording(clip);
     setPlayingClip(undefined);
     audioRef.current?.pause();
-    setCameraStatus(`Recording ${clip} sound.`);
+    setCameraStatus(t("creator.recordingSound", { clip: voiceClipLabel(t, clip) }));
   };
 
   const toggleVoicePlayback = async (clip: VoiceClipType) => {
@@ -677,14 +723,16 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     audio.onended = () => setPlayingClip(undefined);
     audio.onerror = () => {
       setPlayingClip(undefined);
-      setCameraStatus(`Could not play ${clip} sound.`);
+      setCameraStatus(t("creator.playSoundFailed", { clip: voiceClipLabel(t, clip) }));
     };
     try {
       await audio.play();
       setPlayingClip(clip);
     } catch (error) {
       setPlayingClip(undefined);
-      setCameraStatus(error instanceof Error ? error.message : `Could not play ${clip} sound.`);
+      setCameraStatus(
+        error instanceof Error ? error.message : t("creator.playSoundFailed", { clip: voiceClipLabel(t, clip) }),
+      );
     }
   };
 
@@ -697,7 +745,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       setPlayingClip(undefined);
     }
     removeVoiceDraft(clip);
-    setCameraStatus(`${clip} sound removed.`);
+    setCameraStatus(t("creator.soundRemoved", { clip: voiceClipLabel(t, clip) }));
   };
 
   const setPoseCaptureDelay = (pose: FighterPose, delay: CaptureDelay) => {
@@ -708,13 +756,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     <section className="creator-grid">
       <div className="creator-workspace">
         <label className="field-label creator-name-field">
-          Fighter name
+          {t("creator.fighterName")}
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} disabled={creatorBusy} />
         </label>
 
-        <div className="pose-grid" aria-label="Required actions">
+        <div className="pose-grid" aria-label={t("creator.requiredActions")}>
           {FIGHTER_POSES.map((pose) => {
             const draft = drafts[pose];
+            const poseText = poseLabel(t, pose);
             return (
               <div className={draft?.frame ? "pose-card complete" : "pose-card"} key={pose}>
                 <div className={previewPose === pose ? "pose-frame-preview live" : "pose-frame-preview"}>
@@ -723,15 +772,15 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                   ) : draft?.frame ? (
                     <img src={draft.frame.url} alt="" />
                   ) : (
-                    <span>{pose}</span>
+                    <span>{poseText}</span>
                   )}
                 </div>
                 <div className="pose-card-body">
                   <div className="pose-card-header">
-                    <strong>{pose}</strong>
-                    <span>{getPoseStatus(draft)}</span>
+                    <strong>{poseText}</strong>
+                    <span>{getPoseStatus(t, draft)}</span>
                   </div>
-                  <div className="pose-delay-control" aria-label={`${pose} capture delay`}>
+                  <div className="pose-delay-control" aria-label={t("creator.captureDelay", { pose: poseText })}>
                     {CAPTURE_DELAYS.map((delay) => (
                       <button
                         className={captureDelays[pose] === delay ? "delay-option active" : "delay-option"}
@@ -739,20 +788,34 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                         type="button"
                         onClick={() => setPoseCaptureDelay(pose, delay)}
                         disabled={creatorBusy}
-                        title={delay === 0 ? "Capture immediately" : `Capture after ${delay} seconds`}
+                        title={
+                          delay === 0
+                            ? t("creator.captureImmediately")
+                            : t("creator.captureAfterSeconds", { seconds: delay })
+                        }
                       >
-                        {delay === 0 ? "Now" : `${delay}s`}
+                        {delay === 0 ? t("creator.now") : `${delay}s`}
                       </button>
                     ))}
                   </div>
                   <div className="pose-action-row">
-                    <button className="secondary-button pose-action-button" type="button" onClick={() => void capturePose(pose)} disabled={creatorBusy}>
+                    <button
+                      className="secondary-button pose-action-button"
+                      type="button"
+                      onClick={() => void capturePose(pose)}
+                      disabled={creatorBusy}
+                    >
                       <Camera size={16} />
-                      {getCaptureButtonLabel(pose, countdown, activeOperation, cameraReady)}
+                      {getCaptureButtonLabel(t, pose, countdown, activeOperation, cameraReady)}
                     </button>
-                    <button className="secondary-button pose-action-button" type="button" onClick={() => poseImportInputRefs.current[pose]?.click()} disabled={creatorBusy}>
+                    <button
+                      className="secondary-button pose-action-button"
+                      type="button"
+                      onClick={() => poseImportInputRefs.current[pose]?.click()}
+                      disabled={creatorBusy}
+                    >
                       <Upload size={16} />
-                      Import
+                      {t("common.import")}
                     </button>
                     <input
                       ref={(node) => {
@@ -776,17 +839,19 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                       disabled={creatorBusy || providerStatus !== "ready" || !draft?.source}
                     >
                       <Wand2 size={16} />
-                      {activeOperation?.type === "process" && activeOperation.pose === pose ? "Wait" : "Process"}
+                      {activeOperation?.type === "process" && activeOperation.pose === pose
+                        ? t("common.wait")
+                        : t("common.process")}
                     </button>
                     <button
                       className="secondary-button pose-action-button pose-settings-button"
                       type="button"
                       onClick={() => setSettingsOpen(true)}
                       disabled={operationBusy}
-                      title="Cutout settings"
+                      title={t("creator.cutoutSettings")}
                     >
                       <Settings size={16} />
-                      <span className="sr-only">Cutout settings</span>
+                      <span className="sr-only">{t("creator.cutoutSettings")}</span>
                     </button>
                   </div>
                 </div>
@@ -795,52 +860,71 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           })}
         </div>
 
-        <section className="sound-section" aria-label="Sounds">
+        <section className="sound-section" aria-label={t("common.sounds")}>
           <div className="sound-section-header">
             <Volume2 size={18} />
-            <span className="field-label-text">Sounds</span>
+            <span className="field-label-text">{t("common.sounds")}</span>
           </div>
           <div className="sound-grid">
             {VOICE_CLIPS.map((clip) => {
               const draft = voiceDrafts[clip];
               const isRecording = recording === clip;
               const isPlaying = playingClip === clip;
+              const clipText = voiceClipLabel(t, clip);
               return (
                 <div className="sound-card" key={clip}>
                   <div className="sound-card-title">
-                    <strong>{clip}</strong>
-                    <span>{isRecording ? "Recording" : draft ? "Recorded" : "Empty"}</span>
+                    <strong>{clipText}</strong>
+                    <span>
+                      {isRecording ? t("common.recording") : draft ? t("common.recorded") : t("common.empty")}
+                    </span>
                   </div>
                   <div className="sound-actions">
                     <button
                       className={isRecording ? "icon-button danger" : "icon-button"}
                       type="button"
                       onClick={() => void toggleRecording(clip)}
-                      title={`${isRecording ? "Stop recording" : "Record"} ${clip}`}
+                      title={
+                        isRecording
+                          ? t("creator.stopRecordingClip", { clip: clipText })
+                          : t("creator.recordClip", { clip: clipText })
+                      }
                       disabled={operationBusy || Boolean(recording && recording !== clip)}
                     >
                       <Mic size={18} />
-                      <span className="sr-only">{isRecording ? `Stop recording ${clip}` : `Record ${clip}`}</span>
+                      <span className="sr-only">
+                        {isRecording
+                          ? t("creator.stopRecordingClip", { clip: clipText })
+                          : t("creator.recordClip", { clip: clipText })}
+                      </span>
                     </button>
                     <button
                       className="icon-button"
                       type="button"
                       onClick={() => void toggleVoicePlayback(clip)}
-                      title={`${isPlaying ? "Pause" : "Play"} ${clip}`}
+                      title={
+                        isPlaying
+                          ? t("creator.pauseClip", { clip: clipText })
+                          : t("creator.playClip", { clip: clipText })
+                      }
                       disabled={operationBusy || Boolean(recording) || !draft}
                     >
                       {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-                      <span className="sr-only">{isPlaying ? `Pause ${clip}` : `Play ${clip}`}</span>
+                      <span className="sr-only">
+                        {isPlaying
+                          ? t("creator.pauseClip", { clip: clipText })
+                          : t("creator.playClip", { clip: clipText })}
+                      </span>
                     </button>
                     <button
                       className="icon-button danger"
                       type="button"
                       onClick={() => deleteVoiceClip(clip)}
-                      title={`Remove ${clip}`}
+                      title={t("creator.removeClip", { clip: clipText })}
                       disabled={operationBusy || Boolean(recording) || !draft}
                     >
                       <Trash2 size={18} />
-                      <span className="sr-only">Remove {clip}</span>
+                      <span className="sr-only">{t("creator.removeClip", { clip: clipText })}</span>
                     </button>
                   </div>
                 </div>
@@ -849,7 +933,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           </div>
         </section>
 
-        <div className="creator-source-row" aria-label="Fighter source">
+        <div className="creator-source-row" aria-label={t("creator.fighterSource")}>
           <button
             className="secondary-button source-action"
             type="button"
@@ -862,9 +946,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
             <Sparkles size={18} />
             Generate
           </button>
-          <button className="secondary-button source-action" type="button" onClick={() => characterImportInputRef.current?.click()} disabled={creatorBusy}>
+          <button
+            className="secondary-button source-action"
+            type="button"
+            onClick={() => characterImportInputRef.current?.click()}
+            disabled={creatorBusy}
+          >
             <FileJson size={18} />
-            Import fighter
+            {t("creator.importFighter")}
           </button>
           <input
             ref={characterImportInputRef}
@@ -879,9 +968,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
               }
             }}
           />
-          <button className="secondary-button source-action" type="button" onClick={() => spritesheetImportInputRef.current?.click()} disabled={creatorBusy}>
+          <button
+            className="secondary-button source-action"
+            type="button"
+            onClick={() => spritesheetImportInputRef.current?.click()}
+            disabled={creatorBusy}
+          >
             <Images size={18} />
-            Import strip
+            {t("creator.importStrip")}
           </button>
           <input
             ref={spritesheetImportInputRef}
@@ -903,7 +997,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
             disabled={creatorBusy || providerStatus !== "ready" || !hasProcessableSources}
           >
             <Wand2 size={18} />
-            {activeOperation?.type === "process-all" ? "Processing..." : "Process all"}
+            {activeOperation?.type === "process-all" ? t("common.processing") : t("creator.processAll")}
           </button>
         </div>
 
@@ -911,25 +1005,49 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           <div className="creator-status">
             <p className="helper-text">{cameraStatus}</p>
             <p className="helper-text">
-              {providerStatus === "idle" && `${selectedProvider.label} is not loaded.`}
-              {providerStatus === "loading" && `Loading ${selectedProvider.label}...`}
-              {providerStatus === "ready" && `${selectedProvider.label} ready.`}
-              {providerStatus === "error" && `Segmentation unavailable: ${providerError}`}
+              {providerStatus === "idle" &&
+                t("creator.providerIdle", { provider: getSegmentationProviderLabel(t, selectedProvider) })}
+              {providerStatus === "loading" &&
+                t("creator.providerLoading", { provider: getSegmentationProviderLabel(t, selectedProvider) })}
+              {providerStatus === "ready" &&
+                t("creator.providerReady", { provider: getSegmentationProviderLabel(t, selectedProvider) })}
+              {providerStatus === "error" && t("creator.providerError", { error: providerError })}
             </p>
           </div>
-          <button className="primary-button" type="button" onClick={() => void saveFighter()} disabled={creatorBusy || !saveComplete}>
-            {saving ? (editingFighterId ? "Updating..." : "Saving...") : editingFighterId ? "Update fighter" : "Save fighter"}
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => void saveFighter()}
+            disabled={creatorBusy || !saveComplete}
+          >
+            {saving
+              ? editingFighterId
+                ? t("creator.updating")
+                : t("creator.saving")
+              : editingFighterId
+                ? t("creator.updateFighter")
+                : t("creator.saveFighter")}
           </button>
         </div>
       </div>
 
       {generationOpen && (
         <div className="creator-drawer-shell">
-          <button className="creator-drawer-backdrop" type="button" onClick={() => setGenerationOpen(false)} aria-label="Close generator" />
+          <button
+            className="creator-drawer-backdrop"
+            type="button"
+            onClick={() => setGenerationOpen(false)}
+            aria-label="Close generator"
+          />
           <aside className="creator-settings-drawer" role="dialog" aria-modal="true" aria-label="Generate fighter">
             <div className="drawer-header">
               <strong>Generate fighter</strong>
-              <button className="icon-button" type="button" onClick={() => setGenerationOpen(false)} title="Close generator">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setGenerationOpen(false)}
+                title="Close generator"
+              >
                 <X size={18} />
                 <span className="sr-only">Close generator</span>
               </button>
@@ -989,14 +1107,25 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
               <div className="generation-reference-row">
                 <ImagePlus size={18} />
                 <span>{generationReferenceFile.name}</span>
-                <button className="icon-button" type="button" onClick={() => setGenerationReferenceFile(undefined)} disabled={creatorBusy} title="Remove reference">
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setGenerationReferenceFile(undefined)}
+                  disabled={creatorBusy}
+                  title="Remove reference"
+                >
                   <X size={16} />
                   <span className="sr-only">Remove reference</span>
                 </button>
               </div>
             )}
 
-            <button className="primary-button full-width" type="button" onClick={() => void generateFighterDraft()} disabled={creatorBusy}>
+            <button
+              className="primary-button full-width"
+              type="button"
+              onClick={() => void generateFighterDraft()}
+              disabled={creatorBusy}
+            >
               <Sparkles size={18} />
               {activeOperation?.type === "generate" ? "Generating..." : "Generate strip"}
             </button>
@@ -1006,92 +1135,107 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
 
       {settingsOpen && (
         <div className="creator-drawer-shell">
-          <button className="creator-drawer-backdrop" type="button" onClick={() => setSettingsOpen(false)} aria-label="Close cutout settings" />
-          <aside className="creator-settings-drawer" role="dialog" aria-modal="true" aria-label="Cutout settings">
+          <button
+            className="creator-drawer-backdrop"
+            type="button"
+            onClick={() => setSettingsOpen(false)}
+            aria-label={t("creator.closeCutoutSettings")}
+          />
+          <aside
+            className="creator-settings-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("creator.cutoutSettings")}
+          >
             <div className="drawer-header">
-              <strong>Cutout settings</strong>
-              <button className="icon-button" type="button" onClick={() => setSettingsOpen(false)} title="Close cutout settings">
-                <X size={18} />
-                <span className="sr-only">Close cutout settings</span>
-              </button>
-            </div>
-        <div className="provider-control" aria-label="Segmentation provider">
-          <span className="field-label-text">Cutout engine</span>
-          <div className="segmented-control">
-            {SEGMENTATION_PROVIDERS.map((provider) => (
+              <strong>{t("creator.cutoutSettings")}</strong>
               <button
-                className={provider.id === providerId ? "segment-option active" : "segment-option"}
-                key={provider.id}
+                className="icon-button"
                 type="button"
-                onClick={() => selectProvider(provider.id)}
-                disabled={creatorBusy}
-                title={provider.description}
+                onClick={() => setSettingsOpen(false)}
+                title={t("creator.closeCutoutSettings")}
               >
-                {provider.label}
+                <X size={18} />
+                <span className="sr-only">{t("creator.closeCutoutSettings")}</span>
               </button>
-            ))}
-          </div>
-          <p className="helper-text">{selectedProvider.description}</p>
-        </div>
-
-        {providerId === "mediapipe-selfie" && (
-          <div className="provider-control" aria-label="MediaPipe mask controls">
-            <span className="field-label-text">Mask tuning</span>
-            <label className="range-field">
-              <span>Foreground edge</span>
-              <input
-                type="range"
-                min="0.05"
-                max="0.65"
-                step="0.01"
-                value={segmentationOptions["mediapipe-selfie"].maskLow}
-                onChange={(event) => updateMediaPipeOptions({ maskLow: Number(event.target.value) })}
-                disabled={creatorBusy}
-              />
-              <strong>{segmentationOptions["mediapipe-selfie"].maskLow.toFixed(2)}</strong>
-            </label>
-            <label className="range-field">
-              <span>Background cutoff</span>
-              <input
-                type="range"
-                min="0.25"
-                max="0.95"
-                step="0.01"
-                value={segmentationOptions["mediapipe-selfie"].maskHigh}
-                onChange={(event) => updateMediaPipeOptions({ maskHigh: Number(event.target.value) })}
-                disabled={creatorBusy}
-              />
-              <strong>{segmentationOptions["mediapipe-selfie"].maskHigh.toFixed(2)}</strong>
-            </label>
-          </div>
-        )}
-
-        {providerId === "transformers-background-removal" && (
-          <div className="provider-control" aria-label="Transformers.js model">
-            <span className="field-label-text">Model</span>
-            <div className="segmented-control">
-              {TRANSFORMERS_MODELS.map((model) => (
-                <button
-                  className={segmentationOptions["transformers-background-removal"].modelId === model.id ? "segment-option active" : "segment-option"}
-                  key={model.id}
-                  type="button"
-                  onClick={() => selectTransformersModel(model.id)}
-                  disabled={creatorBusy}
-                  title={model.description}
-                >
-                  {model.label}
-                </button>
-              ))}
             </div>
-            <p className="helper-text">
-              {
-                TRANSFORMERS_MODELS.find(
-                  (model) => model.id === segmentationOptions["transformers-background-removal"].modelId,
-                )?.description
-              }
-            </p>
-          </div>
-        )}
+            <div className="provider-control" aria-label={t("creator.segmentationProvider")}>
+              <span className="field-label-text">{t("creator.cutoutEngine")}</span>
+              <div className="segmented-control">
+                {SEGMENTATION_PROVIDERS.map((provider) => (
+                  <button
+                    className={provider.id === providerId ? "segment-option active" : "segment-option"}
+                    key={provider.id}
+                    type="button"
+                    onClick={() => selectProvider(provider.id)}
+                    disabled={creatorBusy}
+                    title={getSegmentationProviderDescription(t, provider)}
+                  >
+                    {getSegmentationProviderLabel(t, provider)}
+                  </button>
+                ))}
+              </div>
+              <p className="helper-text">{getSegmentationProviderDescription(t, selectedProvider)}</p>
+            </div>
+
+            {providerId === "mediapipe-selfie" && (
+              <div className="provider-control" aria-label={t("creator.mediaPipeMaskControls")}>
+                <span className="field-label-text">{t("creator.maskTuning")}</span>
+                <label className="range-field">
+                  <span>{t("creator.foregroundEdge")}</span>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="0.65"
+                    step="0.01"
+                    value={segmentationOptions["mediapipe-selfie"].maskLow}
+                    onChange={(event) => updateMediaPipeOptions({ maskLow: Number(event.target.value) })}
+                    disabled={creatorBusy}
+                  />
+                  <strong>{segmentationOptions["mediapipe-selfie"].maskLow.toFixed(2)}</strong>
+                </label>
+                <label className="range-field">
+                  <span>{t("creator.backgroundCutoff")}</span>
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="0.95"
+                    step="0.01"
+                    value={segmentationOptions["mediapipe-selfie"].maskHigh}
+                    onChange={(event) => updateMediaPipeOptions({ maskHigh: Number(event.target.value) })}
+                    disabled={creatorBusy}
+                  />
+                  <strong>{segmentationOptions["mediapipe-selfie"].maskHigh.toFixed(2)}</strong>
+                </label>
+              </div>
+            )}
+
+            {providerId === "transformers-background-removal" && (
+              <div className="provider-control" aria-label={t("creator.transformersModel")}>
+                <span className="field-label-text">{t("creator.model")}</span>
+                <div className="segmented-control">
+                  {TRANSFORMERS_MODELS.map((model) => (
+                    <button
+                      className={
+                        segmentationOptions["transformers-background-removal"].modelId === model.id
+                          ? "segment-option active"
+                          : "segment-option"
+                      }
+                      key={model.id}
+                      type="button"
+                      onClick={() => selectTransformersModel(model.id)}
+                      disabled={creatorBusy}
+                      title={getTransformersModelDescription(t, model.id)}
+                    >
+                      {model.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="helper-text">
+                  {getTransformersModelDescription(t, segmentationOptions["transformers-background-removal"].modelId)}
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -1170,17 +1314,18 @@ function revokeDraftAsset(asset: DraftAsset | undefined) {
   }
 }
 
-function getPoseStatus(draft: PoseDraft | undefined) {
+function getPoseStatus(t: Translate, draft: PoseDraft | undefined) {
   if (draft?.processed) {
-    return "Processed";
+    return t("creator.poseStatusProcessed");
   }
   if (draft?.frame) {
-    return "Source ready";
+    return t("creator.poseStatusSourceReady");
   }
-  return "Needs image";
+  return t("creator.poseStatusNeedsImage");
 }
 
 function getCaptureButtonLabel(
+  t: Translate,
   pose: FighterPose,
   countdown: { pose: FighterPose; remaining: number } | undefined,
   activeOperation: CreatorOperation | undefined,
@@ -1193,9 +1338,40 @@ function getCaptureButtonLabel(
     (activeOperation?.type === "capture" || activeOperation?.type === "start-camera") &&
     activeOperation.pose === pose
   ) {
-    return "Wait";
+    return t("common.wait");
   }
-  return cameraReady ? "Capture" : "Start";
+  return cameraReady ? t("creator.capture") : t("creator.start");
+}
+
+function getSegmentationProviderLabel(t: Translate, provider: SegmentationProvider) {
+  switch (provider.id) {
+    case "mediapipe-selfie":
+      return t("segmentation.mediapipe.label");
+    case "transformers-background-removal":
+      return t("segmentation.transformers.label");
+    default:
+      return provider.label;
+  }
+}
+
+function getSegmentationProviderDescription(t: Translate, provider: SegmentationProvider) {
+  switch (provider.id) {
+    case "mediapipe-selfie":
+      return t("segmentation.mediapipe.description");
+    case "transformers-background-removal":
+      return t("segmentation.transformers.description");
+    default:
+      return provider.description;
+  }
+}
+
+function getTransformersModelDescription(t: Translate, modelId: TransformersModelId) {
+  switch (modelId) {
+    case "onnx-community/ormbg-ONNX":
+      return t("segmentation.model.ormbg.description");
+    case "Xenova/modnet":
+      return t("segmentation.model.modnet.description");
+  }
 }
 
 function getSelectedGenerationModel(model: GenerationModelOption, customModel: string) {

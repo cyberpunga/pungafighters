@@ -19,6 +19,7 @@ import {
   restartMatch,
   stepBattleFrame,
   SUPER_HITS_REQUIRED,
+  type BattleMessage,
   type BattleState,
 } from "../../game/simulation/battle";
 import { NETPLAY_CHECKSUM_INTERVAL } from "../../game/network/protocol";
@@ -57,7 +58,40 @@ export interface BattleSceneOptions {
   networkController?: NetworkInputController;
   background?: RuntimeBattleBackground;
   displayEffects?: BattlePostEffect[];
+  copy?: BattleSceneCopy;
 }
+
+export interface BattleSceneCopy {
+  ready: string;
+  fight: string;
+  wins: (name: string) => string;
+  takesRound: (name: string) => string;
+  roundsWon: (count: number) => string;
+  max: string;
+  restartHint: string;
+  syncingFrame: (frame: number) => string;
+  syncError: string;
+  opponentMenu: string;
+  opponentLeft: string;
+  connectionClosed: string;
+  super: string;
+}
+
+const DEFAULT_BATTLE_SCENE_COPY: BattleSceneCopy = {
+  ready: "Ready",
+  fight: "Fight",
+  wins: (name) => `${name} wins`,
+  takesRound: (name) => `${name} takes the round`,
+  roundsWon: (count) => `Rounds: ${count}`,
+  max: "MAX",
+  restartHint: "Enter: restart  |  Esc: menu",
+  syncingFrame: (frame) => `Syncing frame ${frame}`,
+  syncError: "Sync error. Match stopped.",
+  opponentMenu: "Opponent returned to menu.",
+  opponentLeft: "Opponent left the match.",
+  connectionClosed: "Connection closed.",
+  super: "SUPER",
+};
 
 const FIGHTER_DISPLAY_SIZE = 190;
 const CUSTOM_STAGE_TEXTURE = "custom-stage-background";
@@ -107,6 +141,7 @@ export class BattleScene extends Phaser.Scene {
   private readonly localSlot: PlayerSlot;
   private readonly networkController?: NetworkInputController;
   private readonly background?: RuntimeBattleBackground;
+  private readonly copy: BattleSceneCopy;
   private displayEffects: BattlePostEffect[];
   private hasCreated = false;
   private views?: Record<PlayerSlot, FighterView>;
@@ -143,6 +178,7 @@ export class BattleScene extends Phaser.Scene {
     this.networkController = options.networkController;
     this.background = options.background;
     this.displayEffects = options.displayEffects ?? [];
+    this.copy = options.copy ?? DEFAULT_BATTLE_SCENE_COPY;
     this.state = createBattleState(config, {
       p1: { id: fighters.p1.id, name: fighters.p1.name },
       p2: { id: fighters.p2.id, name: fighters.p2.name },
@@ -177,7 +213,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5, 0);
     this.timerText.setShadow(0, 6, "#06040d", 16, true, true);
     this.messageText = this.add
-      .text(480, 212, "Ready", {
+      .text(480, 212, this.copy.ready, {
         fontFamily: "Impact, Arial Black, sans-serif",
         fontSize: "54px",
         color: "#ffe9f5",
@@ -188,7 +224,7 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.messageText.setShadow(0, 8, "#040309", 18, true, true);
     this.restartHint = this.add
-      .text(480, 478, "Enter: restart  |  Esc: menu", {
+      .text(480, 478, this.copy.restartHint, {
         fontFamily: "Arial, sans-serif",
         fontSize: "16px",
         color: "#e4dcff",
@@ -251,7 +287,7 @@ export class BattleScene extends Phaser.Scene {
       this.networkController?.requestRestart(this.state.frame);
     }
     if (this.pressedCodes.has("Escape")) {
-      this.networkController?.sendExit("Opponent returned to menu.");
+      this.networkController?.sendExit(this.copy.opponentMenu);
       this.onExit();
       return;
     }
@@ -477,7 +513,7 @@ export class BattleScene extends Phaser.Scene {
     applyNameText(runtime.name);
 
     const rounds = this.add
-      .text(orient(HUD_HEALTH_ANCHOR), HUD_PANEL_HEIGHT - 8, "Rounds: 0", {
+      .text(orient(HUD_HEALTH_ANCHOR), HUD_PANEL_HEIGHT - 8, this.copy.roundsWon(0), {
         fontFamily: "Arial Black, Arial, sans-serif",
         fontSize: "16px",
         color: "#dcd0ff",
@@ -569,7 +605,7 @@ export class BattleScene extends Phaser.Scene {
     container.add(superSegments);
 
     const superMaxBadge = this.add
-      .text(orient(HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP + 10), HUD_SUPER_TOP + HUD_SUPER_HEIGHT + 10, "MAX", {
+      .text(orient(HUD_SUPER_ANCHOR + HUD_SUPER_LENGTH + HUD_SUPER_TIP + 10), HUD_SUPER_TOP + HUD_SUPER_HEIGHT + 10, this.copy.max, {
         fontFamily: "Impact, Arial Black, sans-serif",
         fontSize: "14px",
         color: "#fff6d6",
@@ -664,7 +700,7 @@ export class BattleScene extends Phaser.Scene {
     const inputs = this.networkController.getInputsForFrame(this.state.frame);
     if (!inputs) {
       const missingFrame = this.networkController.getMissingFrame(this.state.frame) ?? this.state.frame;
-      this.onlineStatus = `Syncing frame ${missingFrame}`;
+      this.onlineStatus = this.copy.syncingFrame(missingFrame);
       return undefined;
     }
     this.onlineStatus = undefined;
@@ -743,11 +779,11 @@ export class BattleScene extends Phaser.Scene {
         this.state = restartMatch(this.state);
         this.resetSyncState();
       } else if (event.type === "exit") {
-        this.haltedMessage = event.reason || "Opponent left the match.";
+        this.haltedMessage = event.reason || this.copy.opponentLeft;
       } else if (event.type === "error") {
         this.haltedMessage = event.message;
       } else if (event.type === "closed") {
-        this.haltedMessage = "Connection closed.";
+        this.haltedMessage = this.copy.connectionClosed;
       }
     });
   }
@@ -759,8 +795,8 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     if (localChecksum !== checksum) {
-      this.haltedMessage = "Sync error. Match stopped.";
-      this.networkController?.sendError("Sync error. Match stopped.");
+      this.haltedMessage = this.copy.syncError;
+      this.networkController?.sendError(this.copy.syncError);
     }
   }
 
@@ -775,6 +811,22 @@ export class BattleScene extends Phaser.Scene {
     this.checksumHistory.clear();
     this.pendingRemoteChecksums.clear();
     this.networkController?.resetSync();
+  }
+
+  private formatBattleMessage(message: BattleMessage | undefined) {
+    if (!message) {
+      return "";
+    }
+    switch (message.type) {
+      case "ready":
+        return this.copy.ready;
+      case "fight":
+        return this.copy.fight;
+      case "match-winner":
+        return this.copy.wins(this.state.fighters[message.winner].name);
+      case "round-winner":
+        return this.copy.takesRound(this.state.fighters[message.winner].name);
+    }
   }
 
   private renderState() {
@@ -806,7 +858,7 @@ export class BattleScene extends Phaser.Scene {
       view.updateHealthMeter(runtime.health / 100);
       view.updateSuperMeter(runtime.superMeter / SUPER_HITS_REQUIRED);
       view.setName(runtime.name);
-      view.rounds.setText(`Rounds: ${runtime.roundsWon}`);
+      view.rounds.setText(this.copy.roundsWon(runtime.roundsWon));
       this.updateKnockdownSfx(slot);
     });
     this.syncFighterDepths();
@@ -825,7 +877,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.timerText?.setText(String(Math.ceil(this.state.timer)));
-    const message = this.haltedMessage || this.onlineStatus || this.state.message;
+    const message = this.haltedMessage || this.onlineStatus || this.formatBattleMessage(this.state.message);
     this.messageText?.setText(message);
     this.messageText?.setAlpha(message ? 1 : 0);
     this.restartHint?.setAlpha(this.state.status === "matchOver" ? 1 : 0);
@@ -976,7 +1028,7 @@ export class BattleScene extends Phaser.Scene {
     const textX = fromLeft ? 678 : 282;
     const textStartX = fromLeft ? ARENA_WIDTH + 120 : -120;
     const title = this.add
-      .text(textStartX, 122, "SUPER", {
+      .text(textStartX, 122, this.copy.super, {
         fontFamily: "Arial Black, Arial, sans-serif",
         fontSize: "64px",
         color: "#f8f4df",
