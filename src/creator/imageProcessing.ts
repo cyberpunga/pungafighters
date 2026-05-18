@@ -45,7 +45,7 @@ export function normalizeCanvas(source: CanvasImageSource, options: NormalizeCan
   return canvas;
 }
 
-export async function decodeImageBlob(blob: Blob, errorMessage = "Could not read image."): Promise<DecodedImage> {
+export async function decodeImageBlob(blob: Blob, decodeError: Error | string = "Could not read image."): Promise<DecodedImage> {
   if ("createImageBitmap" in window) {
     const bitmap = await createImageBitmap(blob);
     return {
@@ -62,7 +62,9 @@ export async function decodeImageBlob(blob: Blob, errorMessage = "Could not read
   try {
     await new Promise<void>((resolve, reject) => {
       image.addEventListener("load", () => resolve(), { once: true });
-      image.addEventListener("error", () => reject(new Error(errorMessage)), { once: true });
+      image.addEventListener("error", () => reject(decodeError instanceof Error ? decodeError : new Error(decodeError)), {
+        once: true,
+      });
       image.src = url;
     });
   } catch (error) {

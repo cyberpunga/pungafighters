@@ -1,5 +1,6 @@
 import { FilesetResolver, ImageSegmenter } from "@mediapipe/tasks-vision";
 import type { AnySegmentationProviderOptions, MediaPipeSegmentationOptions, SegmentationProvider } from "./types";
+import { AppError } from "../../i18n/errors";
 
 const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const MODEL_URL =
@@ -60,7 +61,7 @@ function segmentWithMediaPipe(
 ): HTMLCanvasElement {
   const sourceCtx = source.getContext("2d", { willReadFrequently: true });
   if (!sourceCtx) {
-    throw new Error("Could not read the camera frame.");
+    throw new AppError("error.cameraFrameRead");
   }
 
   const imageData = sourceCtx.getImageData(0, 0, source.width, source.height);

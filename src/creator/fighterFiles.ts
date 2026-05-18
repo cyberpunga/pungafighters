@@ -1,4 +1,5 @@
 import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE, normalizeCanvas } from "./imageProcessing";
+import { AppError } from "../i18n/errors";
 import type { FighterPose, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 
@@ -114,12 +115,12 @@ export async function readFighterImportFile(file: File): Promise<ImportedFighter
   if (isImageFile(file)) {
     return readSpritesheetFighterFile(file);
   }
-  throw new Error("Choose a Punga fighter JSON file or a PNG, JPEG, or WebP spritesheet.");
+  throw new AppError("error.fighterImportType");
 }
 
 export async function readFighterCharacterFile(file: File): Promise<ImportedFighterAssets> {
   if (!isJsonFile(file)) {
-    throw new Error("Choose a Punga fighter JSON file.");
+    throw new AppError("error.fighterJsonType");
   }
   return readCharacterJsonFile(file);
 }
@@ -135,9 +136,9 @@ export async function readSpritesheetFighterFile(file: File): Promise<ImportedFi
 
 export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpritesheetAssets> {
   if (!isImageFile(file)) {
-    throw new Error("Choose a PNG, JPEG, or WebP spritesheet.");
+    throw new AppError("error.spritesheetType");
   }
-  const image = await decodeImageBlob(file, "Could not read spritesheet image.");
+  const image = await decodeImageBlob(file, new AppError("error.spritesheetRead"));
   try {
     const horizontal = image.width >= image.height;
     const columns = horizontal ? FIGHTER_POSES.length : 1;
@@ -146,7 +147,7 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
     const cellHeight = image.height / rows;
 
     if (cellWidth < 8 || cellHeight < 8) {
-      throw new Error("Spritesheet cells are too small to import.");
+      throw new AppError("error.spritesheetSmall");
     }
 
     const pairs = await Promise.all(
@@ -156,7 +157,7 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
         cellCanvas.height = Math.round(cellHeight);
         const ctx = cellCanvas.getContext("2d");
         if (!ctx) {
-          throw new Error("Could not read spritesheet image.");
+          throw new AppError("error.spritesheetRead");
         }
         const sx = (index % columns) * cellWidth;
         const sy = Math.floor(index / columns) * cellHeight;
@@ -248,7 +249,7 @@ async function urlToDataUrl(url: string): Promise<string> {
   }
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error("Could not load fighter asset.");
+    throw new AppError("error.fighterAssetLoad");
   }
   return blobToDataUrl(await response.blob());
 }
@@ -257,7 +258,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result)));
-    reader.addEventListener("error", () => reject(new Error("Could not read fighter asset.")));
+    reader.addEventListener("error", () => reject(new AppError("error.fighterAssetRead")));
     reader.readAsDataURL(blob);
   });
 }
@@ -265,7 +266,7 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 async function dataUrlToBlob(dataUrl: string) {
   const response = await fetch(dataUrl);
   if (!response.ok) {
-    throw new Error("Could not read fighter asset.");
+    throw new AppError("error.fighterAssetRead");
   }
   return response.blob();
 }

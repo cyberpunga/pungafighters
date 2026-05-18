@@ -2,7 +2,7 @@ export type SegmentationProviderId = "mediapipe-selfie" | "transformers-backgrou
 
 export type SegmentationProviderState = "idle" | "loading" | "ready" | "error";
 
-export type TransformersModelId = "Xenova/modnet" | "onnx-community/ormbg-ONNX";
+export type TransformersModelId = "Xenova/modnet" | "onnx-community/ormbg-ONNX" | "briaai/RMBG-1.4";
 
 export interface MediaPipeSegmentationOptions {
   maskLow: number;

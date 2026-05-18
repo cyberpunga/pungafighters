@@ -1,3 +1,5 @@
+import { AppError } from "../../i18n/errors";
+
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
@@ -22,7 +24,7 @@ export async function getIceServers(): Promise<RTCIceServer[]> {
   if (endpoint) {
     const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
     if (!response.ok) {
-      throw new Error("Could not load TURN credentials.");
+      throw new AppError("error.turnCredentials");
     }
     return normalizeIceServers(await response.json());
   }
