@@ -99,6 +99,20 @@ pnpm deploy
 
 Set `ALLOWED_ORIGINS` in `server/wrangler.toml` to the deployed game origin and any local dev origins you need.
 
+### Character Generation Worker
+
+The same Worker exposes `POST /generate` for server-side Gemini spritesheet generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `prompt`, `model`, and optional reference `image` or `images` entries:
+
+```json
+{
+  "prompt": "a homemade cardboard robot boxer with red gloves",
+  "model": "nano-banana-pro",
+  "images": [{ "mimeType": "image/png", "data": "<base64-or-data-url>" }]
+}
+```
+
+Supported model aliases are `nano-banana`, `nano-banana-2`, and `nano-banana-pro`; direct `gemini-*` image model ids are also accepted for testing. The response includes the generated image as base64 and a `dataUrl`, ready to feed into the creator spritesheet import flow.
+
 ## Browser Requirements
 
 - Modern Chromium, Firefox, or Safari.
