@@ -1369,6 +1369,8 @@ function getTransformersModelDescription(t: Translate, modelId: TransformersMode
   switch (modelId) {
     case "onnx-community/ormbg-ONNX":
       return t("segmentation.model.ormbg.description");
+    case "briaai/RMBG-1.4":
+      return t("segmentation.model.rmbg.description");
     case "Xenova/modnet":
       return t("segmentation.model.modnet.description");
   }

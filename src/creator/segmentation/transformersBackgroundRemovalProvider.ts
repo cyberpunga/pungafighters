@@ -8,6 +8,11 @@ export const TRANSFORMERS_MODELS: Array<{ id: TransformersModelId; label: string
     description: "General background removal. Worth testing for full-body cutouts.",
   },
   {
+    id: "briaai/RMBG-1.4",
+    label: "RMBG 1.4",
+    description: "BRIA background removal for broad foreground subjects. Review the model license before commercial use.",
+  },
+  {
     id: "Xenova/modnet",
     label: "MODNet",
     description: "Portrait matting. Best for closer portrait-style subjects.",
