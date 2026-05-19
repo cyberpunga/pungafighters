@@ -6,9 +6,11 @@ import {
   Mic,
   Pause,
   Play,
+  Redo2,
   Settings,
   Sparkles,
   Trash2,
+  Undo2,
   Upload,
   Volume2,
   Wand2,
@@ -59,6 +61,7 @@ const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
 const GENERATION_MODEL_OPTIONS = ["", "nano-banana-2", "nano-banana-pro", "nano-banana", "custom"] as const;
+const POSE_FRAME_HISTORY_LIMIT = 12;
 
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
 type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number];
@@ -74,7 +77,18 @@ interface PoseDraft {
   processed: boolean;
 }
 
+interface PoseFrameSnapshot {
+  blob: Blob;
+  processed: boolean;
+}
+
+interface PoseFrameHistory {
+  past: PoseFrameSnapshot[];
+  future: PoseFrameSnapshot[];
+}
+
 type PoseDrafts = Partial<Record<FighterPose, PoseDraft>>;
+type PoseFrameHistories = Partial<Record<FighterPose, PoseFrameHistory>>;
 type VoiceDrafts = Partial<Record<VoiceClipType, DraftAsset>>;
 
 type CreatorOperation =
@@ -99,6 +113,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [name, setName] = useState(() => t("creator.newFighter"));
   const [editingFighterId, setEditingFighterId] = useState<string | undefined>();
   const [drafts, setDrafts] = useState<PoseDrafts>({});
+  const [poseFrameHistories, setPoseFrameHistories] = useState<PoseFrameHistories>({});
   const [voiceDrafts, setVoiceDrafts] = useState<VoiceDrafts>({});
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
   const [playingClip, setPlayingClip] = useState<VoiceClipType | undefined>();
@@ -128,6 +143,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const saveComplete = FIGHTER_POSES.every((pose) => Boolean(drafts[pose]?.frame));
 
   const replaceDrafts = useCallback((nextDrafts: PoseDrafts) => {
+    setPoseFrameHistories({});
     setDrafts((current) => {
       revokeDrafts(current);
       return nextDrafts;
@@ -135,14 +151,35 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   }, []);
 
   const replacePoseDraft = useCallback((pose: FighterPose, nextDraft: PoseDraft) => {
+    setPoseFrameHistories((current) => {
+      if (!current[pose]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[pose];
+      return next;
+    });
     setDrafts((current) => {
       revokeDraft(current[pose]);
       return { ...current, [pose]: nextDraft };
     });
   }, []);
 
-  const replacePoseFrame = useCallback((pose: FighterPose, frameBlob: Blob, processed: boolean) => {
-    const frame = createDraftAsset(frameBlob);
+  const pushPoseFrameHistory = useCallback((pose: FighterPose, snapshot: PoseFrameSnapshot) => {
+    setPoseFrameHistories((current) => {
+      const history = current[pose] ?? { past: [], future: [] };
+      return {
+        ...current,
+        [pose]: {
+          past: [...history.past, snapshot].slice(-POSE_FRAME_HISTORY_LIMIT),
+          future: [],
+        },
+      };
+    });
+  }, []);
+
+  const applyPoseFrameSnapshot = useCallback((pose: FighterPose, snapshot: PoseFrameSnapshot) => {
+    const frame = createDraftAsset(snapshot.blob);
     setDrafts((current) => {
       const currentDraft = current[pose];
       if (!currentDraft?.source) {
@@ -150,9 +187,93 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         return current;
       }
       revokeDraftAsset(currentDraft.frame);
-      return { ...current, [pose]: { ...currentDraft, frame, processed } };
+      return { ...current, [pose]: { ...currentDraft, frame, processed: snapshot.processed } };
     });
+    setPreviewPose((current) => (current === pose ? undefined : current));
   }, []);
+
+  const replacePoseFrame = useCallback(
+    (pose: FighterPose, frameBlob: Blob, processed: boolean) => {
+      const currentDraft = draftsRef.current[pose];
+      if (!currentDraft?.source) {
+        return;
+      }
+      if (currentDraft.frame) {
+        pushPoseFrameHistory(pose, { blob: currentDraft.frame.blob, processed: currentDraft.processed });
+      }
+      const frame = createDraftAsset(frameBlob);
+      setDrafts((current) => {
+        const currentDraft = current[pose];
+        if (!currentDraft?.source) {
+          revokeDraftAsset(frame);
+          return current;
+        }
+        revokeDraftAsset(currentDraft.frame);
+        return { ...current, [pose]: { ...currentDraft, frame, processed } };
+      });
+    },
+    [pushPoseFrameHistory],
+  );
+
+  const undoPoseFrame = useCallback(
+    (pose: FighterPose) => {
+      if (creatorBusy) {
+        return;
+      }
+      const draft = draftsRef.current[pose];
+      const history = poseFrameHistories[pose];
+      const previous = history?.past[history.past.length - 1];
+      if (!draft?.frame || !previous) {
+        return;
+      }
+      const currentSnapshot: PoseFrameSnapshot = { blob: draft.frame.blob, processed: draft.processed };
+      setPoseFrameHistories((current) => {
+        const currentHistory = current[pose];
+        if (!currentHistory?.past.length) {
+          return current;
+        }
+        return {
+          ...current,
+          [pose]: {
+            past: currentHistory.past.slice(0, -1),
+            future: [...currentHistory.future, currentSnapshot].slice(-POSE_FRAME_HISTORY_LIMIT),
+          },
+        };
+      });
+      applyPoseFrameSnapshot(pose, previous);
+    },
+    [applyPoseFrameSnapshot, creatorBusy, poseFrameHistories],
+  );
+
+  const redoPoseFrame = useCallback(
+    (pose: FighterPose) => {
+      if (creatorBusy) {
+        return;
+      }
+      const draft = draftsRef.current[pose];
+      const history = poseFrameHistories[pose];
+      const nextFrame = history?.future[history.future.length - 1];
+      if (!draft?.frame || !nextFrame) {
+        return;
+      }
+      const currentSnapshot: PoseFrameSnapshot = { blob: draft.frame.blob, processed: draft.processed };
+      setPoseFrameHistories((current) => {
+        const currentHistory = current[pose];
+        if (!currentHistory?.future.length) {
+          return current;
+        }
+        return {
+          ...current,
+          [pose]: {
+            past: [...currentHistory.past, currentSnapshot].slice(-POSE_FRAME_HISTORY_LIMIT),
+            future: currentHistory.future.slice(0, -1),
+          },
+        };
+      });
+      applyPoseFrameSnapshot(pose, nextFrame);
+    },
+    [applyPoseFrameSnapshot, creatorBusy, poseFrameHistories],
+  );
 
   const replaceVoiceDrafts = useCallback((nextDrafts: VoiceDrafts) => {
     setVoiceDrafts((current) => {
@@ -757,6 +878,9 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         <div className="pose-grid" aria-label={t("creator.requiredActions")}>
           {FIGHTER_POSES.map((pose) => {
             const draft = drafts[pose];
+            const frameHistory = poseFrameHistories[pose];
+            const canUndoFrame = Boolean(draft?.frame && frameHistory?.past.length);
+            const canRedoFrame = Boolean(draft?.frame && frameHistory?.future.length);
             const poseText = poseLabel(t, pose);
             return (
               <div className={draft?.frame ? "pose-card complete" : "pose-card"} key={pose}>
@@ -838,7 +962,27 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                         : t("common.process")}
                     </button>
                     <button
-                      className="secondary-button pose-action-button pose-settings-button"
+                      className="secondary-button pose-action-button pose-icon-action-button"
+                      type="button"
+                      onClick={() => undoPoseFrame(pose)}
+                      disabled={creatorBusy || !canUndoFrame}
+                      title={t("common.undo")}
+                    >
+                      <Undo2 size={16} />
+                      <span className="sr-only">{t("common.undo")}</span>
+                    </button>
+                    <button
+                      className="secondary-button pose-action-button pose-icon-action-button"
+                      type="button"
+                      onClick={() => redoPoseFrame(pose)}
+                      disabled={creatorBusy || !canRedoFrame}
+                      title={t("common.redo")}
+                    >
+                      <Redo2 size={16} />
+                      <span className="sr-only">{t("common.redo")}</span>
+                    </button>
+                    <button
+                      className="secondary-button pose-action-button pose-icon-action-button pose-settings-button"
                       type="button"
                       onClick={() => setSettingsOpen(true)}
                       disabled={operationBusy}

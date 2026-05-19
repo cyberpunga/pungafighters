@@ -666,12 +666,14 @@ button:disabled {
 }
 
 .pose-action-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 42px;
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .pose-action-button {
+  flex: 1 1 88px;
   min-height: 42px;
   min-width: 0;
   gap: 8px;
@@ -683,7 +685,9 @@ button:disabled {
   flex: 0 0 auto;
 }
 
-.pose-settings-button {
+.pose-icon-action-button {
+  flex: 0 0 42px;
+  width: 42px;
   padding: 0;
 }
 
@@ -1599,10 +1603,6 @@ button:disabled {
     min-height: 220px;
     height: 220px;
     width: 100%;
-  }
-
-  .pose-action-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 42px;
   }
 
   .sound-card {
