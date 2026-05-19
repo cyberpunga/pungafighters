@@ -4,6 +4,7 @@ import {
   type BattleConfig,
   type BattlePostEffect,
   type FighterPose,
+  type FrameAnchor,
   type LoadedFighter,
   type PlayerInputSnapshot,
   type PlayerSlot,
@@ -94,6 +95,7 @@ const DEFAULT_BATTLE_SCENE_COPY: BattleSceneCopy = {
 };
 
 const FIGHTER_DISPLAY_SIZE = 190;
+const DEFAULT_FIGHTER_ANCHOR: FrameAnchor = { x: 0.5, y: 0.9 };
 const CUSTOM_STAGE_TEXTURE = "custom-stage-background";
 const ARENA_WIDTH = 960;
 const ARENA_HEIGHT = 540;
@@ -843,11 +845,13 @@ export class BattleScene extends Phaser.Scene {
       const view = this.views![slot];
       const frame = updateFighterRenderState(view.renderState, runtime, animationDeltaSeconds, this.state.groundY);
       const texture = this.getFighterTexture(slot, view.renderState.currentPose);
-      this.applyFighterImage(view.sprite, texture, frame.current, runtime.facing, frame.currentAlpha);
+      const anchor = this.getFighterFrameAnchor(slot, view.renderState.currentPose);
+      this.applyFighterImage(view.sprite, texture, frame.current, runtime.facing, frame.currentAlpha, anchor);
 
       if (frame.previous && view.renderState.previousPose) {
         const previousTexture = this.getFighterTexture(slot, view.renderState.previousPose);
-        this.applyFighterImage(view.previousSprite, previousTexture, frame.previous, runtime.facing, frame.previousAlpha);
+        const previousAnchor = this.getFighterFrameAnchor(slot, view.renderState.previousPose);
+        this.applyFighterImage(view.previousSprite, previousTexture, frame.previous, runtime.facing, frame.previousAlpha, previousAnchor);
       } else {
         view.previousSprite.setAlpha(0);
       }
@@ -940,6 +944,12 @@ export class BattleScene extends Phaser.Scene {
     return this.textures.exists(texture) ? texture : `${slot}-idle`;
   }
 
+  private getFighterFrameAnchor(slot: PlayerSlot, pose: FighterPose): FrameAnchor {
+    const fighter = this.fighters[slot];
+    const frame = this.textures.exists(`${slot}-${pose}`) ? fighter.frames[pose] : fighter.frames.idle;
+    return normalizeFrameAnchor(frame?.anchor);
+  }
+
   private getPortraitTexture(slot: PlayerSlot) {
     const preferred = ["portrait", "victory", "idle", "hit", "punch"];
     for (const pose of preferred) {
@@ -957,10 +967,12 @@ export class BattleScene extends Phaser.Scene {
     transform: FighterRenderTransform,
     facing: 1 | -1,
     alphaMultiplier: number,
+    anchor: FrameAnchor,
   ) {
     if (sprite.texture.key !== texture) {
       sprite.setTexture(texture);
     }
+    sprite.setOrigin(anchor.x, anchor.y);
     sprite.setPosition(transform.x, transform.y);
     sprite.setFlipX(facing === -1);
     sprite.setDisplaySize(FIGHTER_DISPLAY_SIZE * transform.scaleX, FIGHTER_DISPLAY_SIZE * transform.scaleY);
@@ -1210,7 +1222,7 @@ export class BattleScene extends Phaser.Scene {
     if (hit.damage >= 12 || isSuperHit) {
       const afterimage = this.add
         .image(attacker.x - attacker.facing * 22, attacker.y, attackerView.sprite.texture.key)
-        .setOrigin(0.5, 0.9)
+        .setOrigin(attackerView.sprite.originX, attackerView.sprite.originY)
         .setDisplaySize(attackerView.sprite.displayWidth, attackerView.sprite.displayHeight)
         .setFlipX(attacker.facing === -1)
         .setRotation(attackerView.sprite.rotation)
@@ -1282,4 +1294,15 @@ export class BattleScene extends Phaser.Scene {
       arenaWidth: ARENA_WIDTH,
     });
   }
+}
+
+function normalizeFrameAnchor(anchor: FrameAnchor | undefined): FrameAnchor {
+  return {
+    x: clamp(anchor?.x ?? DEFAULT_FIGHTER_ANCHOR.x, 0, 1),
+    y: clamp(anchor?.y ?? DEFAULT_FIGHTER_ANCHOR.y, 0, 1),
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }

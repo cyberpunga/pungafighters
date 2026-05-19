@@ -1,8 +1,12 @@
 export const NORMALIZED_FRAME_SIZE = 384;
+const DEFAULT_FRAME_ANCHOR_Y = 0.9;
+const DEFAULT_PADDING_SCALE = 0.92;
+const ALPHA_TRIM_THRESHOLD = 12;
 
 export interface NormalizeCanvasOptions {
   paddingScale?: number;
   anchorY?: number;
+  trimTransparentPadding?: boolean;
 }
 
 export interface DecodedImage {
@@ -35,13 +39,18 @@ export function normalizeCanvas(source: CanvasImageSource, options: NormalizeCan
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const { width: sourceWidth, height: sourceHeight } = getCanvasSourceSize(source);
-  const scale = Math.min(NORMALIZED_FRAME_SIZE / sourceWidth, NORMALIZED_FRAME_SIZE / sourceHeight) * (options.paddingScale ?? 0.92);
-  const width = sourceWidth * scale;
-  const height = sourceHeight * scale;
+  const sourceBounds = getSourceDrawBounds(source, sourceWidth, sourceHeight, options.trimTransparentPadding ?? true);
+  const anchorY = options.anchorY ?? DEFAULT_FRAME_ANCHOR_Y;
+  const paddingScale = options.paddingScale ?? DEFAULT_PADDING_SCALE;
+  const scale =
+    Math.min(NORMALIZED_FRAME_SIZE / sourceBounds.width, (NORMALIZED_FRAME_SIZE * anchorY) / sourceBounds.height) *
+    paddingScale;
+  const width = sourceBounds.width * scale;
+  const height = sourceBounds.height * scale;
   const x = (NORMALIZED_FRAME_SIZE - width) / 2;
-  const y = NORMALIZED_FRAME_SIZE * (options.anchorY ?? 0.9) - height;
+  const y = NORMALIZED_FRAME_SIZE * anchorY - height;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(source, x, y, width, height);
+  ctx.drawImage(source, sourceBounds.x, sourceBounds.y, sourceBounds.width, sourceBounds.height, x, y, width, height);
   return canvas;
 }
 
@@ -122,5 +131,65 @@ function getCanvasSourceSize(source: CanvasImageSource) {
   return {
     width: Math.max(1, Math.round(width || NORMALIZED_FRAME_SIZE)),
     height: Math.max(1, Math.round(height || NORMALIZED_FRAME_SIZE)),
+  };
+}
+
+function getSourceDrawBounds(source: CanvasImageSource, width: number, height: number, trimTransparentPadding: boolean) {
+  const fallback = { x: 0, y: 0, width, height };
+  if (!trimTransparentPadding) {
+    return fallback;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    return fallback;
+  }
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(source, 0, 0, width, height);
+
+  try {
+    return getAlphaBounds(ctx.getImageData(0, 0, width, height), fallback) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getAlphaBounds(imageData: ImageData, fallback: { x: number; y: number; width: number; height: number }) {
+  const { width, height, data } = imageData;
+  let left = width;
+  let right = -1;
+  let top = height;
+  let bottom = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha <= ALPHA_TRIM_THRESHOLD) {
+        continue;
+      }
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+      top = Math.min(top, y);
+      bottom = Math.max(bottom, y);
+    }
+  }
+
+  if (right < left || bottom < top) {
+    return undefined;
+  }
+
+  if (left === fallback.x && top === fallback.y && right === width - 1 && bottom === height - 1) {
+    return fallback;
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: right - left + 1,
+    height: bottom - top + 1,
   };
 }
