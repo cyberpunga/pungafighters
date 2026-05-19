@@ -80,7 +80,7 @@ Online matches intentionally buffer inputs by a small fixed delay so both browse
 
 ### TURN Configuration
 
-Online matches use STUN by default. To improve connection reliability, provide short-lived TURN `iceServers` at runtime:
+Online matches use STUN by default. To improve connection reliability, provide short-lived TURN `iceServers` at runtime. For production Pages deploys, set this as a GitHub Actions repository variable named `VITE_RTC_ICE_SERVERS_URL`:
 
 ```bash
 VITE_RTC_ICE_SERVERS_URL=https://your-credentials-endpoint.example/ice-servers
@@ -121,11 +121,20 @@ pnpm wrangler secret put GEMINI_API_KEY
 pnpm deploy
 ```
 
-Set `ALLOWED_ORIGINS` in `workers/generation/wrangler.toml` to the deployed game origin and any local dev origins you need. Configure the browser app with the deployed endpoint:
+Set `ALLOWED_ORIGINS` in `workers/generation/wrangler.toml` to the deployed game origin and any local dev origins you need. For local browser development against a local Wrangler worker, set the Vite development env file:
+
+```bash
+# .env.development.local
+VITE_CHARACTER_GENERATION_URL=http://localhost:8787/generate
+```
+
+Vite loads `.env.development.local` for `pnpm dev`. The GitHub Pages build uses `--mode github-pages`, so configure the deployed endpoint as a GitHub Actions repository variable named `VITE_CHARACTER_GENERATION_URL`:
 
 ```bash
 VITE_CHARACTER_GENERATION_URL=https://your-generation-worker.example/generate
 ```
+
+For local production-like Pages builds, put that same deployed endpoint in `.env.github-pages.local`. Avoid using `.env.local` for this value when you need different development and deployed endpoints, because `.env.local` is loaded for every Vite mode.
 
 ## Browser Requirements
 

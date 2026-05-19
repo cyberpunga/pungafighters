@@ -37,6 +37,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Pages artifact
+        env:
+          VITE_CHARACTER_GENERATION_URL: ${{ vars.VITE_CHARACTER_GENERATION_URL }}
+          VITE_RTC_ICE_SERVERS_URL: ${{ vars.VITE_RTC_ICE_SERVERS_URL }}
         run: pnpm build:pages
 
       - name: Upload artifact
