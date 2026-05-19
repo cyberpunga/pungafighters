@@ -217,18 +217,20 @@ async function readGeneratePayload(request: Request): Promise<{ ok: true; value:
 function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCount: number) {
   const cleanedUserPrompt = typeof userPrompt === "string" ? userPrompt.trim() : "";
   const userDirection = cleanedUserPrompt
-    ? `\nUser character brief to merge into the character design:\n${cleanedUserPrompt}\n`
-    : "\nUser character brief: invent a playful original homemade fighter.\n";
+    ? `\nUser character brief and visual style to follow:\n${cleanedUserPrompt}\n`
+    : referenceImageCount > 0
+      ? "\nUser brief: create an original fighter based on the provided visual reference.\n"
+      : "\nUser brief: invent an original fighter.\n";
   const referenceDirection =
     referenceImageCount > 0
-      ? `\nUse the ${referenceImageCount} provided image${referenceImageCount === 1 ? "" : "s"} as visual reference only. Preserve useful user-provided details such as body shape, colors, outfit, sketch, or prop ideas, but transform them into an original cartoon cutout fighter. Do not copy protected characters, logos, visible text, or third-party branding from reference images.\n`
+      ? `\nUse the ${referenceImageCount} provided image${referenceImageCount === 1 ? "" : "s"} as visual reference only. Preserve useful user-provided details such as body shape, colors, outfit, medium, rendering style, sketch quality, texture, lighting, or prop ideas as much as possible. Do not copy protected characters, logos, visible text, or third-party branding from reference images.\n`
       : "";
 
-  return `Create a single horizontal 5-cell spritesheet for an original cartoon cutout fighting-game character.
+  return `Create a single horizontal 5-cell spritesheet for an original fighting-game character.
 
 Canvas: 5:1 aspect ratio, PNG. Use a transparent background with alpha if possible; if transparency is unavailable, use a flat plain white background that can be cleanly removed. Each cell is an equal square frame. No labels, no text, no borders, no grid lines.
 
-Character: an original playful homemade fighter, full body visible, bold readable silhouette, high-contrast colors, expressive face, simple clean shapes, camera-created cutout style, suitable for a 2D browser fighting game. Keep the exact same character design, outfit, colors, scale, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
+Character: an original fighter, full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character design, outfit, colors, scale, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
 Pose order from left to right:
 
@@ -240,7 +242,7 @@ Pose order from left to right:
 
 Format compatibility: make the final image easy to crop by splitting it into five equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all five cells.
 
-Style: crisp game sprite, transparent cutout, charming DIY fighting-game energy, no copyrighted characters, no Nintendo or Photo Dojo references.`;
+Safety: create an original character. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }
 
 function normalizeGeminiModel(input: unknown, configuredModel?: string) {

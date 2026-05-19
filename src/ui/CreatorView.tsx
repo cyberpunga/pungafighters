@@ -61,6 +61,41 @@ const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
 const GENERATION_MODEL_OPTIONS = ["", "nano-banana-2", "nano-banana-pro", "nano-banana", "custom"] as const;
+const GENERATION_PROMPT_MAX_LENGTH = 700;
+const GENERATION_STYLE_SUGGESTIONS = [
+  {
+    labelKey: "creator.generationStyle.pixelArt",
+    promptKey: "creator.generationStylePrompt.pixelArt",
+  },
+  {
+    labelKey: "creator.generationStyle.clayStopMotion",
+    promptKey: "creator.generationStylePrompt.clayStopMotion",
+  },
+  {
+    labelKey: "creator.generationStyle.inkSketch",
+    promptKey: "creator.generationStylePrompt.inkSketch",
+  },
+  {
+    labelKey: "creator.generationStyle.watercolor",
+    promptKey: "creator.generationStylePrompt.watercolor",
+  },
+  {
+    labelKey: "creator.generationStyle.comicBook",
+    promptKey: "creator.generationStylePrompt.comicBook",
+  },
+  {
+    labelKey: "creator.generationStyle.toyPhoto",
+    promptKey: "creator.generationStylePrompt.toyPhoto",
+  },
+  {
+    labelKey: "creator.generationStyle.paperCutout",
+    promptKey: "creator.generationStylePrompt.paperCutout",
+  },
+  {
+    labelKey: "creator.generationStyle.realisticCostumePhoto",
+    promptKey: "creator.generationStylePrompt.realisticCostumePhoto",
+  },
+] as const;
 const POSE_FRAME_HISTORY_LIMIT = 12;
 
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
@@ -651,6 +686,17 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
   };
 
+  const appendGenerationStyleSuggestion = (stylePrompt: string) => {
+    if (creatorBusy) {
+      return;
+    }
+    setGenerationPrompt((currentPrompt) => {
+      const cleanedCurrentPrompt = currentPrompt.trim();
+      const separator = cleanedCurrentPrompt ? "\n" : "";
+      return `${cleanedCurrentPrompt}${separator}${stylePrompt}`.slice(0, GENERATION_PROMPT_MAX_LENGTH);
+    });
+  };
+
   const generateFighterDraft = async () => {
     if (creatorBusy) {
       return;
@@ -1203,9 +1249,26 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                 onChange={(event) => setGenerationPrompt(event.target.value)}
                 placeholder={t("creator.characterPromptPlaceholder")}
                 disabled={creatorBusy}
-                maxLength={700}
+                maxLength={GENERATION_PROMPT_MAX_LENGTH}
               />
             </label>
+
+            <div className="generation-style-suggestions" aria-label={t("creator.generationStyleSuggestions")}>
+              <span>{t("creator.generationStyleSuggestions")}</span>
+              <div>
+                {GENERATION_STYLE_SUGGESTIONS.map((style) => (
+                  <button
+                    className="generation-style-chip"
+                    type="button"
+                    key={style.labelKey}
+                    onClick={() => appendGenerationStyleSuggestion(t(style.promptKey))}
+                    disabled={creatorBusy}
+                  >
+                    {t(style.labelKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <label className="field-label">
               {t("creator.model")}
