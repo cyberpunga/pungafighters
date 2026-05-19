@@ -1,4 +1,4 @@
-import type { BackgroundRemovalPipeline } from "@huggingface/transformers";
+import type { BackgroundRemovalPipeline, PretrainedConfig } from "@huggingface/transformers";
 import type { AnySegmentationProviderOptions, SegmentationProvider, TransformersModelId, TransformersSegmentationOptions } from "./types";
 
 export const TRANSFORMERS_MODELS: Array<{ id: TransformersModelId; label: string; description: string }> = [
@@ -23,6 +23,12 @@ const MODEL_LABELS = Object.fromEntries(TRANSFORMERS_MODELS.map((model) => [mode
   TransformersModelId,
   string
 >;
+
+const MODEL_CONFIG_OVERRIDES: Partial<Record<TransformersModelId, Record<string, unknown>>> = {
+  "briaai/RMBG-1.4": {
+    model_type: "segformer",
+  },
+};
 
 const pipelines = new Map<TransformersModelId, Promise<BackgroundRemovalPipeline>>();
 const loadedPipelines = new Map<TransformersModelId, BackgroundRemovalPipeline>();
@@ -71,13 +77,15 @@ function normalizeOptions(options: AnySegmentationProviderOptions | undefined): 
 }
 
 async function createBackgroundRemovalPipeline(model: TransformersModelId): Promise<BackgroundRemovalPipeline> {
-  const { pipeline } = await import("@huggingface/transformers");
+  const { pipeline, PretrainedConfig } = await import("@huggingface/transformers");
+  const config = createModelConfig(PretrainedConfig, model);
 
   if (supportsWebGpu()) {
     try {
       return await pipeline("background-removal", model, {
         dtype: "fp32",
         device: "webgpu",
+        ...(config ? { config } : {}),
       });
     } catch (error) {
       console.warn(`WebGPU ${MODEL_LABELS[model]} load failed; falling back to default Transformers.js backend.`, error);
@@ -86,7 +94,16 @@ async function createBackgroundRemovalPipeline(model: TransformersModelId): Prom
 
   return pipeline("background-removal", model, {
     dtype: "fp32",
+    ...(config ? { config } : {}),
   });
+}
+
+function createModelConfig(
+  PretrainedConfigCtor: new (configJson: Record<string, unknown>) => PretrainedConfig,
+  model: TransformersModelId,
+): PretrainedConfig | undefined {
+  const configJson = MODEL_CONFIG_OVERRIDES[model];
+  return configJson ? new PretrainedConfigCtor(configJson) : undefined;
 }
 
 function supportsWebGpu(): boolean {
