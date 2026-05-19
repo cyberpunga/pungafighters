@@ -80,7 +80,7 @@ Online matches intentionally buffer inputs by a small fixed delay so both browse
 
 ### TURN Configuration
 
-Online matches use STUN by default. To improve connection reliability, provide short-lived TURN `iceServers` at runtime. For production Pages deploys, set this as a GitHub Actions repository variable named `VITE_RTC_ICE_SERVERS_URL`:
+Online matches use STUN by default. To improve connection reliability, provide short-lived TURN `iceServers` at runtime. For production Pages deploys, set this as a GitHub Actions variable named `VITE_RTC_ICE_SERVERS_URL` in either repository variables or the `github-pages` environment variables:
 
 ```bash
 VITE_RTC_ICE_SERVERS_URL=https://your-credentials-endpoint.example/ice-servers
@@ -128,7 +128,7 @@ Set `ALLOWED_ORIGINS` in `workers/generation/wrangler.toml` to the deployed game
 VITE_CHARACTER_GENERATION_URL=http://localhost:8787/generate
 ```
 
-Vite loads `.env.development.local` for `pnpm dev`. The GitHub Pages build uses `--mode github-pages`, so configure the deployed endpoint as a GitHub Actions repository variable named `VITE_CHARACTER_GENERATION_URL`:
+Vite loads `.env.development.local` for `pnpm dev`. The GitHub Pages build uses `--mode github-pages`, so configure the deployed endpoint as a GitHub Actions variable named `VITE_CHARACTER_GENERATION_URL` in either repository variables or the `github-pages` environment variables:
 
 ```bash
 VITE_CHARACTER_GENERATION_URL=https://your-generation-worker.example/generate
