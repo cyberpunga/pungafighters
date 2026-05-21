@@ -448,6 +448,79 @@ button:disabled {
   max-width: 460px;
 }
 
+.creator-method-section,
+.required-action-section {
+  display: grid;
+  gap: 12px;
+}
+
+.creator-method-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.creator-method-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(29, 26, 40, 0.8);
+  color: var(--text);
+  font-weight: 900;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.creator-method-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(248, 244, 223, 0.35);
+}
+
+.creator-method-button.active {
+  border-color: var(--gold);
+  background: rgba(247, 178, 103, 0.18);
+}
+
+.creator-inline-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(29, 26, 40, 0.82);
+}
+
+.inline-panel-header,
+.required-action-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.generation-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.import-inline-panel {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action-bulk-button {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
 .creator-source-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
@@ -584,6 +657,15 @@ button:disabled {
   border-color: rgba(46, 196, 182, 0.52);
 }
 
+.pose-card.capture-focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(247, 178, 103, 0.18);
+}
+
+.pose-card.generator-open {
+  border-color: rgba(247, 178, 103, 0.52);
+}
+
 .pose-frame-preview {
   min-height: 220px;
   aspect-ratio: 4 / 3;
@@ -689,6 +771,19 @@ button:disabled {
   flex: 0 0 42px;
   width: 42px;
   padding: 0;
+}
+
+.pose-generator-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(247, 178, 103, 0.28);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.72);
+}
+
+.pose-generator-panel textarea {
+  min-height: 92px;
 }
 
 .sound-section,
@@ -1619,6 +1714,17 @@ button:disabled {
   .sound-grid,
   .creator-footer {
     grid-template-columns: 1fr;
+  }
+
+  .creator-method-row,
+  .generation-field-grid,
+  .import-inline-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .required-action-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

@@ -33,7 +33,7 @@
 - `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
 - `workers/turn/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials.
-- `workers/generation/`: Cloudflare Worker that proxies server-side Gemini character spritesheet generation.
+- `workers/generation/`: Cloudflare Worker that proxies server-side Gemini character spritesheet and single-pose generation.
 
 ## Engineering Rules
 

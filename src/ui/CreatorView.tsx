@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { startVoiceRecording, type RecorderSession } from "../creator/audio";
-import { dataUrlToFile, fileToReferenceImage, generateCharacterSpritesheet } from "../creator/characterGeneration";
+import { dataUrlToFile, fileToReferenceImage, generateCharacterImage } from "../creator/characterGeneration";
 import {
   FIGHTER_CHARACTER_IMPORT_ACCEPT,
   FIGHTER_IMAGE_IMPORT_ACCEPT,
@@ -140,7 +140,8 @@ interface PoseDraft {
 }
 
 interface PoseFrameSnapshot {
-  blob: Blob;
+  sourceBlob?: Blob;
+  frameBlob: Blob;
   processed: boolean;
 }
 
@@ -152,9 +153,10 @@ interface PoseFrameHistory {
 type PoseDrafts = Partial<Record<FighterPose, PoseDraft>>;
 type PoseFrameHistories = Partial<Record<FighterPose, PoseFrameHistory>>;
 type VoiceDrafts = Partial<Record<VoiceClipType, DraftAsset>>;
+type CreationPanel = "capture" | "generate" | "import";
 
 type CreatorOperation =
-  | { type: "start-camera" | "capture" | "import" | "process"; pose: FighterPose }
+  | { type: "start-camera" | "capture" | "import" | "process" | "generate-pose"; pose: FighterPose }
   | { type: "generate" | "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
 
 export function CreatorView(props: { editFighterId?: string; onSaved: () => Promise<void> }) {
@@ -163,6 +165,8 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const characterImportInputRef = useRef<HTMLInputElement | null>(null);
   const spritesheetImportInputRef = useRef<HTMLInputElement | null>(null);
   const poseImportInputRefs = useRef<Partial<Record<FighterPose, HTMLInputElement | null>>>({});
+  const poseCardRefs = useRef<Partial<Record<FighterPose, HTMLDivElement | null>>>({});
+  const generationPromptRef = useRef<HTMLTextAreaElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
@@ -180,11 +184,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
   const [playingClip, setPlayingClip] = useState<VoiceClipType | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [generationOpen, setGenerationOpen] = useState(false);
+  const [activeCreationPanel, setActiveCreationPanel] = useState<CreationPanel | undefined>();
+  const [activePoseGenerator, setActivePoseGenerator] = useState<FighterPose | undefined>();
   const [generationPrompt, setGenerationPrompt] = useState("");
   const [generationModel, setGenerationModel] = useState<GenerationModelOption>("");
   const [generationCustomModel, setGenerationCustomModel] = useState("");
   const [generationReferenceFile, setGenerationReferenceFile] = useState<File | undefined>();
+  const [poseGenerationPrompts, setPoseGenerationPrompts] = useState<Partial<Record<FighterPose, string>>>({});
+  const [poseGenerationReferenceFiles, setPoseGenerationReferenceFiles] = useState<Partial<Record<FighterPose, File>>>({});
   const [cameraStatus, setCameraStatus] = useState(() => t("creator.cameraOff"));
   const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
   const [segmentationOptions, setSegmentationOptions] =
@@ -203,6 +210,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const creatorBusy = operationBusy || Boolean(recording);
   const hasProcessableSources = FIGHTER_POSES.some((pose) => Boolean(drafts[pose]?.source));
   const saveComplete = FIGHTER_POSES.every((pose) => Boolean(drafts[pose]?.frame));
+  const firstIncompletePose = FIGHTER_POSES.find((pose) => !drafts[pose]?.frame) ?? FIGHTER_POSES[0];
 
   const replaceDrafts = useCallback((nextDrafts: PoseDrafts) => {
     setPoseFrameHistories({});
@@ -241,12 +249,18 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   }, []);
 
   const applyPoseFrameSnapshot = useCallback((pose: FighterPose, snapshot: PoseFrameSnapshot) => {
-    const frame = createDraftAsset(snapshot.blob);
+    const source = snapshot.sourceBlob ? createDraftAsset(snapshot.sourceBlob) : undefined;
+    const frame = createDraftAsset(snapshot.frameBlob);
     setDrafts((current) => {
       const currentDraft = current[pose];
       if (!currentDraft?.source) {
+        revokeDraftAsset(source);
         revokeDraftAsset(frame);
         return current;
+      }
+      if (source) {
+        revokeDraft(currentDraft);
+        return { ...current, [pose]: { source, frame, processed: snapshot.processed } };
       }
       revokeDraftAsset(currentDraft.frame);
       return { ...current, [pose]: { ...currentDraft, frame, processed: snapshot.processed } };
@@ -261,7 +275,11 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         return;
       }
       if (currentDraft.frame) {
-        pushPoseFrameHistory(pose, { blob: currentDraft.frame.blob, processed: currentDraft.processed });
+        pushPoseFrameHistory(pose, {
+          sourceBlob: currentDraft.source.blob,
+          frameBlob: currentDraft.frame.blob,
+          processed: currentDraft.processed,
+        });
       }
       const frame = createDraftAsset(frameBlob);
       setDrafts((current) => {
@@ -277,6 +295,24 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     [pushPoseFrameHistory],
   );
 
+  const replacePoseDraftWithHistory = useCallback(
+    (pose: FighterPose, nextDraft: PoseDraft) => {
+      const currentDraft = draftsRef.current[pose];
+      if (currentDraft?.source && currentDraft.frame) {
+        pushPoseFrameHistory(pose, {
+          sourceBlob: currentDraft.source.blob,
+          frameBlob: currentDraft.frame.blob,
+          processed: currentDraft.processed,
+        });
+      }
+      setDrafts((current) => {
+        revokeDraft(current[pose]);
+        return { ...current, [pose]: nextDraft };
+      });
+    },
+    [pushPoseFrameHistory],
+  );
+
   const undoPoseFrame = useCallback(
     (pose: FighterPose) => {
       if (creatorBusy) {
@@ -285,10 +321,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const draft = draftsRef.current[pose];
       const history = poseFrameHistories[pose];
       const previous = history?.past[history.past.length - 1];
-      if (!draft?.frame || !previous) {
+      if (!draft?.source || !draft.frame || !previous) {
         return;
       }
-      const currentSnapshot: PoseFrameSnapshot = { blob: draft.frame.blob, processed: draft.processed };
+      const currentSnapshot: PoseFrameSnapshot = {
+        sourceBlob: draft.source.blob,
+        frameBlob: draft.frame.blob,
+        processed: draft.processed,
+      };
       setPoseFrameHistories((current) => {
         const currentHistory = current[pose];
         if (!currentHistory?.past.length) {
@@ -315,10 +355,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const draft = draftsRef.current[pose];
       const history = poseFrameHistories[pose];
       const nextFrame = history?.future[history.future.length - 1];
-      if (!draft?.frame || !nextFrame) {
+      if (!draft?.source || !draft.frame || !nextFrame) {
         return;
       }
-      const currentSnapshot: PoseFrameSnapshot = { blob: draft.frame.blob, processed: draft.processed };
+      const currentSnapshot: PoseFrameSnapshot = {
+        sourceBlob: draft.source.blob,
+        frameBlob: draft.frame.blob,
+        processed: draft.processed,
+      };
       setPoseFrameHistories((current) => {
         const currentHistory = current[pose];
         if (!currentHistory?.future.length) {
@@ -500,6 +544,12 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       void loadProvider(selectedProvider, selectedOptions);
     }
   }, [hasProcessableSources, loadProvider, providerStatus, selectedOptions, selectedProvider]);
+
+  useEffect(() => {
+    if (activeCreationPanel === "generate") {
+      window.requestAnimationFrame(() => generationPromptRef.current?.focus());
+    }
+  }, [activeCreationPanel]);
 
   const selectProvider = (nextProviderId: SegmentationProviderId) => {
     const nextProvider = getSegmentationProvider(nextProviderId);
@@ -713,6 +763,21 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
   };
 
+  const selectCreationPanel = (panel: CreationPanel) => {
+    setSettingsOpen(false);
+    setActivePoseGenerator(undefined);
+    setActiveCreationPanel((current) => (current === panel ? undefined : panel));
+    if (panel === "capture") {
+      const pose = firstIncompletePose;
+      window.requestAnimationFrame(() => {
+        const card = poseCardRefs.current[pose];
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+        card?.focus({ preventScroll: true });
+      });
+      setCameraStatus(t("creator.captureMethodSelected", { pose: poseLabel(t, pose) }));
+    }
+  };
+
   const appendGenerationStyleSuggestion = (stylePrompt: string) => {
     if (creatorBusy) {
       return;
@@ -737,7 +802,8 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     try {
       setCameraStatus(t("creator.generatingStripStatus"));
       const referenceImage = generationReferenceFile ? await fileToReferenceImage(generationReferenceFile) : undefined;
-      const result = await generateCharacterSpritesheet({
+      const result = await generateCharacterImage({
+        mode: "strip",
         prompt: generationPrompt.trim(),
         model: getSelectedGenerationModel(generationModel, generationCustomModel),
         images: referenceImage ? [referenceImage] : undefined,
@@ -749,10 +815,62 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       replaceVoiceDrafts({});
       setName(createGeneratedFighterName(generationPrompt, t("creator.generatedFighterName")));
       setEditingFighterId(undefined);
-      setGenerationOpen(false);
+      setActiveCreationPanel(undefined);
       setCameraStatus(t("creator.generatedStripLoaded", { model: result.model }));
     } catch (error) {
       setCameraStatus(localizeError(error, t, "creator.generateFailed"));
+    } finally {
+      setActiveOperation(undefined);
+    }
+  };
+
+  const setPoseGenerationPrompt = (pose: FighterPose, prompt: string) => {
+    setPoseGenerationPrompts((current) => ({ ...current, [pose]: prompt }));
+  };
+
+  const setPoseGenerationReferenceFile = (pose: FighterPose, file: File | undefined) => {
+    setPoseGenerationReferenceFiles((current) => ({ ...current, [pose]: file }));
+  };
+
+  const generatePoseDraft = async (pose: FighterPose) => {
+    if (creatorBusy) {
+      return;
+    }
+    const prompt = poseGenerationPrompts[pose]?.trim() ?? "";
+    const explicitReference = poseGenerationReferenceFiles[pose];
+    const currentDraft = draftsRef.current[pose];
+    const defaultReference = currentDraft?.frame?.blob ?? currentDraft?.source?.blob;
+    const referenceBlob = explicitReference ?? defaultReference;
+    if (!prompt && !referenceBlob) {
+      setCameraStatus(t("creator.poseGenerationNeedsPromptOrReference", { pose: poseLabel(t, pose) }));
+      return;
+    }
+
+    setActiveOperation({ type: "generate-pose", pose });
+    try {
+      setCameraStatus(t("creator.generatingPoseStatus", { pose: poseLabel(t, pose) }));
+      const referenceImage = referenceBlob ? await fileToReferenceImage(referenceBlob) : undefined;
+      const result = await generateCharacterImage({
+        mode: "pose",
+        pose,
+        prompt,
+        model: getSelectedGenerationModel(generationModel, generationCustomModel),
+        images: referenceImage ? [referenceImage] : undefined,
+      });
+      const file = dataUrlToFile(result.image.dataUrl, `generated-${pose}.png`);
+      const image = await decodeImageBlob(file, t("creator.actionImageReadFailed"));
+      try {
+        const frameBlob = await canvasToPngBlob(normalizeCanvas(image.source));
+        replacePoseDraftWithHistory(pose, createPoseDraft(file, frameBlob, false));
+      } finally {
+        image.close();
+      }
+      setPreviewPose((current) => (current === pose ? undefined : current));
+      setActivePoseGenerator(undefined);
+      setActiveCreationPanel(undefined);
+      setCameraStatus(t("creator.generatedPoseLoaded", { pose: poseLabel(t, pose), model: result.model }));
+    } catch (error) {
+      setCameraStatus(localizeError(error, t, "creator.generatePoseFailed"));
     } finally {
       setActiveOperation(undefined);
     }
@@ -948,128 +1066,450 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           <input value={name} onChange={(event) => setName(event.target.value)} maxLength={32} disabled={creatorBusy} />
         </label>
 
-        <div className="pose-grid" aria-label={t("creator.requiredActions")}>
-          {FIGHTER_POSES.map((pose) => {
-            const draft = drafts[pose];
-            const frameHistory = poseFrameHistories[pose];
-            const canUndoFrame = Boolean(draft?.frame && frameHistory?.past.length);
-            const canRedoFrame = Boolean(draft?.frame && frameHistory?.future.length);
-            const poseText = poseLabel(t, pose);
-            return (
-              <div className={draft?.frame ? "pose-card complete" : "pose-card"} key={pose}>
-                <div className={previewPose === pose ? "pose-frame-preview live" : "pose-frame-preview"}>
-                  {previewPose === pose ? (
-                    <video ref={videoRef} autoPlay muted playsInline />
-                  ) : draft?.frame ? (
-                    <img src={draft.frame.url} alt="" />
-                  ) : (
-                    <span>{poseText}</span>
-                  )}
-                </div>
-                <div className="pose-card-body">
-                  <div className="pose-card-header">
-                    <strong>{poseText}</strong>
-                    <span>{getPoseStatus(t, draft)}</span>
-                  </div>
-                  <div className="pose-delay-control" aria-label={t("creator.captureDelay", { pose: poseText })}>
-                    {CAPTURE_DELAYS.map((delay) => (
-                      <button
-                        className={captureDelays[pose] === delay ? "delay-option active" : "delay-option"}
-                        key={delay}
-                        type="button"
-                        onClick={() => setPoseCaptureDelay(pose, delay)}
-                        disabled={creatorBusy}
-                        title={
-                          delay === 0
-                            ? t("creator.captureImmediately")
-                            : t("creator.captureAfterSeconds", { seconds: delay })
-                        }
-                      >
-                        {delay === 0 ? t("creator.now") : `${delay}s`}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="pose-action-row">
+        <section className="creator-method-section" aria-label={t("creator.creationMethod")}>
+          <div className="creator-method-row">
+            <button
+              className={activeCreationPanel === "capture" ? "creator-method-button active" : "creator-method-button"}
+              type="button"
+              onClick={() => selectCreationPanel("capture")}
+              disabled={creatorBusy}
+            >
+              <Camera size={20} />
+              <span>{t("creator.capture")}</span>
+            </button>
+            <button
+              className={activeCreationPanel === "generate" ? "creator-method-button active" : "creator-method-button"}
+              type="button"
+              onClick={() => selectCreationPanel("generate")}
+              disabled={creatorBusy}
+            >
+              <Sparkles size={20} />
+              <span>{t("creator.generateFighter")}</span>
+            </button>
+            <button
+              className={activeCreationPanel === "import" ? "creator-method-button active" : "creator-method-button"}
+              type="button"
+              onClick={() => selectCreationPanel("import")}
+              disabled={creatorBusy}
+            >
+              <Upload size={20} />
+              <span>{t("creator.importFighterSource")}</span>
+            </button>
+          </div>
+
+          {activeCreationPanel === "generate" && (
+            <div className="creator-inline-panel">
+              <div className="inline-panel-header">
+                <strong>{t("creator.generateFighter")}</strong>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => setActiveCreationPanel(undefined)}
+                  title={t("creator.closeGenerator")}
+                >
+                  <X size={18} />
+                  <span className="sr-only">{t("creator.closeGenerator")}</span>
+                </button>
+              </div>
+
+              <label className="field-label">
+                {t("creator.characterPrompt")}
+                <textarea
+                  ref={generationPromptRef}
+                  value={generationPrompt}
+                  onChange={(event) => setGenerationPrompt(event.target.value)}
+                  placeholder={t("creator.characterPromptPlaceholder")}
+                  disabled={creatorBusy}
+                  maxLength={GENERATION_PROMPT_MAX_LENGTH}
+                />
+              </label>
+
+              <div className="generation-style-suggestions" aria-label={t("creator.generationStyleSuggestions")}>
+                <span>{t("creator.generationStyleSuggestions")}</span>
+                <div>
+                  {GENERATION_STYLE_SUGGESTIONS.map((style) => (
                     <button
-                      className="secondary-button pose-action-button"
+                      className="generation-style-chip"
                       type="button"
-                      onClick={() => void capturePose(pose)}
+                      key={style.labelKey}
+                      onClick={() => appendGenerationStyleSuggestion(t(style.promptKey))}
                       disabled={creatorBusy}
                     >
-                      <Camera size={16} />
-                      {getCaptureButtonLabel(t, pose, countdown, activeOperation, cameraReady)}
+                      {t(style.labelKey)}
                     </button>
-                    <button
-                      className="secondary-button pose-action-button"
-                      type="button"
-                      onClick={() => poseImportInputRefs.current[pose]?.click()}
-                      disabled={creatorBusy}
-                    >
-                      <Upload size={16} />
-                      {t("common.import")}
-                    </button>
-                    <input
-                      ref={(node) => {
-                        poseImportInputRefs.current[pose] = node;
-                      }}
-                      className="sr-only"
-                      type="file"
-                      accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
-                      onChange={(event) => {
-                        const file = event.currentTarget.files?.[0];
-                        event.currentTarget.value = "";
-                        if (file) {
-                          void importPoseImage(pose, file);
-                        }
-                      }}
-                    />
-                    <button
-                      className="secondary-button pose-action-button"
-                      type="button"
-                      onClick={() => void processPose(pose)}
-                      disabled={creatorBusy || providerStatus !== "ready" || !draft?.source}
-                    >
-                      <Wand2 size={16} />
-                      {activeOperation?.type === "process" && activeOperation.pose === pose
-                        ? t("common.wait")
-                        : t("common.process")}
-                    </button>
-                    <button
-                      className="secondary-button pose-action-button pose-icon-action-button"
-                      type="button"
-                      onClick={() => undoPoseFrame(pose)}
-                      disabled={creatorBusy || !canUndoFrame}
-                      title={t("common.undo")}
-                    >
-                      <Undo2 size={16} />
-                      <span className="sr-only">{t("common.undo")}</span>
-                    </button>
-                    <button
-                      className="secondary-button pose-action-button pose-icon-action-button"
-                      type="button"
-                      onClick={() => redoPoseFrame(pose)}
-                      disabled={creatorBusy || !canRedoFrame}
-                      title={t("common.redo")}
-                    >
-                      <Redo2 size={16} />
-                      <span className="sr-only">{t("common.redo")}</span>
-                    </button>
-                    <button
-                      className="secondary-button pose-action-button pose-icon-action-button pose-settings-button"
-                      type="button"
-                      onClick={() => setSettingsOpen(true)}
-                      disabled={operationBusy}
-                      title={t("creator.cutoutSettings")}
-                    >
-                      <Settings size={16} />
-                      <span className="sr-only">{t("creator.cutoutSettings")}</span>
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              <div className="generation-field-grid">
+                <label className="field-label">
+                  {t("creator.model")}
+                  <select
+                    value={generationModel}
+                    onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
+                    disabled={creatorBusy}
+                  >
+                    {GENERATION_MODEL_OPTIONS.map((option) => (
+                      <option key={option.value || "default"} value={option.value}>
+                        {getGenerationModelOptionLabel(t, option)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field-label">
+                  {t("creator.referenceImage")}
+                  <input
+                    type="file"
+                    accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
+                    disabled={creatorBusy}
+                    onChange={(event) => {
+                      setGenerationReferenceFile(event.currentTarget.files?.[0]);
+                    }}
+                  />
+                </label>
+              </div>
+
+              {generationModel === "custom" && (
+                <label className="field-label">
+                  {t("creator.modelId")}
+                  <input
+                    value={generationCustomModel}
+                    onChange={(event) => setGenerationCustomModel(event.target.value)}
+                    placeholder="gemini-3-pro-image-preview"
+                    disabled={creatorBusy}
+                  />
+                </label>
+              )}
+
+              {generationReferenceFile && (
+                <div className="generation-reference-row">
+                  <ImagePlus size={18} />
+                  <span>{generationReferenceFile.name}</span>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => setGenerationReferenceFile(undefined)}
+                    disabled={creatorBusy}
+                    title={t("creator.removeReference")}
+                  >
+                    <X size={16} />
+                    <span className="sr-only">{t("creator.removeReference")}</span>
+                  </button>
+                </div>
+              )}
+
+              <button
+                className="primary-button full-width"
+                type="button"
+                onClick={() => void generateFighterDraft()}
+                disabled={creatorBusy}
+              >
+                <Sparkles size={18} />
+                {activeOperation?.type === "generate" ? t("creator.generating") : t("creator.generateStrip")}
+              </button>
+            </div>
+          )}
+
+          {activeCreationPanel === "import" && (
+            <div className="creator-inline-panel import-inline-panel">
+              <button
+                className="secondary-button source-action"
+                type="button"
+                onClick={() => characterImportInputRef.current?.click()}
+                disabled={creatorBusy}
+              >
+                <FileJson size={18} />
+                {t("creator.importFighter")}
+              </button>
+              <button
+                className="secondary-button source-action"
+                type="button"
+                onClick={() => spritesheetImportInputRef.current?.click()}
+                disabled={creatorBusy}
+              >
+                <Images size={18} />
+                {t("creator.importStrip")}
+              </button>
+            </div>
+          )}
+
+          <input
+            ref={characterImportInputRef}
+            className="sr-only"
+            type="file"
+            accept={FIGHTER_CHARACTER_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void importFighterDraft(file);
+              }
+            }}
+          />
+          <input
+            ref={spritesheetImportInputRef}
+            className="sr-only"
+            type="file"
+            accept={SPRITESHEET_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+              if (file) {
+                void importSpritesheetDraft(file);
+              }
+            }}
+          />
+        </section>
+
+        <section className="required-action-section" aria-label={t("creator.requiredActions")}>
+          <div className="required-action-header">
+            <span className="field-label-text">{t("creator.requiredActions")}</span>
+            <button
+              className="secondary-button action-bulk-button"
+              type="button"
+              onClick={() => void processAll()}
+              disabled={creatorBusy || providerStatus !== "ready" || !hasProcessableSources}
+            >
+              <Wand2 size={18} />
+              {activeOperation?.type === "process-all" ? t("common.processing") : t("creator.processAll")}
+            </button>
+          </div>
+
+          <div className="pose-grid">
+            {FIGHTER_POSES.map((pose) => {
+              const draft = drafts[pose];
+              const frameHistory = poseFrameHistories[pose];
+              const canUndoFrame = Boolean(draft?.frame && frameHistory?.past.length);
+              const canRedoFrame = Boolean(draft?.frame && frameHistory?.future.length);
+              const poseText = poseLabel(t, pose);
+              const poseGenerationPrompt = poseGenerationPrompts[pose] ?? "";
+              const poseReferenceFile = poseGenerationReferenceFiles[pose];
+              const isPoseGeneratorOpen = activePoseGenerator === pose;
+              const isCaptureFocus = activeCreationPanel === "capture" && firstIncompletePose === pose;
+              const poseCardClassName = [
+                "pose-card",
+                draft?.frame ? "complete" : "",
+                isCaptureFocus ? "capture-focus" : "",
+                isPoseGeneratorOpen ? "generator-open" : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+              return (
+                <div
+                  className={poseCardClassName}
+                  key={pose}
+                  ref={(node) => {
+                    poseCardRefs.current[pose] = node;
+                  }}
+                  tabIndex={-1}
+                >
+                  <div className={previewPose === pose ? "pose-frame-preview live" : "pose-frame-preview"}>
+                    {previewPose === pose ? (
+                      <video ref={videoRef} autoPlay muted playsInline />
+                    ) : draft?.frame ? (
+                      <img src={draft.frame.url} alt="" />
+                    ) : (
+                      <span>{poseText}</span>
+                    )}
+                  </div>
+                  <div className="pose-card-body">
+                    <div className="pose-card-header">
+                      <strong>{poseText}</strong>
+                      <span>{getPoseStatus(t, draft)}</span>
+                    </div>
+                    <div className="pose-delay-control" aria-label={t("creator.captureDelay", { pose: poseText })}>
+                      {CAPTURE_DELAYS.map((delay) => (
+                        <button
+                          className={captureDelays[pose] === delay ? "delay-option active" : "delay-option"}
+                          key={delay}
+                          type="button"
+                          onClick={() => setPoseCaptureDelay(pose, delay)}
+                          disabled={creatorBusy}
+                          title={
+                            delay === 0
+                              ? t("creator.captureImmediately")
+                              : t("creator.captureAfterSeconds", { seconds: delay })
+                          }
+                        >
+                          {delay === 0 ? t("creator.now") : `${delay}s`}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="pose-action-row">
+                      <button
+                        className="secondary-button pose-action-button"
+                        type="button"
+                        onClick={() => void capturePose(pose)}
+                        disabled={creatorBusy}
+                      >
+                        <Camera size={16} />
+                        {getCaptureButtonLabel(t, pose, countdown, activeOperation, cameraReady)}
+                      </button>
+                      <button
+                        className="secondary-button pose-action-button"
+                        type="button"
+                        onClick={() => poseImportInputRefs.current[pose]?.click()}
+                        disabled={creatorBusy}
+                      >
+                        <Upload size={16} />
+                        {t("common.import")}
+                      </button>
+                      <input
+                        ref={(node) => {
+                          poseImportInputRefs.current[pose] = node;
+                        }}
+                        className="sr-only"
+                        type="file"
+                        accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = "";
+                          if (file) {
+                            void importPoseImage(pose, file);
+                          }
+                        }}
+                      />
+                      <button
+                        className="secondary-button pose-action-button"
+                        type="button"
+                        onClick={() => {
+                          setActiveCreationPanel(undefined);
+                          setActivePoseGenerator((current) => (current === pose ? undefined : pose));
+                        }}
+                        disabled={creatorBusy}
+                      >
+                        <Sparkles size={16} />
+                        {activeOperation?.type === "generate-pose" && activeOperation.pose === pose
+                          ? t("common.wait")
+                          : t("creator.generatePose")}
+                      </button>
+                      <button
+                        className="secondary-button pose-action-button"
+                        type="button"
+                        onClick={() => void processPose(pose)}
+                        disabled={creatorBusy || providerStatus !== "ready" || !draft?.source}
+                      >
+                        <Wand2 size={16} />
+                        {activeOperation?.type === "process" && activeOperation.pose === pose
+                          ? t("common.wait")
+                          : t("common.process")}
+                      </button>
+                      <button
+                        className="secondary-button pose-action-button pose-icon-action-button"
+                        type="button"
+                        onClick={() => undoPoseFrame(pose)}
+                        disabled={creatorBusy || !canUndoFrame}
+                        title={t("common.undo")}
+                      >
+                        <Undo2 size={16} />
+                        <span className="sr-only">{t("common.undo")}</span>
+                      </button>
+                      <button
+                        className="secondary-button pose-action-button pose-icon-action-button"
+                        type="button"
+                        onClick={() => redoPoseFrame(pose)}
+                        disabled={creatorBusy || !canRedoFrame}
+                        title={t("common.redo")}
+                      >
+                        <Redo2 size={16} />
+                        <span className="sr-only">{t("common.redo")}</span>
+                      </button>
+                      <button
+                        className="secondary-button pose-action-button pose-icon-action-button pose-settings-button"
+                        type="button"
+                        onClick={() => setSettingsOpen(true)}
+                        disabled={operationBusy}
+                        title={t("creator.cutoutSettings")}
+                      >
+                        <Settings size={16} />
+                        <span className="sr-only">{t("creator.cutoutSettings")}</span>
+                      </button>
+                    </div>
+
+                    {isPoseGeneratorOpen && (
+                      <div className="pose-generator-panel">
+                        <label className="field-label">
+                          {t("creator.posePrompt", { pose: poseText })}
+                          <textarea
+                            value={poseGenerationPrompt}
+                            onChange={(event) => setPoseGenerationPrompt(pose, event.target.value)}
+                            placeholder={t("creator.posePromptPlaceholder", { pose: poseText })}
+                            disabled={creatorBusy}
+                            maxLength={GENERATION_PROMPT_MAX_LENGTH}
+                          />
+                        </label>
+                        <div className="generation-field-grid">
+                          <label className="field-label">
+                            {t("creator.model")}
+                            <select
+                              value={generationModel}
+                              onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
+                              disabled={creatorBusy}
+                            >
+                              {GENERATION_MODEL_OPTIONS.map((option) => (
+                                <option key={option.value || "default"} value={option.value}>
+                                  {getGenerationModelOptionLabel(t, option)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="field-label">
+                            {t("creator.referenceImage")}
+                            <input
+                              type="file"
+                              accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
+                              disabled={creatorBusy}
+                              onChange={(event) => setPoseGenerationReferenceFile(pose, event.currentTarget.files?.[0])}
+                            />
+                          </label>
+                        </div>
+                        {generationModel === "custom" && (
+                          <label className="field-label">
+                            {t("creator.modelId")}
+                            <input
+                              value={generationCustomModel}
+                              onChange={(event) => setGenerationCustomModel(event.target.value)}
+                              placeholder="gemini-3-pro-image-preview"
+                              disabled={creatorBusy}
+                            />
+                          </label>
+                        )}
+                        {poseReferenceFile && (
+                          <div className="generation-reference-row">
+                            <ImagePlus size={18} />
+                            <span>{poseReferenceFile.name}</span>
+                            <button
+                              className="icon-button"
+                              type="button"
+                              onClick={() => setPoseGenerationReferenceFile(pose, undefined)}
+                              disabled={creatorBusy}
+                              title={t("creator.removeReference")}
+                            >
+                              <X size={16} />
+                              <span className="sr-only">{t("creator.removeReference")}</span>
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          className="primary-button full-width"
+                          type="button"
+                          onClick={() => void generatePoseDraft(pose)}
+                          disabled={creatorBusy}
+                        >
+                          <Sparkles size={18} />
+                          {activeOperation?.type === "generate-pose" && activeOperation.pose === pose
+                            ? t("creator.regeneratingPose")
+                            : t("creator.generatePose")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <section className="sound-section" aria-label={t("common.sounds")}>
           <div className="sound-section-header">
@@ -1144,74 +1584,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           </div>
         </section>
 
-        <div className="creator-source-row" aria-label={t("creator.fighterSource")}>
-          <button
-            className="secondary-button source-action"
-            type="button"
-            onClick={() => {
-              setSettingsOpen(false);
-              setGenerationOpen(true);
-            }}
-            disabled={creatorBusy}
-          >
-            <Sparkles size={18} />
-            {t("creator.generate")}
-          </button>
-          <button
-            className="secondary-button source-action"
-            type="button"
-            onClick={() => characterImportInputRef.current?.click()}
-            disabled={creatorBusy}
-          >
-            <FileJson size={18} />
-            {t("creator.importFighter")}
-          </button>
-          <input
-            ref={characterImportInputRef}
-            className="sr-only"
-            type="file"
-            accept={FIGHTER_CHARACTER_IMPORT_ACCEPT}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (file) {
-                void importFighterDraft(file);
-              }
-            }}
-          />
-          <button
-            className="secondary-button source-action"
-            type="button"
-            onClick={() => spritesheetImportInputRef.current?.click()}
-            disabled={creatorBusy}
-          >
-            <Images size={18} />
-            {t("creator.importStrip")}
-          </button>
-          <input
-            ref={spritesheetImportInputRef}
-            className="sr-only"
-            type="file"
-            accept={SPRITESHEET_IMPORT_ACCEPT}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = "";
-              if (file) {
-                void importSpritesheetDraft(file);
-              }
-            }}
-          />
-          <button
-            className="secondary-button source-action"
-            type="button"
-            onClick={() => void processAll()}
-            disabled={creatorBusy || providerStatus !== "ready" || !hasProcessableSources}
-          >
-            <Wand2 size={18} />
-            {activeOperation?.type === "process-all" ? t("common.processing") : t("creator.processAll")}
-          </button>
-        </div>
-
         <div className="creator-footer">
           <div className="creator-status">
             <p className="helper-text">{cameraStatus}</p>
@@ -1241,130 +1613,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           </button>
         </div>
       </div>
-
-      {generationOpen && (
-        <div className="creator-drawer-shell">
-          <button
-            className="creator-drawer-backdrop"
-            type="button"
-            onClick={() => setGenerationOpen(false)}
-            aria-label={t("creator.closeGenerator")}
-          />
-          <aside
-            className="creator-settings-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("creator.generateFighter")}
-          >
-            <div className="drawer-header">
-              <strong>{t("creator.generateFighter")}</strong>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => setGenerationOpen(false)}
-                title={t("creator.closeGenerator")}
-              >
-                <X size={18} />
-                <span className="sr-only">{t("creator.closeGenerator")}</span>
-              </button>
-            </div>
-
-            <label className="field-label">
-              {t("creator.characterPrompt")}
-              <textarea
-                value={generationPrompt}
-                onChange={(event) => setGenerationPrompt(event.target.value)}
-                placeholder={t("creator.characterPromptPlaceholder")}
-                disabled={creatorBusy}
-                maxLength={GENERATION_PROMPT_MAX_LENGTH}
-              />
-            </label>
-
-            <div className="generation-style-suggestions" aria-label={t("creator.generationStyleSuggestions")}>
-              <span>{t("creator.generationStyleSuggestions")}</span>
-              <div>
-                {GENERATION_STYLE_SUGGESTIONS.map((style) => (
-                  <button
-                    className="generation-style-chip"
-                    type="button"
-                    key={style.labelKey}
-                    onClick={() => appendGenerationStyleSuggestion(t(style.promptKey))}
-                    disabled={creatorBusy}
-                  >
-                    {t(style.labelKey)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <label className="field-label">
-              {t("creator.model")}
-              <select
-                value={generationModel}
-                onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
-                disabled={creatorBusy}
-              >
-                {GENERATION_MODEL_OPTIONS.map((option) => (
-                  <option key={option.value || "default"} value={option.value}>
-                    {getGenerationModelOptionLabel(t, option)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {generationModel === "custom" && (
-              <label className="field-label">
-                {t("creator.modelId")}
-                <input
-                  value={generationCustomModel}
-                  onChange={(event) => setGenerationCustomModel(event.target.value)}
-                  placeholder="gemini-3-pro-image-preview"
-                  disabled={creatorBusy}
-                />
-              </label>
-            )}
-
-            <label className="field-label">
-              {t("creator.referenceImage")}
-              <input
-                type="file"
-                accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
-                disabled={creatorBusy}
-                onChange={(event) => {
-                  setGenerationReferenceFile(event.currentTarget.files?.[0]);
-                }}
-              />
-            </label>
-
-            {generationReferenceFile && (
-              <div className="generation-reference-row">
-                <ImagePlus size={18} />
-                <span>{generationReferenceFile.name}</span>
-                <button
-                  className="icon-button"
-                  type="button"
-                  onClick={() => setGenerationReferenceFile(undefined)}
-                  disabled={creatorBusy}
-                  title={t("creator.removeReference")}
-                >
-                  <X size={16} />
-                  <span className="sr-only">{t("creator.removeReference")}</span>
-                </button>
-              </div>
-            )}
-
-            <button
-              className="primary-button full-width"
-              type="button"
-              onClick={() => void generateFighterDraft()}
-              disabled={creatorBusy}
-            >
-              <Sparkles size={18} />
-              {activeOperation?.type === "generate" ? t("creator.generating") : t("creator.generateStrip")}
-            </button>
-          </aside>
-        </div>
-      )}
 
       {settingsOpen && (
         <div className="creator-drawer-shell">

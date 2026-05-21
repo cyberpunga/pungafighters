@@ -1,4 +1,5 @@
 import { AppError } from "../i18n/errors";
+import type { FighterPose } from "../types/game";
 
 type Env = Record<string, string | boolean | undefined>;
 
@@ -7,13 +8,17 @@ export interface CharacterGenerationReferenceImage {
   data: string;
 }
 
-export interface GenerateCharacterSpritesheetInput {
+interface GenerateCharacterBaseInput {
   prompt: string;
   model?: string;
   images?: CharacterGenerationReferenceImage[];
 }
 
-export interface GeneratedCharacterSpritesheet {
+export type GenerateCharacterInput =
+  | (GenerateCharacterBaseInput & { mode?: "strip" })
+  | (GenerateCharacterBaseInput & { mode: "pose"; pose: FighterPose });
+
+export interface GeneratedCharacterImage {
   model: string;
   prompt: string;
   image: {
@@ -32,7 +37,7 @@ export function getCharacterGenerationEndpoint() {
   return endpoint;
 }
 
-export async function generateCharacterSpritesheet(input: GenerateCharacterSpritesheetInput): Promise<GeneratedCharacterSpritesheet> {
+export async function generateCharacterImage(input: GenerateCharacterInput): Promise<GeneratedCharacterImage> {
   const endpoint = getCharacterGenerationEndpoint();
   const response = await fetch(endpoint, {
     method: "POST",
@@ -41,9 +46,11 @@ export async function generateCharacterSpritesheet(input: GenerateCharacterSprit
       Accept: "application/json",
     },
     body: JSON.stringify({
+      mode: input.mode ?? "strip",
       prompt: input.prompt,
       ...(input.model ? { model: input.model } : {}),
       ...(input.images?.length ? { images: input.images } : {}),
+      ...(input.mode === "pose" ? { pose: input.pose } : {}),
     }),
   });
 
@@ -52,11 +59,17 @@ export async function generateCharacterSpritesheet(input: GenerateCharacterSprit
     throw new AppError("error.generationService");
   }
 
-  if (!isGeneratedCharacterSpritesheet(payload)) {
+  if (!isGeneratedCharacterImage(payload)) {
     throw new AppError("error.generationInvalidResponse");
   }
 
   return payload;
+}
+
+export function generateCharacterSpritesheet(
+  input: GenerateCharacterBaseInput & { mode?: "strip" },
+): Promise<GeneratedCharacterImage> {
+  return generateCharacterImage({ ...input, mode: "strip" });
 }
 
 export function dataUrlToFile(dataUrl: string, filename: string): File {
@@ -70,13 +83,13 @@ export function dataUrlToFile(dataUrl: string, filename: string): File {
   return new File([bytes], filename, { type: mimeType });
 }
 
-export function fileToReferenceImage(file: File): Promise<CharacterGenerationReferenceImage> {
+export function fileToReferenceImage(file: Blob & { name?: string }): Promise<CharacterGenerationReferenceImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.addEventListener("load", () => {
       const dataUrl = String(reader.result);
       resolve({
-        mimeType: file.type || getMimeTypeFromName(file.name) || "image/png",
+        mimeType: file.type || getMimeTypeFromName(file.name ?? "") || "image/png",
         data: dataUrl,
       });
     });
@@ -85,7 +98,7 @@ export function fileToReferenceImage(file: File): Promise<CharacterGenerationRef
   });
 }
 
-function isGeneratedCharacterSpritesheet(value: unknown): value is GeneratedCharacterSpritesheet {
+function isGeneratedCharacterImage(value: unknown): value is GeneratedCharacterImage {
   if (!isRecord(value) || typeof value.model !== "string" || !isRecord(value.image)) {
     return false;
   }

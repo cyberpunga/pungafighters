@@ -11,6 +11,7 @@ const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const MAX_REFERENCE_IMAGES = 14;
 const MAX_REFERENCE_IMAGE_BYTES = 12 * 1024 * 1024;
+const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
 
 const MODEL_ALIASES: Record<string, string> = {
   "nano-banana": "gemini-2.5-flash-image",
@@ -19,6 +20,8 @@ const MODEL_ALIASES: Record<string, string> = {
 };
 
 interface GenerateCharacterRequest {
+  mode?: unknown;
+  pose?: unknown;
   prompt?: unknown;
   model?: unknown;
   images?: unknown;
@@ -36,6 +39,9 @@ interface NormalizedReferenceImage {
   mimeType: string;
   data: string;
 }
+
+type GenerationMode = "strip" | "pose";
+type FighterPose = (typeof FIGHTER_POSES)[number];
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -88,7 +94,19 @@ async function generateCharacterSpritesheet(request: Request, env: Env, corsHead
     return json({ error: images.error }, 400, corsHeaders);
   }
 
-  const prompt = buildCharacterSpritesheetPrompt(payload.value.prompt, images.value.length);
+  const mode = normalizeGenerationMode(payload.value.mode);
+  if (!mode) {
+    return json({ error: "Generation mode must be strip or pose." }, 400, corsHeaders);
+  }
+  const pose = mode === "pose" ? normalizeFighterPose(payload.value.pose) : undefined;
+  if (mode === "pose" && !pose) {
+    return json({ error: "Pose generation requires pose to be idle, punch, kick, hit, or victory." }, 400, corsHeaders);
+  }
+
+  const prompt =
+    mode === "pose" && pose
+      ? buildCharacterPosePrompt(payload.value.prompt, images.value.length, pose)
+      : buildCharacterSpritesheetPrompt(payload.value.prompt, images.value.length);
   const requestBody = {
     contents: [
       {
@@ -104,7 +122,7 @@ async function generateCharacterSpritesheet(request: Request, env: Env, corsHead
         ],
       },
     ],
-    generationConfig: buildGenerationConfig(payload.value, env),
+    generationConfig: buildGenerationConfig(payload.value, env, mode),
   };
 
   const response = await fetch(`${GEMINI_API}/${encodeURIComponent(model)}:generateContent`, {
@@ -234,7 +252,7 @@ function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCoun
 
   return `Create a single horizontal 5-cell spritesheet for a fighting-game character.
 
-Canvas: 5:1 aspect ratio, PNG. Use a transparent background with alpha if possible; if transparency is unavailable, use a flat plain white background that can be cleanly removed. Each cell is an equal square frame. No labels, no text, no borders, no grid lines.
+Canvas: 5:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00) across the whole image. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
 
 ${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character identity, design, outfit, colors, scale, medium, rendering style, lighting, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
@@ -249,6 +267,51 @@ Pose order from left to right:
 Format compatibility: make the final image easy to crop by splitting it into five equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all five cells.
 
 Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
+}
+
+function buildCharacterPosePrompt(userPrompt: unknown, referenceImageCount: number, pose: FighterPose) {
+  const cleanedUserPrompt = typeof userPrompt === "string" ? userPrompt.trim() : "";
+  const hasReferenceImages = referenceImageCount > 0;
+  const userDirection = cleanedUserPrompt
+    ? `\nUser instructions:\n${cleanedUserPrompt}\n`
+    : hasReferenceImages
+      ? "\nUser instructions: keep the same character from the provided reference image(s).\n"
+      : "\nUser instructions: invent an original fighter.\n";
+
+  const referenceDirection = hasReferenceImages
+    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. Generate only the requested action pose.\n`
+    : "";
+
+  const characterDirection = hasReferenceImages
+    ? "Character: use the same character from the provided reference image(s)."
+    : "Character: create an original fighter.";
+
+  return `Create one square action frame for a fighting-game character.
+
+Canvas: 1:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00). Do not use transparency, alpha, white, gradients, scenery, labels, text, borders, or grid lines in the background.
+
+${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Center the character with feet aligned near the bottom and leave safe padding around the body.
+${userDirection}${referenceDirection}
+Action pose: ${getPosePromptDescription(pose)}.
+
+Format compatibility: keep every limb, prop, and effect inside the square frame. Avoid motion blur or effects that make the cutout hard to read.
+
+Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
+}
+
+function getPosePromptDescription(pose: FighterPose) {
+  switch (pose) {
+    case "idle":
+      return "idle fighting stance";
+    case "punch":
+      return "forward punch";
+    case "kick":
+      return "forward kick";
+    case "hit":
+      return "getting hit / recoil pose";
+    case "victory":
+      return "victory pose";
+  }
 }
 
 function normalizeGeminiModel(input: unknown, configuredModel?: string) {
@@ -306,12 +369,12 @@ function normalizeReferenceImage(image: ReferenceImageInput): { ok: true; value:
   };
 }
 
-function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env) {
+function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env, mode: GenerationMode) {
   const generationConfig: Record<string, unknown> = {
     responseModalities: ["Image"],
   };
 
-  const aspectRatio = getOptionalString(payload.aspectRatio) || env.GEMINI_IMAGE_ASPECT_RATIO?.trim();
+  const aspectRatio = getOptionalString(payload.aspectRatio) || (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim());
   const imageSize = getOptionalString(payload.imageSize) || env.GEMINI_IMAGE_SIZE?.trim();
   if (aspectRatio || imageSize) {
     generationConfig.responseFormat = {
@@ -323,6 +386,17 @@ function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env) {
   }
 
   return generationConfig;
+}
+
+function normalizeGenerationMode(value: unknown): GenerationMode | "" {
+  if (value === undefined || value === null || value === "") {
+    return "strip";
+  }
+  return value === "strip" || value === "pose" ? value : "";
+}
+
+function normalizeFighterPose(value: unknown): FighterPose | "" {
+  return typeof value === "string" && FIGHTER_POSES.includes(value as FighterPose) ? (value as FighterPose) : "";
 }
 
 function getOptionalString(value: unknown) {
