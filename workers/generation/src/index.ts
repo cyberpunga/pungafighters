@@ -216,21 +216,27 @@ async function readGeneratePayload(request: Request): Promise<{ ok: true; value:
 
 function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCount: number) {
   const cleanedUserPrompt = typeof userPrompt === "string" ? userPrompt.trim() : "";
-  const userDirection = cleanedUserPrompt
-    ? `\nUser character brief and visual style to follow:\n${cleanedUserPrompt}\n`
-    : referenceImageCount > 0
-      ? "\nUser brief: create an original fighter based on the provided visual reference.\n"
-      : "\nUser brief: invent an original fighter.\n";
-  const referenceDirection =
-    referenceImageCount > 0
-      ? `\nUse the ${referenceImageCount} provided image${referenceImageCount === 1 ? "" : "s"} as visual reference only. Preserve useful user-provided details such as body shape, colors, outfit, medium, rendering style, sketch quality, texture, lighting, or prop ideas as much as possible. Do not copy protected characters, logos, visible text, or third-party branding from reference images.\n`
-      : "";
+  const hasReferenceImages = referenceImageCount > 0;
 
-  return `Create a single horizontal 5-cell spritesheet for an original fighting-game character.
+  const userDirection = cleanedUserPrompt
+    ? `\nUser instructions:\n${cleanedUserPrompt}\n`
+    : hasReferenceImages
+      ? "\nUser instructions: keep the same character from the provided reference image(s).\n"
+      : "\nUser instructions: invent an original fighter.\n";
+
+  const referenceDirection = hasReferenceImages
+    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Use the same character, not a redesigned or inspired version. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. Only change the pose in each spritesheet cell. Do not reinterpret, redesign, restyle, simplify, cartoonify, or invent a different fighter.\n`
+    : "";
+
+  const characterDirection = hasReferenceImages
+    ? "Character: use the same character from the provided reference image(s)."
+    : "Character: create an original fighter.";
+
+  return `Create a single horizontal 5-cell spritesheet for a fighting-game character.
 
 Canvas: 5:1 aspect ratio, PNG. Use a transparent background with alpha if possible; if transparency is unavailable, use a flat plain white background that can be cleanly removed. Each cell is an equal square frame. No labels, no text, no borders, no grid lines.
 
-Character: an original fighter, full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character design, outfit, colors, scale, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
+${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character identity, design, outfit, colors, scale, medium, rendering style, lighting, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
 Pose order from left to right:
 
@@ -242,7 +248,7 @@ Pose order from left to right:
 
 Format compatibility: make the final image easy to crop by splitting it into five equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all five cells.
 
-Safety: create an original character. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
+Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }
 
 function normalizeGeminiModel(input: unknown, configuredModel?: string) {
