@@ -1520,7 +1520,8 @@ button:disabled {
   .creator-grid,
   .fight-mode-grid,
   .online-grid,
-  .settings-grid {
+  .settings-grid,
+  .pose-grid {
     grid-template-columns: 1fr;
   }
 
