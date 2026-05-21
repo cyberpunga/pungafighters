@@ -860,8 +860,10 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const file = dataUrlToFile(result.image.dataUrl, `generated-${pose}.png`);
       const image = await decodeImageBlob(file, t("creator.actionImageReadFailed"));
       try {
-        const frameBlob = await canvasToPngBlob(normalizeCanvas(image.source));
-        replacePoseDraftWithHistory(pose, createPoseDraft(file, frameBlob, false));
+        const sourceCanvas = getGeneratedPoseSourceCanvas(image.source, image.width, image.height, pose);
+        const sourceBlob = await canvasToPngBlob(sourceCanvas);
+        const frameBlob = await canvasToPngBlob(normalizeCanvas(sourceCanvas));
+        replacePoseDraftWithHistory(pose, createPoseDraft(sourceBlob, frameBlob, false));
       } finally {
         image.close();
       }
@@ -1882,6 +1884,32 @@ function createGeneratedFighterName(prompt: string, fallbackName: string) {
     .slice(0, 4);
 
   return words.length ? words.join(" ").slice(0, 32) : fallbackName;
+}
+
+function getGeneratedPoseSourceCanvas(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+  pose: FighterPose,
+): HTMLCanvasElement {
+  const stripCellCount = FIGHTER_POSES.length;
+  const poseIndex = FIGHTER_POSES.indexOf(pose);
+  const sourceCanvas = document.createElement("canvas");
+
+  if (width / height > 2.5 && poseIndex >= 0) {
+    const cellWidth = width / stripCellCount;
+    sourceCanvas.width = Math.round(cellWidth);
+    sourceCanvas.height = height;
+    const ctx = sourceCanvas.getContext("2d");
+    ctx?.drawImage(source, poseIndex * cellWidth, 0, cellWidth, height, 0, 0, sourceCanvas.width, sourceCanvas.height);
+    return sourceCanvas;
+  }
+
+  sourceCanvas.width = width;
+  sourceCanvas.height = height;
+  const ctx = sourceCanvas.getContext("2d");
+  ctx?.drawImage(source, 0, 0, width, height);
+  return sourceCanvas;
 }
 
 function waitForVideoReady(video: HTMLVideoElement) {
