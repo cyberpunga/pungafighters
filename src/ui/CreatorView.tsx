@@ -60,7 +60,34 @@ import { useI18n } from "../i18n/react";
 const SEGMENTATION_PROVIDER_SETTING_KEY = "segmentation.providerId";
 const SEGMENTATION_OPTIONS_SETTING_KEY = "segmentation.options";
 const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
-const GENERATION_MODEL_OPTIONS = ["", "nano-banana-2", "nano-banana-pro", "nano-banana", "custom"] as const;
+const DEFAULT_GENERATION_MODEL_VALUE = "gemini-3.1-flash-image-preview";
+const GENERATION_MODEL_OPTIONS = [
+  {
+    value: "",
+    labelKey: "creator.serverDefaultModel",
+    valueLabelKey: "creator.serverDefaultModelValue",
+  },
+  {
+    value: "nano-banana-2",
+    labelKey: "creator.generationModel.nanoBanana2",
+    modelId: "gemini-3.1-flash-image-preview",
+  },
+  {
+    value: "nano-banana-pro",
+    labelKey: "creator.generationModel.nanoBananaPro",
+    modelId: "gemini-3-pro-image-preview",
+  },
+  {
+    value: "nano-banana",
+    labelKey: "creator.generationModel.nanoBanana",
+    modelId: "gemini-2.5-flash-image",
+  },
+  {
+    value: "custom",
+    labelKey: "creator.customModel",
+    valueLabelKey: "creator.customModelValue",
+  },
+] as const;
 const GENERATION_PROMPT_MAX_LENGTH = 700;
 const GENERATION_STYLE_SUGGESTIONS = [
   {
@@ -99,7 +126,7 @@ const GENERATION_STYLE_SUGGESTIONS = [
 const POSE_FRAME_HISTORY_LIMIT = 12;
 
 type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
-type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number];
+type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number]["value"];
 
 interface DraftAsset {
   blob: Blob;
@@ -1278,8 +1305,8 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                 disabled={creatorBusy}
               >
                 {GENERATION_MODEL_OPTIONS.map((option) => (
-                  <option key={option || "default"} value={option}>
-                    {getGenerationModelLabel(t, option)}
+                  <option key={option.value || "default"} value={option.value}>
+                    {getGenerationModelOptionLabel(t, option)}
                   </option>
                 ))}
               </select>
@@ -1582,15 +1609,13 @@ function getTransformersModelDescription(t: Translate, modelId: TransformersMode
   }
 }
 
-function getGenerationModelLabel(t: Translate, model: GenerationModelOption) {
-  switch (model) {
-    case "":
-      return t("creator.serverDefaultModel");
-    case "custom":
-      return t("creator.customModel");
-    default:
-      return model;
+function getGenerationModelOptionLabel(t: Translate, option: (typeof GENERATION_MODEL_OPTIONS)[number]) {
+  const label = t(option.labelKey);
+  if ("modelId" in option) {
+    return t("creator.modelOptionAliasLabel", { label, value: option.value, model: option.modelId });
   }
+  const value = t(option.valueLabelKey, { model: DEFAULT_GENERATION_MODEL_VALUE });
+  return t("creator.modelOptionLabel", { label, value });
 }
 
 function getSelectedGenerationModel(model: GenerationModelOption, customModel: string) {
