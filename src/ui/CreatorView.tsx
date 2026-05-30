@@ -157,16 +157,26 @@ type CreationPanel = "capture" | "generate" | "import";
 
 type CreatorOperation =
   | { type: "start-camera" | "capture" | "import" | "process" | "generate-pose"; pose: FighterPose }
-  | { type: "generate" | "import-character" | "import-spritesheet" | "load-fighter" | "process-all" };
+  | {
+      type:
+        | "generate"
+        | "start-generation-camera"
+        | "capture-generation-reference"
+        | "import-character"
+        | "import-spritesheet"
+        | "load-fighter"
+        | "process-all";
+    };
 
 export function CreatorView(props: { editFighterId?: string; onSaved: () => Promise<void> }) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const generationVideoRef = useRef<HTMLVideoElement | null>(null);
   const characterImportInputRef = useRef<HTMLInputElement | null>(null);
   const spritesheetImportInputRef = useRef<HTMLInputElement | null>(null);
+  const generationReferenceInputRef = useRef<HTMLInputElement | null>(null);
   const poseImportInputRefs = useRef<Partial<Record<FighterPose, HTMLInputElement | null>>>({});
   const poseCardRefs = useRef<Partial<Record<FighterPose, HTMLDivElement | null>>>({});
-  const generationPromptRef = useRef<HTMLTextAreaElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
@@ -190,6 +200,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [generationModel, setGenerationModel] = useState<GenerationModelOption>("");
   const [generationCustomModel, setGenerationCustomModel] = useState("");
   const [generationReferenceFile, setGenerationReferenceFile] = useState<File | undefined>();
+  const [generationCameraOpen, setGenerationCameraOpen] = useState(false);
   const [poseGenerationPrompts, setPoseGenerationPrompts] = useState<Partial<Record<FighterPose, string>>>({});
   const [poseGenerationReferenceFiles, setPoseGenerationReferenceFiles] = useState<Partial<Record<FighterPose, File>>>({});
   const [cameraStatus, setCameraStatus] = useState(() => t("creator.cameraOff"));
@@ -404,8 +415,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     });
   }, []);
 
-  const attachCameraStream = useCallback((stream: MediaStream) => {
-    const video = videoRef.current;
+  const attachVideoStream = useCallback((video: HTMLVideoElement | null, stream: MediaStream) => {
     if (!video) {
       return;
     }
@@ -414,6 +424,20 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
     void video.play().catch(() => undefined);
   }, []);
+
+  const attachCameraStream = useCallback(
+    (stream: MediaStream) => {
+      attachVideoStream(videoRef.current, stream);
+    },
+    [attachVideoStream],
+  );
+
+  const attachGenerationCameraStream = useCallback(
+    (stream: MediaStream) => {
+      attachVideoStream(generationVideoRef.current, stream);
+    },
+    [attachVideoStream],
+  );
 
   useEffect(() => {
     draftsRef.current = drafts;
@@ -546,10 +570,10 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   }, [hasProcessableSources, loadProvider, providerStatus, selectedOptions, selectedProvider]);
 
   useEffect(() => {
-    if (activeCreationPanel === "generate") {
-      window.requestAnimationFrame(() => generationPromptRef.current?.focus());
+    if (activeCreationPanel === "generate" && generationCameraOpen && streamRef.current) {
+      attachGenerationCameraStream(streamRef.current);
     }
-  }, [activeCreationPanel]);
+  }, [activeCreationPanel, attachGenerationCameraStream, generationCameraOpen]);
 
   const selectProvider = (nextProviderId: SegmentationProviderId) => {
     const nextProvider = getSegmentationProvider(nextProviderId);
@@ -614,6 +638,80 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           : t("creator.cameraUnavailable"),
       );
       return false;
+    }
+  };
+
+  const openGenerationCamera = async () => {
+    if (creatorBusy) {
+      return false;
+    }
+    setGenerationCameraOpen(true);
+    await waitForInlinePreview();
+    if (streamRef.current) {
+      attachGenerationCameraStream(streamRef.current);
+      setCameraReady(true);
+      return true;
+    }
+
+    setActiveOperation({ type: "start-generation-camera" });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 960, height: 720 }, audio: false });
+      streamRef.current = stream;
+      attachGenerationCameraStream(stream);
+      setCameraReady(true);
+      setCameraStatus(t("creator.cameraReady"));
+      void loadProvider(selectedProvider, selectedOptions);
+      return true;
+    } catch (error) {
+      setCameraReady(false);
+      setGenerationCameraOpen(false);
+      setCameraStatus(
+        error instanceof Error
+          ? t("creator.cameraUnavailableWithReason", { reason: error.message })
+          : t("creator.cameraUnavailable"),
+      );
+      return false;
+    } finally {
+      setActiveOperation(undefined);
+    }
+  };
+
+  const captureGenerationReference = async () => {
+    if (creatorBusy) {
+      return;
+    }
+    if (!generationCameraOpen || !streamRef.current) {
+      const opened = await openGenerationCamera();
+      if (!opened) {
+        return;
+      }
+    }
+
+    setActiveOperation({ type: "capture-generation-reference" });
+    try {
+      await waitForInlinePreview();
+      if (streamRef.current) {
+        attachGenerationCameraStream(streamRef.current);
+      }
+      const video = generationVideoRef.current;
+      if (!video || !video.videoWidth) {
+        if (video) {
+          await waitForVideoReady(video);
+        }
+      }
+      if (!video || !video.videoWidth) {
+        setCameraStatus(t("creator.cameraWarming"));
+        return;
+      }
+
+      const sourceCanvas = videoToSourceCanvas(video);
+      const blob = await canvasToPngBlob(sourceCanvas);
+      setGenerationReferenceFile(new File([blob], "camera-reference.png", { type: "image/png" }));
+      setCameraStatus(t("creator.referenceCaptured"));
+    } catch (error) {
+      setCameraStatus(localizeError(error, t, "creator.referenceCaptureFailed"));
+    } finally {
+      setActiveOperation(undefined);
     }
   };
 
@@ -1060,6 +1158,14 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     setCaptureDelays((current) => ({ ...current, [pose]: delay }));
   };
 
+  const usePromptOnlyGeneration = () => {
+    setGenerationReferenceFile(undefined);
+    setGenerationCameraOpen(false);
+    if (generationReferenceInputRef.current) {
+      generationReferenceInputRef.current.value = "";
+    }
+  };
+
   return (
     <section className="creator-grid">
       <div className="creator-workspace">
@@ -1114,10 +1220,89 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                 </button>
               </div>
 
+              <div className="generation-reference-start">
+                <div className="generation-camera-header">
+                  <span className="field-label-text">{t("creator.generationStartingPoint")}</span>
+                  <div className="generation-camera-actions">
+                    <button
+                      className={generationReferenceFile ? "secondary-button" : "secondary-button reference-choice-active"}
+                      type="button"
+                      onClick={usePromptOnlyGeneration}
+                      disabled={creatorBusy}
+                    >
+                      <Sparkles size={16} />
+                      {t("creator.promptOnly")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => generationReferenceInputRef.current?.click()}
+                      disabled={creatorBusy}
+                    >
+                      <Upload size={16} />
+                      {t("creator.uploadReference")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void openGenerationCamera()}
+                      disabled={creatorBusy}
+                    >
+                      <Camera size={16} />
+                      {activeOperation?.type === "start-generation-camera" ? t("common.wait") : t("creator.openCamera")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      onClick={() => void captureGenerationReference()}
+                      disabled={creatorBusy}
+                    >
+                      <ImagePlus size={16} />
+                      {activeOperation?.type === "capture-generation-reference"
+                        ? t("common.wait")
+                        : t("creator.captureReference")}
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  ref={generationReferenceInputRef}
+                  className="sr-only"
+                  type="file"
+                  accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
+                  disabled={creatorBusy}
+                  onChange={(event) => {
+                    setGenerationReferenceFile(event.currentTarget.files?.[0]);
+                  }}
+                />
+
+                {generationCameraOpen && (
+                  <div className="generation-camera-preview">
+                    <video ref={generationVideoRef} autoPlay muted playsInline />
+                  </div>
+                )}
+
+                {generationReferenceFile && (
+                  <div className="generation-reference-row">
+                    <ImagePlus size={18} />
+                    <span>{generationReferenceFile.name}</span>
+                    <button
+                      className="icon-button"
+                      type="button"
+                      onClick={usePromptOnlyGeneration}
+                      disabled={creatorBusy}
+                      title={t("creator.removeReference")}
+                    >
+                      <X size={16} />
+                      <span className="sr-only">{t("creator.removeReference")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <label className="field-label">
                 {t("creator.characterPrompt")}
                 <textarea
-                  ref={generationPromptRef}
                   value={generationPrompt}
                   onChange={(event) => setGenerationPrompt(event.target.value)}
                   placeholder={t("creator.characterPromptPlaceholder")}
@@ -1143,34 +1328,20 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                 </div>
               </div>
 
-              <div className="generation-field-grid">
-                <label className="field-label">
-                  {t("creator.model")}
-                  <select
-                    value={generationModel}
-                    onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
-                    disabled={creatorBusy}
-                  >
-                    {GENERATION_MODEL_OPTIONS.map((option) => (
-                      <option key={option.value || "default"} value={option.value}>
-                        {getGenerationModelOptionLabel(t, option)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field-label">
-                  {t("creator.referenceImage")}
-                  <input
-                    type="file"
-                    accept={FIGHTER_IMAGE_IMPORT_ACCEPT}
-                    disabled={creatorBusy}
-                    onChange={(event) => {
-                      setGenerationReferenceFile(event.currentTarget.files?.[0]);
-                    }}
-                  />
-                </label>
-              </div>
+              <label className="field-label">
+                {t("creator.model")}
+                <select
+                  value={generationModel}
+                  onChange={(event) => setGenerationModel(event.target.value as GenerationModelOption)}
+                  disabled={creatorBusy}
+                >
+                  {GENERATION_MODEL_OPTIONS.map((option) => (
+                    <option key={option.value || "default"} value={option.value}>
+                      {getGenerationModelOptionLabel(t, option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               {generationModel === "custom" && (
                 <label className="field-label">
@@ -1182,23 +1353,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                     disabled={creatorBusy}
                   />
                 </label>
-              )}
-
-              {generationReferenceFile && (
-                <div className="generation-reference-row">
-                  <ImagePlus size={18} />
-                  <span>{generationReferenceFile.name}</span>
-                  <button
-                    className="icon-button"
-                    type="button"
-                    onClick={() => setGenerationReferenceFile(undefined)}
-                    disabled={creatorBusy}
-                    title={t("creator.removeReference")}
-                  >
-                    <X size={16} />
-                    <span className="sr-only">{t("creator.removeReference")}</span>
-                  </button>
-                </div>
               )}
 
               <button
