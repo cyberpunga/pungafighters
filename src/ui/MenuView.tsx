@@ -1,4 +1,4 @@
-import { Camera, Gamepad2, Monitor, RadioTower, Sparkles, Trophy, Users } from "lucide-react";
+import { Box, Camera, Gamepad2, Monitor, RadioTower, Sparkles, Trophy, Users } from "lucide-react";
 import type { LoadedFighter } from "../types/game";
 import { useI18n } from "../i18n/react";
 
@@ -7,6 +7,7 @@ export function MenuView(props: {
   loading: boolean;
   onCreate: () => void;
   onLocal: () => void;
+  onStagePreview: () => void;
   onHost: () => void;
   onJoin: () => void;
 }) {
@@ -32,6 +33,10 @@ export function MenuView(props: {
             <button className="secondary-button" type="button" onClick={props.onLocal}>
               <Gamepad2 size={19} />
               {t("menu.startFight")}
+            </button>
+            <button className="secondary-button" type="button" onClick={props.onStagePreview}>
+              <Box size={19} />
+              {t("menu.preview3d")}
             </button>
           </div>
           <div className="home-stat-row" aria-label={t("menu.fighterStatus")}>
@@ -72,6 +77,11 @@ export function MenuView(props: {
             <Users size={28} />
             <strong>{t("menu.localFight")}</strong>
             <span>{t("menu.localFightDetail")}</span>
+          </button>
+          <button className="mode-card stage-card" type="button" onClick={props.onStagePreview}>
+            <Box size={28} />
+            <strong>{t("menu.preview3d")}</strong>
+            <span>{t("menu.preview3dDetail")}</span>
           </button>
           <button className="mode-card host-card" type="button" onClick={props.onHost}>
             <RadioTower size={28} />

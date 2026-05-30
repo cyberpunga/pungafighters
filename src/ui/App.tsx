@@ -1,5 +1,5 @@
 import { Camera, Gamepad2, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { BattleConfig, BattlePostEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
@@ -54,6 +54,8 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
   timerSeconds: 60,
   stageId: "dojo-v1",
 };
+
+const StagePreviewView = lazy(() => import("./StagePreviewView").then((module) => ({ default: module.StagePreviewView })));
 
 export function App() {
   const { t } = useI18n();
@@ -215,7 +217,7 @@ export function App() {
 
   return (
     <main className="app-shell">
-      {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
+      {view !== "battle" && view !== "stagePreview" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (
         <MenuView
@@ -223,6 +225,7 @@ export function App() {
           loading={loading}
           onCreate={() => navigate("creator")}
           onLocal={() => navigate("localFighters")}
+          onStagePreview={() => navigate("stagePreview")}
           onHost={() => navigate("remoteHostFighter")}
           onJoin={() => navigate("remoteJoinFighter")}
         />
@@ -245,7 +248,7 @@ export function App() {
           onNext={() => {
             setOnlineBattle(undefined);
             if (battleFighters) {
-              navigate("battle");
+              navigate("stagePreview");
             }
           }}
         />
@@ -305,6 +308,21 @@ export function App() {
         />
       )}
       {view === "settings" && <SettingsView battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />}
+      {view === "stagePreview" && (
+        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
+          <StagePreviewView
+            fighters={fighters}
+            selectedFighterIds={{ p1: localSelection.p1, p2: localSelection.p2 }}
+            config={{
+              ...localBattleConfig,
+              playerControls: { p1: "human", p2: "cpu" },
+            }}
+            loading={loading}
+            onBack={() => navigate("menu")}
+            onFight={() => navigate("localFighters")}
+          />
+        </Suspense>
+      )}
       {view === "battle" && onlineBattle && (
         <BattleView
           mode="online"

@@ -24,9 +24,11 @@ Open the local Vite URL shown in the terminal.
 
 ## MVP Features
 
-- Route-backed React shell for menus, fighter creator, staged fight setup, settings, online invites, and battle mount.
-- Phaser 3 battle runtime embedded inside React.
-- Local 1v1 battle with 1 vs 2, 1 vs CPU, and CPU vs CPU modes, deterministic health, timer, rounds, hitboxes, and keyboard controls.
+- Route-backed React shell for menus, fighter creator, staged fight setup, settings, online invites, and battle mounts.
+- React Three Fiber 2.5D local battle runtime for photo standee fighters in a physical arena.
+- React Three Rapier visual physics for impact debris and arena juice; deterministic combat hit detection remains in the simulation.
+- Phaser 3 remains embedded for the legacy 2D/online battle runtime while those paths are migrated.
+- Local standee battle with deterministic health, timer, rounds, hitboxes, CPU input synthesis, and keyboard controls.
 - WebRTC invite matches with manual offer/answer codes, DataChannel input sync, and temporary peer fighter transfer.
 - Webcam capture through `getUserMedia`.
 - On-device cutout providers: MediaPipe Selfie Segmenter by default, plus optional Transformers.js ORMBG and MODNet background-removal models.

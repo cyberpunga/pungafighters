@@ -7,10 +7,16 @@ export default defineConfig(({ mode }) => ({
   base: mode === "github-pages" ? "/pungafighters/" : "/",
   plugins: [react(), mode === "github-pages" ? githubPagesSpaFallback() : undefined],
   build: {
-    chunkSizeWarningLimit: 1600,
+    chunkSizeWarningLimit: 2200,
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes("node_modules/@dimforge") || id.includes("node_modules/@react-three/rapier")) {
+            return "rapier";
+          }
+          if (id.includes("node_modules/three") || id.includes("node_modules/@react-three/fiber") || id.includes("node_modules/@react-three/drei")) {
+            return "three";
+          }
           if (id.includes("node_modules/phaser")) {
             return "phaser";
           }

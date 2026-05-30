@@ -11,7 +11,9 @@
 
 - React owns menus, creator/editor UI, settings, and DOM overlays.
 - React views are route-backed through `src/ui/routes.ts`; keep browser history/back-forward behavior intact when adding screens.
-- Phaser owns the 2D battle canvas, scene lifecycle, camera, sprites, and effects.
+- React Three Fiber owns the 2.5D local standee battle direction and should stay a thin renderer over simulation state.
+- React Three Rapier may add visual-only physics juice such as debris, props, and wobble; never use it as the source of combat hit detection.
+- Phaser still owns the legacy 2D/online battle canvas, scene lifecycle, camera, sprites, and effects until those paths are migrated.
 - Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
 - Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
