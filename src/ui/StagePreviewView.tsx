@@ -424,14 +424,6 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
         <planeGeometry args={[geometry.width, geometry.height]} />
         <meshStandardMaterial map={texture} color={tint} transparent opacity={alpha} alphaTest={0.08} roughness={0.72} side={THREE.DoubleSide} />
       </mesh>
-      <mesh castShadow position={[0, 0.16, -0.08]}>
-        <boxGeometry args={[geometry.width * 0.42, 0.16, 0.42]} />
-        <meshStandardMaterial color="#8a603a" roughness={0.82} />
-      </mesh>
-      <mesh position={[0, 0.28, -0.03]}>
-        <boxGeometry args={[geometry.width * 0.3, 0.18, 0.08]} />
-        <meshStandardMaterial color="#3a2a22" roughness={0.9} />
-      </mesh>
     </group>
   );
 }
