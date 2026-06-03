@@ -1,11 +1,15 @@
 import type { BattleConfig, FighterPose, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
 import { createEmptyActions } from "../input/actions";
 
-const ARENA_WIDTH = 960;
+const BASE_ARENA_WIDTH = 960;
+const ARENA_WIDTH = 1200;
 const GROUND_Y = 430;
 const MOVE_SPEED = 250;
 const JUMP_SPEED = -650;
 const GRAVITY = 1800;
+const ARENA_EDGE_PADDING = 80;
+const P1_START_X = (ARENA_WIDTH * 250) / BASE_ARENA_WIDTH;
+const P2_START_X = (ARENA_WIDTH * 710) / BASE_ARENA_WIDTH;
 
 const HURTBOX = {
   halfWidth: 32,
@@ -15,7 +19,7 @@ const HURTBOX = {
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
-export const SUPER_HITS_REQUIRED = 5;
+export const SUPER_HITS_REQUIRED = 0;
 const SUPER_FREEZE_FRAMES = 42;
 const MAX_SUPER_HITS = 4;
 const SUPER_HIT_INTERVAL = 0.08;
@@ -155,8 +159,8 @@ export function createBattleState(
     countdown: 2,
     message: { type: "ready" },
     fighters: {
-      p1: createRuntime("p1", fighters.p1, 250, 1),
-      p2: createRuntime("p2", fighters.p2, 710, -1),
+      p1: createRuntime("p1", fighters.p1, P1_START_X, 1),
+      p2: createRuntime("p2", fighters.p2, P2_START_X, -1),
     },
   };
 }
@@ -353,7 +357,7 @@ function updateFighter(
     fighter.y = GROUND_Y;
     fighter.velocityY = 0;
   }
-  fighter.x = clamp(fighter.x, 80, ARENA_WIDTH - 80);
+  fighter.x = clamp(fighter.x, ARENA_EDGE_PADDING, ARENA_WIDTH - ARENA_EDGE_PADDING);
 
   return startedAttack;
 }
@@ -453,8 +457,8 @@ function finishRound(state: BattleState) {
 function resetRound(state: BattleState) {
   const p1Wins = state.fighters.p1.roundsWon;
   const p2Wins = state.fighters.p2.roundsWon;
-  const p1 = createRuntime("p1", state.fighters.p1, 250, 1);
-  const p2 = createRuntime("p2", state.fighters.p2, 710, -1);
+  const p1 = createRuntime("p1", state.fighters.p1, P1_START_X, 1);
+  const p2 = createRuntime("p2", state.fighters.p2, P2_START_X, -1);
   p1.roundsWon = p1Wins;
   p2.roundsWon = p2Wins;
   state.fighters = { p1, p2 };

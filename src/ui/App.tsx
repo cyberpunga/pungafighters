@@ -313,13 +313,12 @@ export function App() {
           <StagePreviewView
             fighters={fighters}
             selectedFighterIds={{ p1: localSelection.p1, p2: localSelection.p2 }}
-            config={{
-              ...localBattleConfig,
-              playerControls: { p1: "human", p2: "cpu" },
-            }}
+            config={localBattleConfig}
+            background={battleBackground}
+            displayEffects={battlePostEffects}
             loading={loading}
+            onDisplayEffectsChange={updateBattlePostEffects}
             onBack={() => navigate("menu")}
-            onFight={() => navigate("localFighters")}
           />
         </Suspense>
       )}

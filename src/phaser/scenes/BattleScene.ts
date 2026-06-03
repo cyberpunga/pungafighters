@@ -377,13 +377,13 @@ export class BattleScene extends Phaser.Scene {
     const isP1 = slot === "p1";
     const defaultDepth = this.getDefaultFighterDepth(slot);
     const previousSprite = this.add
-      .image(runtime.x, runtime.y, `${slot}-idle`)
+      .image(this.simXToCanvasX(runtime.x), runtime.y, `${slot}-idle`)
       .setOrigin(0.5, 0.9)
       .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
       .setAlpha(0)
       .setDepth(defaultDepth - FIGHTER_PREVIOUS_DEPTH_OFFSET);
     const sprite = this.add
-      .image(runtime.x, runtime.y, `${slot}-idle`)
+      .image(this.simXToCanvasX(runtime.x), runtime.y, `${slot}-idle`)
       .setOrigin(0.5, 0.9)
       .setDisplaySize(FIGHTER_DISPLAY_SIZE, FIGHTER_DISPLAY_SIZE)
       .setDepth(defaultDepth);
@@ -917,6 +917,10 @@ export class BattleScene extends Phaser.Scene {
     return FIGHTER_BASE_DEPTH + (slot === "p2" ? FIGHTER_DEFAULT_DEPTH_STEP : 0);
   }
 
+  private simXToCanvasX(x: number) {
+    return (x / Math.max(this.state.arenaWidth, 1)) * ARENA_WIDTH;
+  }
+
   private updateStageParallax(deltaSeconds: number) {
     if (!this.stageImage) {
       return;
@@ -924,7 +928,7 @@ export class BattleScene extends Phaser.Scene {
 
     const p1 = this.state.fighters.p1;
     const p2 = this.state.fighters.p2;
-    const midpointX = (p1.x + p2.x) / 2;
+    const midpointX = this.simXToCanvasX((p1.x + p2.x) / 2);
     const averageAirHeight = Math.max(0, ((this.state.groundY - p1.y) + (this.state.groundY - p2.y)) / 2);
     const maxPanX = Math.max(0, (this.stageImage.displayWidth - ARENA_WIDTH) / 2);
     const maxPanY = Math.max(0, (this.stageImage.displayHeight - ARENA_HEIGHT) / 2);
@@ -973,7 +977,7 @@ export class BattleScene extends Phaser.Scene {
       sprite.setTexture(texture);
     }
     sprite.setOrigin(anchor.x, anchor.y);
-    sprite.setPosition(transform.x, transform.y);
+    sprite.setPosition(this.simXToCanvasX(transform.x), transform.y);
     sprite.setFlipX(facing === -1);
     sprite.setDisplaySize(FIGHTER_DISPLAY_SIZE * transform.scaleX, FIGHTER_DISPLAY_SIZE * transform.scaleY);
     sprite.setRotation(transform.rotation);
@@ -1188,9 +1192,11 @@ export class BattleScene extends Phaser.Scene {
     const attackerView = this.views[hit.attacker];
     const isSuperHit = attacker.attack?.kind === "special";
     const hitColor = isSuperHit ? 0xf7b267 : hit.damage >= 18 ? 0xf7b267 : 0xf8f4df;
+    const defenderX = this.simXToCanvasX(defender.x);
+    const attackerX = this.simXToCanvasX(attacker.x);
 
     const damageText = this.add
-      .text(defender.x, defender.y - 155, `-${hit.damage}`, {
+      .text(defenderX, defender.y - 155, `-${hit.damage}`, {
         fontFamily: "Arial Black, Arial, sans-serif",
         fontSize: "22px",
         color: "#f8f4df",
@@ -1209,7 +1215,7 @@ export class BattleScene extends Phaser.Scene {
       onComplete: () => damageText.destroy(),
     });
 
-    const impact = this.add.circle(defender.x - defender.facing * 34, defender.y - 92, 18, hitColor, 0.65).setDepth(4);
+    const impact = this.add.circle(defenderX - defender.facing * 34, defender.y - 92, 18, hitColor, 0.65).setDepth(4);
     this.tweens.add({
       targets: impact,
       alpha: 0,
@@ -1221,7 +1227,7 @@ export class BattleScene extends Phaser.Scene {
 
     if (hit.damage >= 12 || isSuperHit) {
       const afterimage = this.add
-        .image(attacker.x - attacker.facing * 22, attacker.y, attackerView.sprite.texture.key)
+        .image(attackerX - attacker.facing * 22, attacker.y, attackerView.sprite.texture.key)
         .setOrigin(attackerView.sprite.originX, attackerView.sprite.originY)
         .setDisplaySize(attackerView.sprite.displayWidth, attackerView.sprite.displayHeight)
         .setFlipX(attacker.facing === -1)
@@ -1249,7 +1255,7 @@ export class BattleScene extends Phaser.Scene {
     playPunchImpactSfx(this.sound, {
       damage: this.state.lastHit.damage,
       x: defender.x,
-      arenaWidth: ARENA_WIDTH,
+      arenaWidth: this.state.arenaWidth,
     });
   }
 
@@ -1272,8 +1278,8 @@ export class BattleScene extends Phaser.Scene {
   private scheduleKnockdownImpact(x: number, delaySeconds: number, strength: number) {
     const event = this.time.delayedCall(delaySeconds * 1000, () => {
       playKnockdownImpactSfx(this.sound, {
-        x: Phaser.Math.Clamp(x, 0, ARENA_WIDTH),
-        arenaWidth: ARENA_WIDTH,
+        x: Phaser.Math.Clamp(x, 0, this.state.arenaWidth),
+        arenaWidth: this.state.arenaWidth,
         strength,
       });
       this.cameras.main.shake(Phaser.Math.Linear(45, 130, strength), Phaser.Math.Linear(0.0012, 0.0038, strength));
@@ -1291,7 +1297,7 @@ export class BattleScene extends Phaser.Scene {
     const attacker = this.state.fighters[attackerSlot];
     playSuperSfx(this.sound, {
       x: attacker.x,
-      arenaWidth: ARENA_WIDTH,
+      arenaWidth: this.state.arenaWidth,
     });
   }
 }

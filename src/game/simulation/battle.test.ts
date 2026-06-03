@@ -17,6 +17,14 @@ const fighters = {
 };
 
 describe("battle simulation", () => {
+  it("uses a widened arena with start positions derived from the original spacing", () => {
+    const state = createBattleState(config, fighters);
+
+    expect(state.arenaWidth).toBe(1200);
+    expect(state.fighters.p1.x).toBeCloseTo(312.5);
+    expect(state.fighters.p2.x).toBeCloseTo(887.5);
+  });
+
   it("advances one deterministic frame at a time", () => {
     const state = createBattleState(config, fighters);
     const next = stepBattleFrame(state, emptyInputs());
@@ -25,6 +33,42 @@ describe("battle simulation", () => {
     expect(state.message).toEqual({ type: "ready" });
     expect(next.frame).toBe(1);
     expect(getBattleChecksum(next)).toBe(getBattleChecksum(stepBattleFrame(state, emptyInputs())));
+  });
+
+  it("clamps fighters to deterministic widened arena edges", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 78, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 1122, y: state.groundY };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), left: true },
+      p2: { ...createEmptyActions(), right: true },
+    });
+
+    expect(state.fighters.p1.x).toBe(80);
+    expect(state.fighters.p2.x).toBe(1120);
+  });
+
+  it("resets new rounds to the widened arena start positions", () => {
+    let state = createBattleState(config, fighters);
+    state = {
+      ...state,
+      countdown: 0,
+      round: 1,
+      roundWinner: "p1",
+      status: "roundOver",
+      winner: undefined,
+    };
+    state.fighters.p1 = { ...state.fighters.p1, x: 80, roundsWon: 1 };
+    state.fighters.p2 = { ...state.fighters.p2, x: 1120 };
+
+    state = stepBattleFrame(state, emptyInputs());
+
+    expect(state.round).toBe(2);
+    expect(state.fighters.p1.x).toBeCloseTo(312.5);
+    expect(state.fighters.p2.x).toBeCloseTo(887.5);
+    expect(state.fighters.p1.roundsWon).toBe(1);
   });
 
   it("keeps frame-based hit events deterministic", () => {
@@ -108,10 +152,10 @@ describe("battle simulation", () => {
 
     expect(hitFrames).toHaveLength(4);
     expect(state.fighters.p2.health).toBe(80);
-    expect(state.fighters.p1.superMeter).toBe(4);
+    expect(state.fighters.p1.superMeter).toBe(Math.min(4, SUPER_HITS_REQUIRED));
   });
 
-  it("does not start a super from punch and kick before the meter is full", () => {
+  it("gates punch-and-kick super by the configured meter threshold", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };
 
@@ -120,8 +164,13 @@ describe("battle simulation", () => {
       p2: createEmptyActions(),
     });
 
-    expect(state.fighters.p1.attack).toBeUndefined();
-    expect(state.lastSuper).toBeUndefined();
+    if (SUPER_HITS_REQUIRED <= 0) {
+      expect(state.fighters.p1.attack?.kind).toBe("special");
+      expect(state.lastSuper).toMatchObject({ attacker: "p1" });
+    } else {
+      expect(state.fighters.p1.attack).toBeUndefined();
+      expect(state.lastSuper).toBeUndefined();
+    }
   });
 
   it("does not hit through transparent fighter padding", () => {
