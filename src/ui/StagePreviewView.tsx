@@ -5,16 +5,20 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 import { createEmptyActions, KEYBOARD_BINDINGS } from "../game/input/actions";
 import { createCpuActions } from "../game/input/cpu";
+import type { NetworkInputController } from "../game/network/networkInputController";
+import { NETPLAY_CHECKSUM_INTERVAL } from "../game/network/protocol";
 import {
   BATTLE_TICK_SECONDS,
   createBattleState,
+  getBattleChecksum,
+  restartMatch,
   stepBattleFrame,
   SUPER_HITS_REQUIRED,
   type BattleMessage,
   type BattleState,
   type FighterRuntime,
 } from "../game/simulation/battle";
-import { createFighterRenderState, updateFighterRenderState } from "../phaser/render/fighterAnimation";
+import { createFighterRenderState, updateFighterRenderState } from "../game/render/fighterAnimation";
 import {
   FIGHTER_POSES,
   type ActionSnapshot,
@@ -67,37 +71,66 @@ export function StagePreviewView(props: {
   loading: boolean;
   onDisplayEffectsChange: (effects: BattlePostEffect[]) => void;
   onBack: () => void;
+  mode?: "local" | "online";
+  localSlot?: PlayerSlot;
+  networkController?: NetworkInputController;
 }) {
   const { t } = useI18n();
   const pressedCodesRef = useRef(new Set<string>());
+  const checksumHistoryRef = useRef(new Map<number, string>());
+  const pendingRemoteChecksumsRef = useRef(new Map<number, string>());
   const fighters = useMemo(() => selectStageFighters(props.fighters, props.selectedFighterIds), [props.fighters, props.selectedFighterIds]);
   const createInitialState = useCallback(
     () => (fighters ? createBattleState(props.config, { p1: fighters.p1, p2: fighters.p2 }) : undefined),
     [fighters, props.config],
   );
   const [battleState, setBattleState] = useState<BattleState | undefined>(() => createInitialState());
+  const [onlineStatus, setOnlineStatus] = useState<string | undefined>();
+  const [haltedMessage, setHaltedMessage] = useState<string | undefined>();
   const battleStateRef = useRef<BattleState | undefined>(battleState);
-  const p1Health = battleState?.fighters.p1.health ?? 100;
-  const showLowHealth = Boolean(battleState && battleState.status === "running" && p1Health > 0 && p1Health <= 30);
+  const watchedHealth = battleState?.fighters[props.localSlot ?? "p1"].health ?? 100;
+  const showLowHealth = Boolean(battleState && battleState.status === "running" && watchedHealth > 0 && watchedHealth <= 30);
   const stageEffectClasses = useMemo(() => props.displayEffects.map((effect) => `stage-effect-${effect}`).join(" "), [props.displayEffects]);
   useStageBattleAudio(battleState, fighters);
+
+  const resetSyncState = useCallback(() => {
+    checksumHistoryRef.current.clear();
+    pendingRemoteChecksumsRef.current.clear();
+    props.networkController?.resetSync();
+    setOnlineStatus(undefined);
+    setHaltedMessage(undefined);
+  }, [props.networkController]);
 
   useEffect(() => {
     const next = createInitialState();
     battleStateRef.current = next;
     setBattleState(next);
-  }, [createInitialState]);
+    resetSyncState();
+    pressedCodesRef.current.clear();
+  }, [createInitialState, resetSyncState]);
 
   useEffect(() => {
     battleStateRef.current = battleState;
   }, [battleState]);
 
-  const restartBattle = useCallback(() => {
-    const next = createInitialState();
+  useEffect(
+    () => () => {
+      props.networkController?.destroy();
+    },
+    [props.networkController],
+  );
+
+  const restartBattle = useCallback((notifyPeer: boolean) => {
+    const current = battleStateRef.current;
+    const next = current ? restartMatch(current) : createInitialState();
     battleStateRef.current = next;
     setBattleState(next);
     pressedCodesRef.current.clear();
-  }, [createInitialState]);
+    resetSyncState();
+    if (notifyPeer && next) {
+      props.networkController?.requestRestart(next.frame);
+    }
+  }, [createInitialState, props.networkController, resetSyncState]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -106,12 +139,13 @@ export function StagePreviewView(props: {
       }
       if (event.code === "Enter" && battleStateRef.current?.status === "matchOver") {
         event.preventDefault();
-        restartBattle();
+        restartBattle(props.mode === "online");
         return;
       }
       if (event.code === "Escape") {
         event.preventDefault();
         pressedCodesRef.current.clear();
+        props.networkController?.sendExit(t("battle.opponentMenu"));
         props.onBack();
         return;
       }
@@ -131,11 +165,11 @@ export function StagePreviewView(props: {
       window.removeEventListener("keyup", handleKeyUp);
       pressedCodesRef.current.clear();
     };
-  }, [props.onBack, restartBattle]);
+  }, [props.mode, props.networkController, props.onBack, restartBattle, t]);
 
   return (
     <section className={`stage-preview-view ${stageEffectClasses}`} onPointerDown={unlockStageAudio}>
-      <div className="stage-preview-canvas" aria-label={t("stagePreview.ariaStage")}>
+      <div className="stage-preview-canvas" aria-label={t("battle.ariaArena")}>
         {fighters && battleState ? (
           <Canvas
             dpr={[1, 2]}
@@ -148,10 +182,26 @@ export function StagePreviewView(props: {
                 battleState={battleState}
                 background={props.background}
                 fighters={fighters}
+                haltedMessage={haltedMessage}
+                localSlot={props.localSlot ?? "p1"}
+                mode={props.mode ?? "local"}
+                networkController={props.networkController}
+                onlineStatus={onlineStatus}
                 pressedCodesRef={pressedCodesRef}
+                setHaltedMessage={setHaltedMessage}
                 setBattleState={setBattleState}
+                setOnlineStatus={setOnlineStatus}
                 superLabel={t("battle.super")}
+                checksumHistoryRef={checksumHistoryRef}
+                pendingRemoteChecksumsRef={pendingRemoteChecksumsRef}
+                onlineCopy={{
+                  connectionClosed: t("battle.connectionClosed"),
+                  opponentLeft: t("battle.opponentLeft"),
+                  syncError: t("battle.syncError"),
+                  syncingFrame: (frame) => t("battle.syncingFrame", { frame }),
+                }}
                 controlsHint={formatStageControls(props.config, t)}
+                onRemoteRestart={() => restartBattle(false)}
               />
             </Suspense>
           </Canvas>
@@ -165,7 +215,7 @@ export function StagePreviewView(props: {
       <div className="sr-only">
         <p className="eyebrow">{t("stagePreview.eyebrow")}</p>
         <h1>{t("stagePreview.title")}</h1>
-        {battleState && <div className="sr-only" aria-live="polite">{formatBattleMessage(battleState, t)}</div>}
+        {battleState && <div className="sr-only" aria-live="polite">{formatBattleMessage(battleState, t, haltedMessage ?? onlineStatus)}</div>}
       </div>
 
       <aside className="battle-fx-panel" aria-label={t("effects.battleDisplayEffects")}>
@@ -179,14 +229,32 @@ export function StagePreviewView(props: {
 function PlayableStage(props: {
   battleState: BattleState;
   background?: RuntimeBattleBackground;
+  checksumHistoryRef: React.MutableRefObject<Map<number, string>>;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  haltedMessage?: string;
+  localSlot: PlayerSlot;
+  mode: "local" | "online";
+  networkController?: NetworkInputController;
+  onlineStatus?: string;
+  pendingRemoteChecksumsRef: React.MutableRefObject<Map<number, string>>;
   pressedCodesRef: React.MutableRefObject<Set<string>>;
+  setHaltedMessage: (message: string | undefined) => void;
   setBattleState: (state: BattleState) => void;
+  setOnlineStatus: (message: string | undefined) => void;
   superLabel: string;
+  onlineCopy: {
+    connectionClosed: string;
+    opponentLeft: string;
+    syncError: string;
+    syncingFrame: (frame: number) => string;
+  };
   controlsHint: string;
+  onRemoteRestart: () => void;
 }) {
   const accumulatorRef = useRef(0);
   const battleStateRef = useRef(props.battleState);
+  const onlineStatusRef = useRef<string | undefined>(props.onlineStatus);
+  const haltedMessageRef = useRef<string | undefined>(props.haltedMessage);
   const lastDebrisHitAtRef = useRef(-1);
   const lastSuperDebrisAtRef = useRef(-1);
   const debrisCleanupTimeoutsRef = useRef<number[]>([]);
@@ -194,7 +262,20 @@ function PlayableStage(props: {
 
   useEffect(() => {
     battleStateRef.current = props.battleState;
+    if (props.battleState.frame === 0) {
+      accumulatorRef.current = 0;
+      lastDebrisHitAtRef.current = -1;
+      lastSuperDebrisAtRef.current = -1;
+    }
   }, [props.battleState]);
+
+  useEffect(() => {
+    onlineStatusRef.current = props.onlineStatus;
+  }, [props.onlineStatus]);
+
+  useEffect(() => {
+    haltedMessageRef.current = props.haltedMessage;
+  }, [props.haltedMessage]);
 
   useEffect(
     () => () => {
@@ -205,12 +286,53 @@ function PlayableStage(props: {
   );
 
   useFrame((_, deltaSeconds) => {
+    processStageNetworkEvents({
+      checksumHistory: props.checksumHistoryRef.current,
+      haltedMessageRef,
+      networkController: props.networkController,
+      onHalt: props.setHaltedMessage,
+      onRemoteRestart: props.onRemoteRestart,
+      copy: props.onlineCopy,
+      pendingRemoteChecksums: props.pendingRemoteChecksumsRef.current,
+    });
+
+    if (haltedMessageRef.current) {
+      return;
+    }
+
     accumulatorRef.current += Math.min(deltaSeconds, 0.1);
     let next = battleStateRef.current;
     let steps = 0;
     while (accumulatorRef.current >= BATTLE_TICK_SECONDS && steps < 6) {
-      const inputs = readStageInputs(next, props.pressedCodesRef.current);
+      const inputs = readStageInputs({
+        localSlot: props.localSlot,
+        mode: props.mode,
+        networkController: props.networkController,
+        onlineCopy: props.onlineCopy,
+        onOnlineStatus: (message) => {
+          if (message !== onlineStatusRef.current) {
+            onlineStatusRef.current = message;
+            props.setOnlineStatus(message);
+          }
+        },
+        pressedCodes: props.pressedCodesRef.current,
+        state: next,
+      });
+      if (!inputs) {
+        accumulatorRef.current = Math.min(accumulatorRef.current, BATTLE_TICK_SECONDS);
+        break;
+      }
       next = stepBattleFrame(next, inputs);
+      afterStageSimulationFrame({
+        checksumHistory: props.checksumHistoryRef.current,
+        mode: props.mode,
+        networkController: props.networkController,
+        onHalt: props.setHaltedMessage,
+        haltedMessageRef,
+        syncError: props.onlineCopy.syncError,
+        pendingRemoteChecksums: props.pendingRemoteChecksumsRef.current,
+        state: next,
+      });
       accumulatorRef.current -= BATTLE_TICK_SECONDS;
       steps += 1;
     }
@@ -262,7 +384,7 @@ function PlayableStage(props: {
       <spotLight color="#f45b69" intensity={1.7} position={[4.5, 2.4, 2.4]} angle={0.48} penumbra={0.7} />
 
       <TheaterSet background={props.background} />
-      <BattleHudSprites fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} />
+      <BattleHudSprites fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <FightingStandee fighter={props.fighters.p1} runtime={props.battleState.fighters.p1} battleState={props.battleState} />
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       <HitSpark state={props.battleState} />
@@ -277,11 +399,11 @@ function PlayableStage(props: {
   );
 }
 
-function BattleHudSprites(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string }) {
+function BattleHudSprites(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
   const { t } = useI18n();
   const p1Texture = useBattleFighterHudTexture(props.state, props.fighters.p1, "p1", t);
   const p2Texture = useBattleFighterHudTexture(props.state, props.fighters.p2, "p2", t);
-  const centerTexture = useBattleCenterHudTexture(props.state, props.controlsHint, t);
+  const centerTexture = useBattleCenterHudTexture(props.state, props.controlsHint, t, props.statusMessage);
 
   return (
     <group position={[0, 0, STAGE_Z + 1.05]}>
@@ -796,9 +918,9 @@ function useBattleFighterHudTexture(state: BattleState, fighter: LoadedFighter, 
   return texture;
 }
 
-function useBattleCenterHudTexture(state: BattleState, controlsHint: string, t: Translate) {
+function useBattleCenterHudTexture(state: BattleState, controlsHint: string, t: Translate, statusMessage?: string) {
   const texture = useCanvasTexture(280, 220);
-  const message = formatBattleMessage(state, t);
+  const message = formatBattleMessage(state, t, statusMessage);
   const hint = state.status === "matchOver" ? t("battle.restartHint") : controlsHint;
   const seconds = Math.ceil(state.timer);
 
@@ -873,11 +995,35 @@ function selectStageFighters(fighters: LoadedFighter[], selected: { p1: string; 
   return p1 && p2 ? { p1, p2 } : undefined;
 }
 
-function readStageInputs(state: BattleState, pressedCodes: Set<string>): PlayerInputSnapshot {
+function readStageInputs(input: {
+  localSlot: PlayerSlot;
+  mode: "local" | "online";
+  networkController?: NetworkInputController;
+  onlineCopy: {
+    syncingFrame: (frame: number) => string;
+  };
+  onOnlineStatus: (message: string | undefined) => void;
+  pressedCodes: Set<string>;
+  state: BattleState;
+}): PlayerInputSnapshot | undefined {
+  if (input.mode === "online" && input.networkController) {
+    const localInput = readOnlineSlotActions(input.pressedCodes, input.localSlot);
+    input.networkController.queueLocalInput(input.state.frame, localInput);
+    const inputs = input.networkController.getInputsForFrame(input.state.frame);
+    if (!inputs) {
+      const missingFrame = input.networkController.getMissingFrame(input.state.frame) ?? input.state.frame;
+      input.onOnlineStatus(input.onlineCopy.syncingFrame(missingFrame));
+      return undefined;
+    }
+    input.onOnlineStatus(undefined);
+    return inputs;
+  }
+
+  const state = input.state;
   const controls = state.config.playerControls;
   return {
-    p1: controls?.p1 === "cpu" ? createCpuActions(state, "p1") : readSlotActions(pressedCodes, "p1"),
-    p2: controls?.p2 === "cpu" ? createCpuActions(state, "p2") : readSlotActions(pressedCodes, "p2"),
+    p1: controls?.p1 === "cpu" ? createCpuActions(state, "p1") : readSlotActions(input.pressedCodes, "p1"),
+    p2: controls?.p2 === "cpu" ? createCpuActions(state, "p2") : readSlotActions(input.pressedCodes, "p2"),
   };
 }
 
@@ -889,6 +1035,16 @@ function readSlotActions(pressedCodes: Set<string>, slot: PlayerSlot): ActionSna
   return actions;
 }
 
+function readOnlineSlotActions(pressedCodes: Set<string>, slot: PlayerSlot): ActionSnapshot {
+  const actions = readSlotActions(pressedCodes, slot);
+  if (slot === "p2") {
+    Object.entries(KEYBOARD_BINDINGS.p1).forEach(([code, action]) => {
+      actions[action] ||= pressedCodes.has(code);
+    });
+  }
+  return actions;
+}
+
 function isStageControlCode(code: string) {
   return PLAYER_SLOTS.some((slot) => code in KEYBOARD_BINDINGS[slot]);
 }
@@ -897,12 +1053,118 @@ function isEditableTarget(target: EventTarget | null) {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 }
 
-function formatBattleMessage(state: BattleState, t: Translate) {
+function formatBattleMessage(state: BattleState, t: Translate, override?: string) {
+  if (override) {
+    return override;
+  }
   const message = state.message;
   if (!message) {
     return state.status === "running" ? t("battle.fight") : "";
   }
   return getBattleMessageText(message, state, t);
+}
+
+function processStageNetworkEvents(input: {
+  checksumHistory: Map<number, string>;
+  copy: {
+    connectionClosed: string;
+    opponentLeft: string;
+    syncError: string;
+  };
+  haltedMessageRef: React.MutableRefObject<string | undefined>;
+  networkController?: NetworkInputController;
+  onHalt: (message: string | undefined) => void;
+  onRemoteRestart: () => void;
+  pendingRemoteChecksums: Map<number, string>;
+}) {
+  if (!input.networkController) {
+    return;
+  }
+  input.networkController.pollEvents().forEach((event) => {
+    if (event.type === "checksum") {
+      compareRemoteChecksum({
+        checksum: event.checksum,
+        checksumHistory: input.checksumHistory,
+        frame: event.frame,
+        haltedMessageRef: input.haltedMessageRef,
+        networkController: input.networkController,
+        onHalt: input.onHalt,
+        pendingRemoteChecksums: input.pendingRemoteChecksums,
+        syncError: input.copy.syncError,
+      });
+    } else if (event.type === "restart") {
+      input.onRemoteRestart();
+    } else if (event.type === "exit") {
+      setStageHalt(input.haltedMessageRef, input.onHalt, event.reason || input.copy.opponentLeft);
+    } else if (event.type === "error") {
+      setStageHalt(input.haltedMessageRef, input.onHalt, event.message);
+    } else if (event.type === "closed") {
+      setStageHalt(input.haltedMessageRef, input.onHalt, input.copy.connectionClosed);
+    }
+  });
+}
+
+function afterStageSimulationFrame(input: {
+  checksumHistory: Map<number, string>;
+  mode: "local" | "online";
+  networkController?: NetworkInputController;
+  onHalt: (message: string | undefined) => void;
+  haltedMessageRef: React.MutableRefObject<string | undefined>;
+  pendingRemoteChecksums: Map<number, string>;
+  state: BattleState;
+  syncError: string;
+}) {
+  if (input.mode !== "online" || !input.networkController || input.state.frame % NETPLAY_CHECKSUM_INTERVAL !== 0) {
+    return;
+  }
+  const checksum = getBattleChecksum(input.state);
+  input.checksumHistory.set(input.state.frame, checksum);
+  input.networkController.sendChecksum(input.state.frame, checksum);
+  const pending = input.pendingRemoteChecksums.get(input.state.frame);
+  if (pending) {
+    input.pendingRemoteChecksums.delete(input.state.frame);
+    compareRemoteChecksum({
+      checksum: pending,
+      checksumHistory: input.checksumHistory,
+      frame: input.state.frame,
+      haltedMessageRef: input.haltedMessageRef,
+      networkController: input.networkController,
+      onHalt: input.onHalt,
+      pendingRemoteChecksums: input.pendingRemoteChecksums,
+      syncError: input.syncError,
+    });
+  }
+}
+
+function compareRemoteChecksum(input: {
+  checksum: string;
+  checksumHistory: Map<number, string>;
+  frame: number;
+  haltedMessageRef: React.MutableRefObject<string | undefined>;
+  networkController?: NetworkInputController;
+  onHalt: (message: string | undefined) => void;
+  pendingRemoteChecksums: Map<number, string>;
+  syncError: string;
+}) {
+  const localChecksum = input.checksumHistory.get(input.frame);
+  if (!localChecksum) {
+    input.pendingRemoteChecksums.set(input.frame, input.checksum);
+    return;
+  }
+  if (localChecksum !== input.checksum) {
+    const message = input.syncError;
+    setStageHalt(input.haltedMessageRef, input.onHalt, message);
+    input.networkController?.sendError(message);
+  }
+}
+
+function setStageHalt(
+  haltedMessageRef: React.MutableRefObject<string | undefined>,
+  onHalt: (message: string | undefined) => void,
+  message: string,
+) {
+  haltedMessageRef.current = message;
+  onHalt(message);
 }
 
 function formatStageControls(config: BattleConfig, t: Translate) {

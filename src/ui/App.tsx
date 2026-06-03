@@ -15,7 +15,6 @@ import {
   saveBattleBackgroundImage,
   setBattlePostEffects as saveBattlePostEffects,
 } from "../storage/db";
-import { BattleView } from "./BattleView";
 import { CreatorView } from "./CreatorView";
 import {
   LocalFighterSelectView,
@@ -55,7 +54,7 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
   stageId: "dojo-v1",
 };
 
-const StagePreviewView = lazy(() => import("./StagePreviewView").then((module) => ({ default: module.StagePreviewView })));
+const StageBattleView = lazy(() => import("./StagePreviewView").then((module) => ({ default: module.StagePreviewView })));
 
 export function App() {
   const { t } = useI18n();
@@ -248,7 +247,7 @@ export function App() {
           onNext={() => {
             setOnlineBattle(undefined);
             if (battleFighters) {
-              navigate("stagePreview");
+              navigate("battle");
             }
           }}
         />
@@ -310,7 +309,7 @@ export function App() {
       {view === "settings" && <SettingsView battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />}
       {view === "stagePreview" && (
         <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
-          <StagePreviewView
+          <StageBattleView
             fighters={fighters}
             selectedFighterIds={{ p1: localSelection.p1, p2: localSelection.p2 }}
             config={localBattleConfig}
@@ -323,27 +322,35 @@ export function App() {
         </Suspense>
       )}
       {view === "battle" && onlineBattle && (
-        <BattleView
-          mode="online"
-          localSlot={onlineBattle.localSlot}
-          networkController={onlineBattle.controller}
-          config={onlineBattle.config}
-          fighters={onlineBattle.fighters}
-          background={onlineBattle.background}
-          displayEffects={battlePostEffects}
-          onDisplayEffectsChange={updateBattlePostEffects}
-          onExit={exitOnlineBattle}
-        />
+        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
+          <StageBattleView
+            fighters={[onlineBattle.fighters.p1, onlineBattle.fighters.p2]}
+            selectedFighterIds={{ p1: onlineBattle.fighters.p1.id, p2: onlineBattle.fighters.p2.id }}
+            mode="online"
+            localSlot={onlineBattle.localSlot}
+            networkController={onlineBattle.controller}
+            config={onlineBattle.config}
+            background={onlineBattle.background}
+            displayEffects={battlePostEffects}
+            loading={loading}
+            onDisplayEffectsChange={updateBattlePostEffects}
+            onBack={exitOnlineBattle}
+          />
+        </Suspense>
       )}
       {view === "battle" && !onlineBattle && battleFighters && (
-        <BattleView
-          config={localBattleConfig}
-          fighters={battleFighters}
-          background={battleBackground}
-          displayEffects={battlePostEffects}
-          onDisplayEffectsChange={updateBattlePostEffects}
-          onExit={exitLocalBattle}
-        />
+        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
+          <StageBattleView
+            fighters={[battleFighters.p1, battleFighters.p2]}
+            selectedFighterIds={{ p1: battleFighters.p1.id, p2: battleFighters.p2.id }}
+            config={localBattleConfig}
+            background={battleBackground}
+            displayEffects={battlePostEffects}
+            loading={loading}
+            onDisplayEffectsChange={updateBattlePostEffects}
+            onBack={exitLocalBattle}
+          />
+        </Suspense>
       )}
     </main>
   );

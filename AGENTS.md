@@ -11,10 +11,9 @@
 
 - React owns menus, creator/editor UI, settings, and DOM overlays.
 - React views are route-backed through `src/ui/routes.ts`; keep browser history/back-forward behavior intact when adding screens.
-- React Three Fiber owns the 2.5D local standee battle direction and should stay a thin renderer over simulation state.
+- React Three Fiber owns the 2.5D local and online standee battle direction and should stay a thin renderer over simulation state.
 - React Three Rapier may add visual-only physics juice such as debris, props, and wobble; never use it as the source of combat hit detection.
-- Phaser still owns the legacy 2D/online battle canvas, scene lifecycle, camera, sprites, and effects until those paths are migrated.
-- Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in Phaser scene callbacks.
+- Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in renderer callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
 - Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
@@ -30,19 +29,19 @@
 - `src/game/simulation/`: deterministic gameplay state and systems.
 - `src/game/input/`: action names, keyboard mappings, and CPU input helpers.
 - `src/game/content/`: default fighters and authored content.
+- `src/game/render/`: renderer-agnostic battle animation helpers.
 - `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
 - `src/i18n/`: typed locale dictionaries, browser-language detection, translation helpers, and React i18n provider.
-- `src/phaser/`: Phaser bridge, scenes, and render-only helpers.
 - `src/ui/`: React views and reusable UI components.
 - `workers/turn/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials.
 - `workers/generation/`: Cloudflare Worker that proxies server-side Gemini character spritesheet and single-pose generation.
 
 ## Engineering Rules
 
-- Keep gameplay state serializable and independent from Phaser objects.
+- Keep gameplay state serializable and independent from Three.js, DOM, and other renderer objects.
 - Keep online combat lockstep-friendly: fixed ticks, frame-indexed inputs, deterministic event ids, and no renderer-owned gameplay rules.
-- Keep local CPU behavior as deterministic input synthesis; do not bake CPU combat behavior into Phaser render callbacks or simulation hit resolution.
-- Keep Phaser render objects disposable; never treat sprites or tweens as source-of-truth state.
+- Keep local CPU behavior as deterministic input synthesis; do not bake CPU combat behavior into React Three Fiber render callbacks or simulation hit resolution.
+- Keep React Three Fiber and Rapier objects disposable; never treat meshes, bodies, or animation refs as source-of-truth state.
 - Use DOM for text-heavy UI and controls.
 - Keep center playfield readable during battle.
 - When adding assets or generated media, prefer local placeholders or user-generated content.
