@@ -140,7 +140,7 @@ export function OnlineMatchView(props: {
           </div>
           {props.role === "host" && (
             <div className="online-stage">
-              {props.background ? <img src={props.background.imageUrl} alt="" /> : <div className="stage-preview-default" />}
+              {props.background ? <img src={props.background.imageUrl} alt="" /> : <div className="background-preview-default" />}
               <div>
                 <span>{t("online.sharedArena")}</span>
                 <strong>{props.background?.name ?? t("common.defaultArena")}</strong>

@@ -1074,10 +1074,6 @@ button:disabled {
   border-color: rgba(244, 91, 105, 0.34);
 }
 
-.mode-card.stage-card {
-  border-color: rgba(159, 132, 255, 0.34);
-}
-
 .mode-card svg {
   color: var(--gold);
 }
@@ -1090,10 +1086,6 @@ button:disabled {
   color: var(--hot);
 }
 
-.mode-card.stage-card svg {
-  color: #b7a5ff;
-}
-
 .mode-card strong {
   font-size: clamp(22px, 3vw, 30px);
   line-height: 1;
@@ -1104,7 +1096,7 @@ button:disabled {
   line-height: 1.45;
 }
 
-.stage-preview-view {
+.battle-stage-view {
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -1112,12 +1104,12 @@ button:disabled {
   background: #14131d;
 }
 
-.stage-preview-canvas {
+.battle-stage-canvas {
   position: absolute;
   inset: 0;
 }
 
-.stage-preview-canvas canvas {
+.battle-stage-canvas canvas {
   display: block;
 }
 
@@ -1129,12 +1121,12 @@ button:disabled {
   mix-blend-mode: screen;
 }
 
-.stage-effect-pixel .stage-preview-canvas canvas {
+.stage-effect-pixel .battle-stage-canvas canvas {
   image-rendering: pixelated;
   filter: saturate(1.08) contrast(1.08);
 }
 
-.stage-effect-bad-tv .stage-preview-canvas {
+.stage-effect-bad-tv .battle-stage-canvas {
   filter: contrast(1.12) saturate(1.16) hue-rotate(-3deg);
 }
 
@@ -1170,7 +1162,7 @@ button:disabled {
   opacity: 0.54;
 }
 
-.stage-preview-loading {
+.battle-stage-loading {
   height: 100%;
   display: grid;
   place-items: center;
@@ -1353,7 +1345,7 @@ button:disabled {
   background: #111018;
 }
 
-.stage-preview {
+.background-preview {
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -1362,18 +1354,18 @@ button:disabled {
   background: var(--panel-strong);
 }
 
-.stage-preview img,
-.stage-preview-default {
+.background-preview img,
+.background-preview-default {
   width: 100%;
   height: 100%;
 }
 
-.stage-preview img {
+.background-preview img {
   display: block;
   object-fit: cover;
 }
 
-.stage-preview-default {
+.background-preview-default {
   background:
     linear-gradient(180deg, rgba(37, 34, 58, 0.95), rgba(16, 16, 24, 0.96)),
     linear-gradient(90deg, transparent 0 14%, rgba(244, 91, 105, 0.2) 14% 15%, transparent 15% 100%),
@@ -1711,7 +1703,7 @@ button:disabled {
 }
 
 .online-stage img,
-.online-stage .stage-preview-default {
+.online-stage .background-preview-default {
   width: 108px;
   aspect-ratio: 16 / 9;
   border: 1px solid var(--line);

@@ -54,7 +54,7 @@ const DEFAULT_BATTLE_CONFIG: Omit<BattleConfig, "playerOneFighterId" | "playerTw
   stageId: "dojo-v1",
 };
 
-const StageBattleView = lazy(() => import("./StagePreviewView").then((module) => ({ default: module.StagePreviewView })));
+const BattleStageView = lazy(() => import("./BattleStageView").then((module) => ({ default: module.BattleStageView })));
 
 export function App() {
   const { t } = useI18n();
@@ -216,7 +216,7 @@ export function App() {
 
   return (
     <main className="app-shell">
-      {view !== "battle" && view !== "stagePreview" && <Topbar view={view} onNavigate={navigate} />}
+      {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (
         <MenuView
@@ -224,7 +224,6 @@ export function App() {
           loading={loading}
           onCreate={() => navigate("creator")}
           onLocal={() => navigate("localFighters")}
-          onStagePreview={() => navigate("stagePreview")}
           onHost={() => navigate("remoteHostFighter")}
           onJoin={() => navigate("remoteJoinFighter")}
         />
@@ -307,23 +306,9 @@ export function App() {
         />
       )}
       {view === "settings" && <SettingsView battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />}
-      {view === "stagePreview" && (
-        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
-          <StageBattleView
-            fighters={fighters}
-            selectedFighterIds={{ p1: localSelection.p1, p2: localSelection.p2 }}
-            config={localBattleConfig}
-            background={battleBackground}
-            displayEffects={battlePostEffects}
-            loading={loading}
-            onDisplayEffectsChange={updateBattlePostEffects}
-            onBack={() => navigate("menu")}
-          />
-        </Suspense>
-      )}
       {view === "battle" && onlineBattle && (
-        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
-          <StageBattleView
+        <Suspense fallback={<div className="battle-stage-loading">{t("common.loading")}</div>}>
+          <BattleStageView
             fighters={[onlineBattle.fighters.p1, onlineBattle.fighters.p2]}
             selectedFighterIds={{ p1: onlineBattle.fighters.p1.id, p2: onlineBattle.fighters.p2.id }}
             mode="online"
@@ -339,8 +324,8 @@ export function App() {
         </Suspense>
       )}
       {view === "battle" && !onlineBattle && battleFighters && (
-        <Suspense fallback={<div className="stage-preview-loading">{t("common.loading")}</div>}>
-          <StageBattleView
+        <Suspense fallback={<div className="battle-stage-loading">{t("common.loading")}</div>}>
+          <BattleStageView
             fighters={[battleFighters.p1, battleFighters.p2]}
             selectedFighterIds={{ p1: battleFighters.p1.id, p2: battleFighters.p2.id }}
             config={localBattleConfig}

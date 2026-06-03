@@ -62,7 +62,7 @@ interface DebrisPiece {
   torque: [number, number, number];
 }
 
-export function StagePreviewView(props: {
+export function BattleStageView(props: {
   fighters: LoadedFighter[];
   selectedFighterIds: { p1: string; p2: string };
   config: BattleConfig;
@@ -168,8 +168,8 @@ export function StagePreviewView(props: {
   }, [props.mode, props.networkController, props.onBack, restartBattle, t]);
 
   return (
-    <section className={`stage-preview-view ${stageEffectClasses}`} onPointerDown={unlockStageAudio}>
-      <div className="stage-preview-canvas" aria-label={t("battle.ariaArena")}>
+    <section className={`battle-stage-view ${stageEffectClasses}`} onPointerDown={unlockStageAudio}>
+      <div className="battle-stage-canvas" aria-label={t("battle.ariaArena")}>
         {fighters && battleState ? (
           <Canvas
             dpr={[1, 2]}
@@ -206,15 +206,15 @@ export function StagePreviewView(props: {
             </Suspense>
           </Canvas>
         ) : (
-          <div className="stage-preview-loading">{props.loading ? t("common.loading") : t("stagePreview.noFighters")}</div>
+          <div className="battle-stage-loading">{props.loading ? t("common.loading") : t("battleStage.noFighters")}</div>
         )}
       </div>
       {props.displayEffects.length > 0 && <div className="stage-effect-overlay" aria-hidden="true" />}
       <div className={`stage-low-health-vignette${showLowHealth ? " active" : ""}`} aria-hidden="true" />
 
       <div className="sr-only">
-        <p className="eyebrow">{t("stagePreview.eyebrow")}</p>
-        <h1>{t("stagePreview.title")}</h1>
+        <p className="eyebrow">{t("battleStage.eyebrow")}</p>
+        <h1>{t("battleStage.title")}</h1>
         {battleState && <div className="sr-only" aria-live="polite">{formatBattleMessage(battleState, t, haltedMessage ?? onlineStatus)}</div>}
       </div>
 
@@ -1170,15 +1170,15 @@ function setStageHalt(
 function formatStageControls(config: BattleConfig, t: Translate) {
   const controls = config.playerControls;
   if (controls?.p1 === "cpu" && controls.p2 === "cpu") {
-    return t("stagePreview.controlsCpu");
+    return t("battleStage.controlsCpu");
   }
   if (controls?.p1 === "cpu" && controls.p2 !== "cpu") {
-    return t("stagePreview.controlsP2");
+    return t("battleStage.controlsP2");
   }
   if (controls?.p2 === "cpu") {
-    return t("stagePreview.controlsP1");
+    return t("battleStage.controlsP1");
   }
-  return t("stagePreview.controlsP1P2");
+  return t("battleStage.controlsP1P2");
 }
 
 function getBattleMessageText(message: BattleMessage, state: BattleState, t: Translate) {

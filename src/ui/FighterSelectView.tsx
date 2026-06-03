@@ -204,8 +204,8 @@ function StagePicker(props: {
 
   return (
     <div className="stage-picker">
-      <div className="stage-preview" aria-hidden="true">
-        {props.battleBackground ? <img src={props.battleBackground.imageUrl} alt="" /> : <div className="stage-preview-default" />}
+      <div className="background-preview" aria-hidden="true">
+        {props.battleBackground ? <img src={props.battleBackground.imageUrl} alt="" /> : <div className="background-preview-default" />}
       </div>
       <div className="stage-details">
         <div className="stage-title">

@@ -1,4 +1,4 @@
-export type View = "menu" | "creator" | "fighterSelect" | "settings" | "online" | "battle" | "stagePreview";
+export type View = "menu" | "creator" | "fighterSelect" | "settings" | "online" | "battle";
 
 export type AppRoute =
   | "menu"
@@ -7,7 +7,6 @@ export type AppRoute =
   | "remoteHostFighter"
   | "remoteJoinFighter"
   | "settings"
-  | "stagePreview"
   | "onlineHost"
   | "onlineGuest"
   | "battle";
@@ -19,7 +18,6 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   remoteHostFighter: "/remote/host/fighter",
   remoteJoinFighter: "/remote/join/fighter",
   settings: "/settings",
-  stagePreview: "/stage-preview",
   onlineHost: "/online/host",
   onlineGuest: "/online/join",
   battle: "/battle",
@@ -93,8 +91,6 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
       return "remoteJoinFighter";
     case "/settings":
       return "settings";
-    case "/stage-preview":
-      return "stagePreview";
     case "/online/host":
       return "onlineHost";
     case "/online/join":
