@@ -91,6 +91,7 @@ export function BattleStageView(props: {
   const watchedHealth = battleState?.fighters[props.localSlot ?? "p1"].health ?? 100;
   const showLowHealth = Boolean(battleState && battleState.status === "running" && watchedHealth > 0 && watchedHealth <= 30);
   const stageEffectClasses = useMemo(() => props.displayEffects.map((effect) => `stage-effect-${effect}`).join(" "), [props.displayEffects]);
+  const controlsHint = useMemo(() => formatStageControls(props.config, t), [props.config, t]);
   useStageBattleAudio(battleState, fighters);
 
   const resetSyncState = useCallback(() => {
@@ -200,7 +201,6 @@ export function BattleStageView(props: {
                   syncError: t("battle.syncError"),
                   syncingFrame: (frame) => t("battle.syncingFrame", { frame }),
                 }}
-                controlsHint={formatStageControls(props.config, t)}
                 onRemoteRestart={() => restartBattle(false)}
               />
             </Suspense>
@@ -211,6 +211,9 @@ export function BattleStageView(props: {
       </div>
       {props.displayEffects.length > 0 && <div className="stage-effect-overlay" aria-hidden="true" />}
       <div className={`stage-low-health-vignette${showLowHealth ? " active" : ""}`} aria-hidden="true" />
+      {fighters && battleState && (
+        <BattleHudOverlay fighters={fighters} state={battleState} controlsHint={controlsHint} statusMessage={haltedMessage ?? onlineStatus} />
+      )}
 
       <div className="sr-only">
         <p className="eyebrow">{t("battleStage.eyebrow")}</p>
@@ -248,7 +251,6 @@ function PlayableStage(props: {
     syncError: string;
     syncingFrame: (frame: number) => string;
   };
-  controlsHint: string;
   onRemoteRestart: () => void;
 }) {
   const accumulatorRef = useRef(0);
@@ -384,7 +386,6 @@ function PlayableStage(props: {
       <spotLight color="#f45b69" intensity={1.7} position={[4.5, 2.4, 2.4]} angle={0.48} penumbra={0.7} />
 
       <TheaterSet background={props.background} />
-      <BattleHudSprites fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <FightingStandee fighter={props.fighters.p1} runtime={props.battleState.fighters.p1} battleState={props.battleState} />
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       <HitSpark state={props.battleState} />
@@ -399,26 +400,67 @@ function PlayableStage(props: {
   );
 }
 
-function BattleHudSprites(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
+function BattleHudOverlay(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
   const { t } = useI18n();
-  const p1Texture = useBattleFighterHudTexture(props.state, props.fighters.p1, "p1", t);
-  const p2Texture = useBattleFighterHudTexture(props.state, props.fighters.p2, "p2", t);
-  const centerTexture = useBattleCenterHudTexture(props.state, props.controlsHint, t, props.statusMessage);
+  const p1CanvasRef = useRef<HTMLCanvasElement>(null);
+  const p2CanvasRef = useRef<HTMLCanvasElement>(null);
+  const centerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const p1Runtime = props.state.fighters.p1;
+  const p2Runtime = props.state.fighters.p2;
+  const p1Health = Math.max(0, Math.min(1, p1Runtime.health / 100));
+  const p2Health = Math.max(0, Math.min(1, p2Runtime.health / 100));
+  const p1SuperRatio = SUPER_HITS_REQUIRED > 0 ? Math.max(0, Math.min(1, p1Runtime.superMeter / SUPER_HITS_REQUIRED)) : 1;
+  const p2SuperRatio = SUPER_HITS_REQUIRED > 0 ? Math.max(0, Math.min(1, p2Runtime.superMeter / SUPER_HITS_REQUIRED)) : 1;
+  const message = formatBattleMessage(props.state, t, props.statusMessage);
+  const hint = props.state.status === "matchOver" ? t("battle.restartHint") : props.controlsHint;
+  const seconds = Math.ceil(props.state.timer);
+
+  useEffect(() => {
+    const canvas = p1CanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    drawFighterHudCanvas(canvas, {
+      health: p1Health,
+      name: props.fighters.p1.name,
+      roundsWon: p1Runtime.roundsWon,
+      slot: "p1",
+      superRatio: p1SuperRatio,
+      superReady: p1Runtime.superMeter >= SUPER_HITS_REQUIRED,
+      maxLabel: t("battle.max"),
+    });
+  }, [p1Health, p1Runtime.roundsWon, p1Runtime.superMeter, p1SuperRatio, props.fighters.p1.name, t]);
+
+  useEffect(() => {
+    const canvas = p2CanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    drawFighterHudCanvas(canvas, {
+      health: p2Health,
+      name: props.fighters.p2.name,
+      roundsWon: p2Runtime.roundsWon,
+      slot: "p2",
+      superRatio: p2SuperRatio,
+      superReady: p2Runtime.superMeter >= SUPER_HITS_REQUIRED,
+      maxLabel: t("battle.max"),
+    });
+  }, [p2Health, p2Runtime.roundsWon, p2Runtime.superMeter, p2SuperRatio, props.fighters.p2.name, t]);
+
+  useEffect(() => {
+    const canvas = centerCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    drawCenterHudCanvas(canvas, { hint, message, seconds });
+  }, [hint, message, seconds]);
 
   return (
-    <group position={[0, 0, STAGE_Z + 1.05]}>
-      <HudSprite texture={p1Texture} position={[-2.35, 3.05, 0]} scale={[2.5, 0.74, 1]} />
-      <HudSprite texture={centerTexture} position={[0, 3.12, 0.02]} scale={[0.96, 0.78, 1]} />
-      <HudSprite texture={p2Texture} position={[2.35, 3.05, 0]} scale={[2.5, 0.74, 1]} />
-    </group>
-  );
-}
-
-function HudSprite(props: { texture: THREE.Texture; position: [number, number, number]; scale: [number, number, number] }) {
-  return (
-    <sprite position={props.position} scale={props.scale} renderOrder={40}>
-      <spriteMaterial map={props.texture} transparent depthTest={false} depthWrite={false} />
-    </sprite>
+    <div className="battle-hud-overlay" aria-hidden="true">
+      <canvas ref={p1CanvasRef} className="battle-hud-panel battle-hud-fighter battle-hud-p1" width={640} height={190} />
+      <canvas ref={centerCanvasRef} className="battle-hud-panel battle-hud-center" width={280} height={220} />
+      <canvas ref={p2CanvasRef} className="battle-hud-panel battle-hud-fighter battle-hud-p2" width={640} height={190} />
+    </div>
   );
 }
 
@@ -446,10 +488,6 @@ function TheaterSet(props: { background?: RuntimeBattleBackground }) {
       <mesh receiveShadow rotation={[0, -Math.PI * 0.38, 0]} position={[4.18, 2.15, -0.55]}>
         <planeGeometry args={[4.3, 4.4]} />
         <meshStandardMaterial color="#211b2b" roughness={0.9} />
-      </mesh>
-      <mesh castShadow position={[0, 0.08, 1.55]}>
-        <boxGeometry args={[6.4, 0.16, 0.22]} />
-        <meshStandardMaterial color="#f7b267" roughness={0.58} />
       </mesh>
     </group>
   );
@@ -896,57 +934,6 @@ function useVictoryTextures(fighters: { p1: LoadedFighter; p2: LoadedFighter }):
   }, [textureList]);
 }
 
-function useBattleFighterHudTexture(state: BattleState, fighter: LoadedFighter, slot: PlayerSlot, t: Translate) {
-  const texture = useCanvasTexture(640, 190);
-  const runtime = state.fighters[slot];
-  const health = Math.max(0, Math.min(1, runtime.health / 100));
-  const superRatio = SUPER_HITS_REQUIRED > 0 ? Math.max(0, Math.min(1, runtime.superMeter / SUPER_HITS_REQUIRED)) : 1;
-  const superReady = runtime.superMeter >= SUPER_HITS_REQUIRED;
-
-  useEffect(() => {
-    drawFighterHud(texture, {
-      health,
-      name: fighter.name,
-      roundsWon: runtime.roundsWon,
-      slot,
-      superRatio,
-      superReady,
-      maxLabel: t("battle.max"),
-    });
-  }, [fighter.name, health, runtime.roundsWon, slot, superRatio, superReady, t, texture]);
-
-  return texture;
-}
-
-function useBattleCenterHudTexture(state: BattleState, controlsHint: string, t: Translate, statusMessage?: string) {
-  const texture = useCanvasTexture(280, 220);
-  const message = formatBattleMessage(state, t, statusMessage);
-  const hint = state.status === "matchOver" ? t("battle.restartHint") : controlsHint;
-  const seconds = Math.ceil(state.timer);
-
-  useEffect(() => {
-    drawCenterHud(texture, { hint, message, seconds });
-  }, [hint, message, seconds, texture]);
-
-  return texture;
-}
-
-function useCanvasTexture(width: number, height: number) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const next = new THREE.CanvasTexture(canvas);
-    next.colorSpace = THREE.SRGBColorSpace;
-    next.minFilter = THREE.LinearFilter;
-    next.magFilter = THREE.LinearFilter;
-    return next;
-  }, [height, width]);
-
-  useEffect(() => () => texture.dispose(), [texture]);
-  return texture;
-}
-
 function useStageBattleAudio(state: BattleState | undefined, fighters: { p1: LoadedFighter; p2: LoadedFighter } | undefined) {
   const previousStateRef = useRef<BattleState | undefined>();
 
@@ -1261,8 +1248,8 @@ function createSuperDebris(state: BattleState): DebrisPiece[] {
   });
 }
 
-function drawFighterHud(
-  texture: THREE.CanvasTexture,
+function drawFighterHudCanvas(
+  canvas: HTMLCanvasElement,
   options: {
     health: number;
     maxLabel: string;
@@ -1273,7 +1260,6 @@ function drawFighterHud(
     superReady: boolean;
   },
 ) {
-  const canvas = texture.image as HTMLCanvasElement;
   const context = canvas.getContext("2d");
   if (!context) {
     return;
@@ -1357,11 +1343,9 @@ function drawFighterHud(
     }
     context.restore();
   }
-  texture.needsUpdate = true;
 }
 
-function drawCenterHud(texture: THREE.CanvasTexture, options: { hint: string; message: string; seconds: number }) {
-  const canvas = texture.image as HTMLCanvasElement;
+function drawCenterHudCanvas(canvas: HTMLCanvasElement, options: { hint: string; message: string; seconds: number }) {
   const context = canvas.getContext("2d");
   if (!context) {
     return;
@@ -1387,7 +1371,6 @@ function drawCenterHud(texture: THREE.CanvasTexture, options: { hint: string; me
   context.fillStyle = "rgba(248, 244, 223, 0.72)";
   context.font = "800 13px Arial, sans-serif";
   wrapCanvasText(context, options.hint, canvas.width / 2, 154, 214, 16);
-  texture.needsUpdate = true;
 }
 
 function drawHudBar(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, ratio: number, fill: CanvasGradient, tip: number) {
