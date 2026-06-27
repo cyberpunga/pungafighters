@@ -1113,75 +1113,12 @@ button:disabled {
   display: block;
 }
 
-.stage-effect-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  mix-blend-mode: screen;
-}
-
-.stage-effect-pixel .battle-stage-canvas canvas {
-  image-rendering: pixelated;
-  filter: saturate(1.08) contrast(1.08);
-}
-
-.stage-effect-bad-tv .battle-stage-canvas {
-  filter: contrast(1.12) saturate(1.16) hue-rotate(-3deg);
-}
-
-.stage-effect-bad-tv .stage-effect-overlay {
-  background:
-    linear-gradient(90deg, rgba(244, 91, 105, 0.1), transparent 16%, rgba(46, 196, 182, 0.08) 34%, transparent 50%),
-    repeating-linear-gradient(0deg, transparent 0 5px, rgba(248, 244, 223, 0.05) 6px 7px);
-  opacity: 0.34;
-}
-
-.stage-effect-static .stage-effect-overlay {
-  background-image:
-    radial-gradient(circle at 12% 22%, rgba(248, 244, 223, 0.18) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 76% 48%, rgba(248, 244, 223, 0.14) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 38% 82%, rgba(248, 244, 223, 0.12) 0 1px, transparent 1.5px);
-  background-size: 17px 19px, 23px 29px, 31px 37px;
-  opacity: 0.28;
-  animation: stageStaticDrift 180ms steps(2) infinite;
-}
-
-.stage-effect-crt-soft .stage-effect-overlay,
-.stage-effect-crt-strong .stage-effect-overlay {
-  background:
-    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 4px),
-    radial-gradient(circle at 50% 52%, transparent 0 48%, rgba(0, 0, 0, 0.34) 100%);
-}
-
-.stage-effect-crt-soft .stage-effect-overlay {
-  opacity: 0.32;
-}
-
-.stage-effect-crt-strong .stage-effect-overlay {
-  opacity: 0.54;
-}
-
 .battle-stage-loading {
   height: 100%;
   display: grid;
   place-items: center;
   color: var(--muted);
   font-weight: 800;
-}
-
-.stage-low-health-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0;
-  box-shadow: inset 0 0 150px 34px rgba(244, 91, 105, 0.7);
-  transition: opacity 160ms ease;
-}
-
-.stage-low-health-vignette.active {
-  animation: stageLowHealthPulse 520ms ease-in-out infinite alternate;
 }
 
 .battle-hud-overlay {
@@ -1219,26 +1156,6 @@ button:disabled {
 .battle-hud-center {
   justify-self: center;
   max-width: 140px;
-}
-
-@keyframes stageStaticDrift {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(3px, -2px, 0);
-  }
-}
-
-@keyframes stageLowHealthPulse {
-  from {
-    opacity: 0.22;
-  }
-
-  to {
-    opacity: 0.52;
-  }
 }
 
 .fighter-grid {
@@ -1641,27 +1558,6 @@ button:disabled {
 
 .battle-canvas-host canvas {
   display: block;
-}
-
-.battle-fx-panel {
-  position: absolute;
-  right: clamp(12px, 2vw, 22px);
-  bottom: clamp(12px, 2vw, 22px);
-  z-index: 3;
-  width: min(360px, calc(100vw - 24px));
-  display: grid;
-  gap: 8px;
-  border: 1px solid rgba(248, 244, 223, 0.18);
-  border-radius: 8px;
-  background: rgba(17, 16, 24, 0.78);
-  padding: 10px;
-  backdrop-filter: blur(10px);
-}
-
-.battle-fx-panel strong {
-  color: var(--aqua);
-  font-size: 12px;
-  letter-spacing: 0;
 }
 
 .effect-stack--compact {

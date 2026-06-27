@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CircleOff, Grid3X3, ScanLine, Sparkles, TvMinimal, Zap } from "lucide-react";
+import { Aperture, ArrowDown, ArrowUp, CircleOff, Grid3X3, ScanLine, Sparkles, TvMinimal, Zap } from "lucide-react";
 import type { MessageKey } from "../i18n";
 import { useI18n } from "../i18n/react";
 import type { BattlePostEffect } from "../types/game";
@@ -9,6 +9,7 @@ const DISPLAY_EFFECT_OPTIONS = [
   { value: "static", labelKey: "effects.static", Icon: Sparkles },
   { value: "crt-soft", labelKey: "effects.crt-soft", Icon: TvMinimal },
   { value: "crt-strong", labelKey: "effects.crt-strong", Icon: ScanLine },
+  { value: "lens", labelKey: "effects.lens", Icon: Aperture },
 ] as const satisfies ReadonlyArray<{
   value: BattlePostEffect;
   labelKey: MessageKey;

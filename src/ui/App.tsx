@@ -318,7 +318,6 @@ export function App() {
             background={onlineBattle.background}
             displayEffects={battlePostEffects}
             loading={loading}
-            onDisplayEffectsChange={updateBattlePostEffects}
             onBack={exitOnlineBattle}
           />
         </Suspense>
@@ -332,7 +331,6 @@ export function App() {
             background={battleBackground}
             displayEffects={battlePostEffects}
             loading={loading}
-            onDisplayEffectsChange={updateBattlePostEffects}
             onBack={exitLocalBattle}
           />
         </Suspense>

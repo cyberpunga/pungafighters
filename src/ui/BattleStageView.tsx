@@ -32,7 +32,7 @@ import {
 } from "../types/game";
 import type { Translate } from "../i18n";
 import { useI18n } from "../i18n/react";
-import { BattleDisplayEffectsControl } from "./BattleDisplayEffectsControl";
+import { BattlePostProcessing } from "./BattlePostProcessing";
 
 const STAGE_X_RANGE = 5.1;
 const STAGE_Z = 0.1;
@@ -69,7 +69,6 @@ export function BattleStageView(props: {
   background?: RuntimeBattleBackground;
   displayEffects: BattlePostEffect[];
   loading: boolean;
-  onDisplayEffectsChange: (effects: BattlePostEffect[]) => void;
   onBack: () => void;
   mode?: "local" | "online";
   localSlot?: PlayerSlot;
@@ -88,9 +87,6 @@ export function BattleStageView(props: {
   const [onlineStatus, setOnlineStatus] = useState<string | undefined>();
   const [haltedMessage, setHaltedMessage] = useState<string | undefined>();
   const battleStateRef = useRef<BattleState | undefined>(battleState);
-  const watchedHealth = battleState?.fighters[props.localSlot ?? "p1"].health ?? 100;
-  const showLowHealth = Boolean(battleState && battleState.status === "running" && watchedHealth > 0 && watchedHealth <= 30);
-  const stageEffectClasses = useMemo(() => props.displayEffects.map((effect) => `stage-effect-${effect}`).join(" "), [props.displayEffects]);
   const controlsHint = useMemo(() => formatStageControls(props.config, t), [props.config, t]);
   useStageBattleAudio(battleState, fighters);
 
@@ -169,7 +165,7 @@ export function BattleStageView(props: {
   }, [props.mode, props.networkController, props.onBack, restartBattle, t]);
 
   return (
-    <section className={`battle-stage-view ${stageEffectClasses}`} onPointerDown={unlockStageAudio}>
+    <section className="battle-stage-view" onPointerDown={unlockStageAudio}>
       <div className="battle-stage-canvas" aria-label={t("battle.ariaArena")}>
         {fighters && battleState ? (
           <Canvas
@@ -182,6 +178,7 @@ export function BattleStageView(props: {
               <PlayableStage
                 battleState={battleState}
                 background={props.background}
+                displayEffects={props.displayEffects}
                 fighters={fighters}
                 haltedMessage={haltedMessage}
                 localSlot={props.localSlot ?? "p1"}
@@ -209,8 +206,6 @@ export function BattleStageView(props: {
           <div className="battle-stage-loading">{props.loading ? t("common.loading") : t("battleStage.noFighters")}</div>
         )}
       </div>
-      {props.displayEffects.length > 0 && <div className="stage-effect-overlay" aria-hidden="true" />}
-      <div className={`stage-low-health-vignette${showLowHealth ? " active" : ""}`} aria-hidden="true" />
       {fighters && battleState && (
         <BattleHudOverlay fighters={fighters} state={battleState} controlsHint={controlsHint} statusMessage={haltedMessage ?? onlineStatus} />
       )}
@@ -220,11 +215,6 @@ export function BattleStageView(props: {
         <h1>{t("battleStage.title")}</h1>
         {battleState && <div className="sr-only" aria-live="polite">{formatBattleMessage(battleState, t, haltedMessage ?? onlineStatus)}</div>}
       </div>
-
-      <aside className="battle-fx-panel" aria-label={t("effects.battleDisplayEffects")}>
-        <strong>{t("battle.fx")}</strong>
-        <BattleDisplayEffectsControl compact effects={props.displayEffects} onChange={props.onDisplayEffectsChange} />
-      </aside>
     </section>
   );
 }
@@ -233,6 +223,7 @@ function PlayableStage(props: {
   battleState: BattleState;
   background?: RuntimeBattleBackground;
   checksumHistoryRef: React.MutableRefObject<Map<number, string>>;
+  displayEffects: BattlePostEffect[];
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
   haltedMessage?: string;
   localSlot: PlayerSlot;
@@ -391,6 +382,7 @@ function PlayableStage(props: {
       <HitSpark state={props.battleState} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
       <CameraRig state={props.battleState} />
+      <BattlePostProcessing state={props.battleState} displayEffects={props.displayEffects} localSlot={props.localSlot} />
       <Physics gravity={[0, -8.5, 0]}>
         <StagePhysicsColliders />
         <ImpactDebris pieces={debrisPieces} />
@@ -576,10 +568,6 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
 
   return (
     <group ref={groupRef}>
-      <mesh castShadow position={[0, geometry.centerY, -0.065]} scale={[1.055 * facingScale, 1.055, 1]}>
-        <planeGeometry args={[geometry.width, geometry.height]} />
-        <meshStandardMaterial map={texture} color="#6f5134" transparent alphaTest={0.08} roughness={0.95} side={THREE.DoubleSide} />
-      </mesh>
       <mesh castShadow position={[0, geometry.centerY, -0.025]} scale={[facingScale, 1, 1]}>
         <planeGeometry args={[geometry.width, geometry.height]} />
         <meshStandardMaterial map={texture} color={tint} transparent opacity={alpha} alphaTest={0.08} roughness={0.72} side={THREE.DoubleSide} />
