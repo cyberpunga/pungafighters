@@ -34,6 +34,7 @@ import {
   getSegmentationProvider,
   isSegmentationProviderId,
 } from "../../creator/segmentation/providerRegistry";
+import { synthesizeMissingSpriteBlobs } from "../../creator/spriteSynthesis";
 import { TRANSFORMERS_MODELS } from "../../creator/segmentation/transformersBackgroundRemovalProvider";
 import type {
   MediaPipeSegmentationOptions,
@@ -1037,14 +1038,16 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
     setSaving(true);
     try {
+      const frameBlobs = Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drafts[pose]!.frame!.blob])) as Record<
+        FighterPose,
+        Blob
+      >;
+      const spriteFrameBlobs = await synthesizeMissingSpriteBlobs(frameBlobs, createSpriteBlobRecord(spriteDrafts));
       const saved = await saveFighterDraft({
         id: editingFighterId,
         name,
-        frameBlobs: Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drafts[pose]!.frame!.blob])) as Record<
-          FighterPose,
-          Blob
-        >,
-        spriteFrameBlobs: createSpriteBlobRecord(spriteDrafts),
+        frameBlobs,
+        spriteFrameBlobs,
         voiceBlobs: createVoiceBlobRecord(voiceDrafts),
       });
       await props.onSaved();
