@@ -2,6 +2,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type {
   BattleDisplayEffect,
   BattlePostEffect,
+  BattlePostEffectSettings,
   FighterPose,
   FighterProfile,
   LoadedBattleBackground,
@@ -9,16 +10,23 @@ import type {
   VoiceClipType,
 } from "../types/game";
 import { BATTLE_POST_EFFECTS, FIGHTER_POSES } from "../types/game";
+import {
+  createDefaultBattlePostEffectSettings,
+  getEnabledBattlePostEffects,
+  normalizeBattlePostEffectSettings,
+} from "../game/render/postEffectSettings";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 import { AppError, missingPoseImageError } from "../i18n/errors";
 
 export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
 export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "clean";
 export const DEFAULT_BATTLE_POST_EFFECTS: BattlePostEffect[] = [];
+export const DEFAULT_BATTLE_POST_EFFECT_SETTINGS: BattlePostEffectSettings = createDefaultBattlePostEffectSettings(DEFAULT_BATTLE_POST_EFFECTS);
 
 const BATTLE_BACKGROUND_SETTING_KEY = "battle-background";
 const BATTLE_DISPLAY_EFFECT_SETTING_KEY = "battle-display-effect";
 const BATTLE_POST_EFFECTS_SETTING_KEY = "battle-post-effects";
+const BATTLE_POST_EFFECT_SETTINGS_KEY = "battle-post-effect-settings";
 const BATTLE_BACKGROUND_BLOB_ID = "battle-background:current";
 const BATTLE_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
 const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -302,21 +310,31 @@ export async function getBattleDisplayEffect(): Promise<BattleDisplayEffect> {
 }
 
 export async function getBattlePostEffects(): Promise<BattlePostEffect[]> {
+  return getEnabledBattlePostEffects(await getBattlePostEffectSettings());
+}
+
+export async function getBattlePostEffectSettings(): Promise<BattlePostEffectSettings> {
   const db = await getDb();
+  const settingsValue = await db.get("settings", BATTLE_POST_EFFECT_SETTINGS_KEY);
+  const settings = normalizeBattlePostEffectSettings(settingsValue);
+  if (settings) {
+    return settings;
+  }
+
   const effectsValue = await db.get("settings", BATTLE_POST_EFFECTS_SETTING_KEY);
   if (Array.isArray(effectsValue)) {
     const effects = dedupePostEffects(effectsValue);
-    return effects.length > 0 ? effects : [];
+    return createDefaultBattlePostEffectSettings(effects.length > 0 ? effects : []);
   }
 
   const value = await db.get("settings", BATTLE_DISPLAY_EFFECT_SETTING_KEY);
   if (isBattlePostEffect(value)) {
-    return [value];
+    return createDefaultBattlePostEffectSettings([value]);
   }
   if (value === "clean") {
-    return [];
+    return createDefaultBattlePostEffectSettings([]);
   }
-  return DEFAULT_BATTLE_POST_EFFECTS;
+  return DEFAULT_BATTLE_POST_EFFECT_SETTINGS;
 }
 
 export async function setBattleDisplayEffect(effect: BattleDisplayEffect): Promise<void> {
@@ -324,8 +342,12 @@ export async function setBattleDisplayEffect(effect: BattleDisplayEffect): Promi
 }
 
 export async function setBattlePostEffects(effects: BattlePostEffect[]): Promise<void> {
+  await setBattlePostEffectSettings(createDefaultBattlePostEffectSettings(dedupePostEffects(effects)));
+}
+
+export async function setBattlePostEffectSettings(settings: BattlePostEffectSettings): Promise<void> {
   const db = await getDb();
-  await db.put("settings", dedupePostEffects(effects), BATTLE_POST_EFFECTS_SETTING_KEY);
+  await db.put("settings", normalizeBattlePostEffectSettings(settings) ?? DEFAULT_BATTLE_POST_EFFECT_SETTINGS, BATTLE_POST_EFFECT_SETTINGS_KEY);
 }
 
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {

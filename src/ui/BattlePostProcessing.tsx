@@ -4,21 +4,25 @@ import { forwardRef, useEffect, useMemo, useRef, type ReactElement } from "react
 import { BlendFunction, Effect, EffectAttribute, type DepthOfFieldEffect } from "postprocessing";
 import { Uniform, Vector2, Vector3, type WebGLRenderer, type WebGLRenderTarget } from "three";
 import type { BattleState } from "../game/simulation/battle";
-import type { BattlePostEffect, PlayerSlot } from "../types/game";
+import { getEnabledBattlePostEffects } from "../game/render/postEffectSettings";
+import type { BattlePostEffect, BattlePostEffectConfigMap, BattlePostEffectSettings, PlayerSlot } from "../types/game";
 
 const STAGE_X_RANGE = 5.1;
 const STAGE_Z = 0.1;
 const CAMERA_CLOSE_DISTANCE = 0.65;
 const CAMERA_FAR_DISTANCE = 4.05;
 
-export function BattlePostProcessing(props: { state: BattleState; displayEffects: BattlePostEffect[]; localSlot: PlayerSlot }) {
+export function BattlePostProcessing(props: { state: BattleState; displayEffectSettings: BattlePostEffectSettings; localSlot: PlayerSlot }) {
   const watchedHealth = props.state.fighters[props.localSlot].health;
   const lowHealthStrength = props.state.status === "running" && watchedHealth > 0 && watchedHealth <= 30 ? (30 - watchedHealth) / 30 : 0;
-  if (props.displayEffects.length === 0 && lowHealthStrength <= 0) {
+  const displayEffects = getEnabledBattlePostEffects(props.displayEffectSettings);
+  if (displayEffects.length === 0 && lowHealthStrength <= 0) {
     return null;
   }
-  const composerKey = props.displayEffects.join("|") || "clean";
-  const passes: ReactElement[] = props.displayEffects.map((effect) => <BattleEffectPass key={effect} effect={effect} state={props.state} />);
+  const composerKey = displayEffects.join("|") || "clean";
+  const passes: ReactElement[] = displayEffects.map((effect) => (
+    <BattleEffectPass key={effect} effect={effect} settings={props.displayEffectSettings.effects[effect]} state={props.state} />
+  ));
   if (lowHealthStrength > 0) {
     passes.push(<LowHealth key="low-health" strength={0.34 + lowHealthStrength * 0.5} />);
   }
@@ -30,43 +34,71 @@ export function BattlePostProcessing(props: { state: BattleState; displayEffects
   );
 }
 
-function BattleEffectPass(props: { effect: BattlePostEffect; state: BattleState }) {
+function BattleEffectPass(props: { effect: BattlePostEffect; settings: BattlePostEffectConfigMap[BattlePostEffect]; state: BattleState }) {
   switch (props.effect) {
     case "pixel":
-      return <Pixelation granularity={5} />;
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["pixel"];
+        return <Pixelation granularity={settings.granularity} />;
+      }
     case "bad-tv":
-      return (
-        <>
-          <ChromaticAberration offset={new Vector2(0.0026, 0.0008)} radialModulation={false} modulationOffset={0} opacity={0.7} />
-          <BadTV distortion={3.3} distortion2={1.4} speed={8.5} rollSpeed={0.018} />
-        </>
-      );
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["bad-tv"];
+        return (
+          <>
+            <ChromaticAberration
+              offset={new Vector2(settings.chromaticOffsetX, settings.chromaticOffsetY)}
+              radialModulation={false}
+              modulationOffset={0}
+              opacity={settings.chromaticOpacity}
+            />
+            <BadTV distortion={settings.distortion} distortion2={settings.distortion2} speed={settings.speed} rollSpeed={settings.rollSpeed} />
+          </>
+        );
+      }
     case "static":
-      return <Static amount={0.32} size={1.65} />;
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["static"];
+        return <Static amount={settings.amount} size={settings.size} />;
+      }
     case "crt-soft":
-      return (
-        <>
-          <CRT hardScan={-10} hardPix={-2.6} warp={new Vector2(1 / 54, 1 / 42)} maskDark={0.68} maskLight={1.22} />
-          <Scanline blendFunction={BlendFunction.MULTIPLY} density={0.36} opacity={0.2} />
-        </>
-      );
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["crt-soft"];
+        return (
+          <>
+            <CRT hardScan={settings.hardScan} hardPix={settings.hardPix} warp={new Vector2(settings.warpX, settings.warpY)} maskDark={settings.maskDark} maskLight={settings.maskLight} />
+            <Scanline blendFunction={BlendFunction.MULTIPLY} density={settings.scanlineDensity} opacity={settings.scanlineOpacity} />
+          </>
+        );
+      }
     case "crt-strong":
-      return (
-        <>
-          <CRT hardScan={-16} hardPix={-3.2} warp={new Vector2(1 / 32, 1 / 24)} maskDark={0.52} maskLight={1.46} />
-          <Scanline blendFunction={BlendFunction.MULTIPLY} density={0.85} opacity={0.36} />
-          <ChromaticAberration offset={new Vector2(0.0018, 0.0006)} radialModulation={false} modulationOffset={0} opacity={0.5} />
-          <DotScreen blendFunction={BlendFunction.COLOR_BURN} angle={Math.PI * 0.5} scale={620} opacity={0.16} />
-        </>
-      );
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["crt-strong"];
+        return (
+          <>
+            <CRT hardScan={settings.hardScan} hardPix={settings.hardPix} warp={new Vector2(settings.warpX, settings.warpY)} maskDark={settings.maskDark} maskLight={settings.maskLight} />
+            <Scanline blendFunction={BlendFunction.MULTIPLY} density={settings.scanlineDensity} opacity={settings.scanlineOpacity} />
+            <ChromaticAberration
+              offset={new Vector2(settings.chromaticOffsetX, settings.chromaticOffsetY)}
+              radialModulation={false}
+              modulationOffset={0}
+              opacity={settings.chromaticOpacity}
+            />
+            <DotScreen blendFunction={BlendFunction.COLOR_BURN} angle={Math.PI * 0.5} scale={settings.dotScale} opacity={settings.dotOpacity} />
+          </>
+        );
+      }
     case "lens":
-      return <Lens state={props.state} />;
+      {
+        const settings = props.settings as BattlePostEffectConfigMap["lens"];
+        return <Lens settings={settings} state={props.state} />;
+      }
     default:
       return null;
   }
 }
 
-function Lens(props: { state: BattleState }) {
+function Lens(props: { settings: BattlePostEffectConfigMap["lens"]; state: BattleState }) {
   const { camera } = useThree();
   const depthOfFieldRef = useRef<DepthOfFieldEffect>(null);
   const focusTargetRef = useRef(new Vector3(0, 1.15, STAGE_Z));
@@ -98,10 +130,14 @@ function Lens(props: { state: BattleState }) {
     } else {
       previousCameraPositionRef.current.copy(camera.position);
     }
-    const motionTarget = clamp(cameraVelocity * 0.075, 0, 0.72);
+    const motionTarget = clamp(cameraVelocity * 0.075 * props.settings.motionBoost, 0, 0.72 * props.settings.motionBoost);
     motionBlurRef.current += addSmoothExp(motionBlurRef.current, motionTarget, motionTarget > motionBlurRef.current ? 8 : 4, deltaSeconds);
 
-    const targetBokeh = clamp(0.72 + motionBlurRef.current + hitPulse * 1.15 + superPulse * 2.45 + (props.state.superFreeze ? 0.5 : 0), 0.48, 4.2);
+    const targetBokeh = clamp(
+      props.settings.bokehBase + motionBlurRef.current + hitPulse * props.settings.hitBoost + superPulse * props.settings.superBoost + (props.state.superFreeze ? 0.5 : 0),
+      0,
+      6,
+    );
     bokehScaleRef.current += addSmoothExp(bokehScaleRef.current, targetBokeh, 10, deltaSeconds);
 
     if (depthOfFieldRef.current) {
@@ -112,8 +148,14 @@ function Lens(props: { state: BattleState }) {
 
   return (
     <>
-      <DepthOfField ref={depthOfFieldRef} target={[0, 1.15, STAGE_Z]} focusRange={0.86} bokehScale={0.72} resolutionScale={0.55} />
-      <Vignette offset={0.2} darkness={0.54} opacity={0.34} />
+      <DepthOfField
+        ref={depthOfFieldRef}
+        target={[0, 1.15, STAGE_Z]}
+        focusRange={props.settings.focusRange}
+        bokehScale={props.settings.bokehBase}
+        resolutionScale={props.settings.resolutionScale}
+      />
+      <Vignette offset={props.settings.vignetteOffset} darkness={props.settings.vignetteDarkness} opacity={props.settings.vignetteOpacity} />
     </>
   );
 }

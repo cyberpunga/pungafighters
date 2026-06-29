@@ -8,6 +8,75 @@ export type VoiceClipType = (typeof VOICE_CLIPS)[number];
 export type BattlePostEffect = (typeof BATTLE_POST_EFFECTS)[number];
 export type BattleDisplayEffect = (typeof BATTLE_DISPLAY_EFFECTS)[number];
 
+export interface PixelPostEffectConfig {
+  enabled: boolean;
+  granularity: number;
+}
+
+export interface BadTvPostEffectConfig {
+  enabled: boolean;
+  chromaticOffsetX: number;
+  chromaticOffsetY: number;
+  chromaticOpacity: number;
+  distortion: number;
+  distortion2: number;
+  speed: number;
+  rollSpeed: number;
+}
+
+export interface StaticPostEffectConfig {
+  enabled: boolean;
+  amount: number;
+  size: number;
+}
+
+export interface CrtPostEffectConfig {
+  enabled: boolean;
+  hardScan: number;
+  hardPix: number;
+  warpX: number;
+  warpY: number;
+  maskDark: number;
+  maskLight: number;
+  scanlineDensity: number;
+  scanlineOpacity: number;
+}
+
+export interface CrtStrongPostEffectConfig extends CrtPostEffectConfig {
+  chromaticOffsetX: number;
+  chromaticOffsetY: number;
+  chromaticOpacity: number;
+  dotScale: number;
+  dotOpacity: number;
+}
+
+export interface LensPostEffectConfig {
+  enabled: boolean;
+  focusRange: number;
+  bokehBase: number;
+  motionBoost: number;
+  hitBoost: number;
+  superBoost: number;
+  resolutionScale: number;
+  vignetteOffset: number;
+  vignetteDarkness: number;
+  vignetteOpacity: number;
+}
+
+export interface BattlePostEffectConfigMap {
+  pixel: PixelPostEffectConfig;
+  "bad-tv": BadTvPostEffectConfig;
+  static: StaticPostEffectConfig;
+  "crt-soft": CrtPostEffectConfig;
+  "crt-strong": CrtStrongPostEffectConfig;
+  lens: LensPostEffectConfig;
+}
+
+export interface BattlePostEffectSettings {
+  order: BattlePostEffect[];
+  effects: BattlePostEffectConfigMap;
+}
+
 export type InputAction =
   | "left"
   | "right"

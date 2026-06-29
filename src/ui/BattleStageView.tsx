@@ -23,7 +23,7 @@ import {
   FIGHTER_POSES,
   type ActionSnapshot,
   type BattleConfig,
-  type BattlePostEffect,
+  type BattlePostEffectSettings,
   type LoadedFighter,
   type PlayerInputSnapshot,
   type PlayerSlot,
@@ -67,7 +67,7 @@ export function BattleStageView(props: {
   selectedFighterIds: { p1: string; p2: string };
   config: BattleConfig;
   background?: RuntimeBattleBackground;
-  displayEffects: BattlePostEffect[];
+  displayEffectSettings: BattlePostEffectSettings;
   loading: boolean;
   onBack: () => void;
   mode?: "local" | "online";
@@ -183,7 +183,7 @@ export function BattleStageView(props: {
               <PlayableStage
                 battleState={battleState}
                 background={props.background}
-                displayEffects={props.displayEffects}
+                displayEffectSettings={props.displayEffectSettings}
                 fighters={fighters}
                 haltedMessage={haltedMessage}
                 localSlot={props.localSlot ?? "p1"}
@@ -226,7 +226,7 @@ function PlayableStage(props: {
   battleState: BattleState;
   background?: RuntimeBattleBackground;
   checksumHistoryRef: React.MutableRefObject<Map<number, string>>;
-  displayEffects: BattlePostEffect[];
+  displayEffectSettings: BattlePostEffectSettings;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
   haltedMessage?: string;
   localSlot: PlayerSlot;
@@ -387,7 +387,7 @@ function PlayableStage(props: {
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
       <BattleHudLayer fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <CameraRig state={props.battleState} />
-      <BattlePostProcessing state={props.battleState} displayEffects={props.displayEffects} localSlot={props.localSlot} />
+      <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
       <Physics gravity={[0, -8.5, 0]}>
         <StagePhysicsColliders />
         <ImpactDebris pieces={debrisPieces} />

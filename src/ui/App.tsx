@@ -1,19 +1,19 @@
 import { Camera, Gamepad2 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { BattleConfig, BattlePostEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
+import type { BattleConfig, BattlePostEffectSettings, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport } from "../creator/fighterFiles";
 import { DEFAULT_FIGHTER_IDS } from "../game/content/defaultFighters";
 import {
   clearBattleBackgroundImage,
   deleteFighter,
-  DEFAULT_BATTLE_POST_EFFECTS,
-  getBattlePostEffects,
+  DEFAULT_BATTLE_POST_EFFECT_SETTINGS,
+  getBattlePostEffectSettings,
   getLoadedBattleBackground,
   listLoadedFighters,
   saveBattleBackgroundImage,
-  setBattlePostEffects as saveBattlePostEffects,
+  setBattlePostEffectSettings as saveBattlePostEffectSettings,
 } from "../storage/db";
 import { CreatorView } from "./CreatorView";
 import {
@@ -74,7 +74,7 @@ export function App() {
   const [fileStatus, setFileStatus] = useState("");
   const [backgroundStatus, setBackgroundStatus] = useState("");
   const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
-  const [battlePostEffects, setBattlePostEffects] = useState<BattlePostEffect[]>(DEFAULT_BATTLE_POST_EFFECTS);
+  const [battlePostEffectSettings, setBattlePostEffectSettings] = useState<BattlePostEffectSettings>(DEFAULT_BATTLE_POST_EFFECT_SETTINGS);
   const battleBackgroundUrlRef = useRef<string | undefined>();
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
@@ -114,9 +114,9 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    void getBattlePostEffects().then((effects) => {
+    void getBattlePostEffectSettings().then((settings) => {
       if (active) {
-        setBattlePostEffects(effects);
+        setBattlePostEffectSettings(settings);
       }
     });
     return () => {
@@ -163,9 +163,9 @@ export function App() {
     }
   }, [setLoadedBattleBackground, t]);
 
-  const updateBattlePostEffects = useCallback((effects: BattlePostEffect[]) => {
-    setBattlePostEffects(effects);
-    void saveBattlePostEffects(effects);
+  const updateBattlePostEffectSettings = useCallback((settings: BattlePostEffectSettings) => {
+    setBattlePostEffectSettings(settings);
+    void saveBattlePostEffectSettings(settings);
   }, []);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
@@ -229,7 +229,7 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <AppSettingsPanel battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />
+      <AppSettingsPanel battlePostEffectSettings={battlePostEffectSettings} onBattlePostEffectSettingsChange={updateBattlePostEffectSettings} />
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (
@@ -329,7 +329,7 @@ export function App() {
             networkController={onlineBattle.controller}
             config={onlineBattle.config}
             background={onlineBattle.background}
-            displayEffects={battlePostEffects}
+            displayEffectSettings={battlePostEffectSettings}
             loading={loading}
             onBack={exitOnlineBattle}
           />
@@ -342,7 +342,7 @@ export function App() {
             selectedFighterIds={localBattleSelectedFighterIds}
             config={localBattleConfig}
             background={battleBackground}
-            displayEffects={battlePostEffects}
+            displayEffectSettings={battlePostEffectSettings}
             loading={loading}
             onBack={exitLocalBattle}
           />
