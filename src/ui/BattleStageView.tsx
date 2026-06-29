@@ -198,6 +198,7 @@ export function BattleStageView(props: {
                   syncError: t("battle.syncError"),
                   syncingFrame: (frame) => t("battle.syncingFrame", { frame }),
                 }}
+                controlsHint={controlsHint}
                 onRemoteRestart={() => restartBattle(false)}
               />
             </Suspense>
@@ -206,9 +207,6 @@ export function BattleStageView(props: {
           <div className="battle-stage-loading">{props.loading ? t("common.loading") : t("battleStage.noFighters")}</div>
         )}
       </div>
-      {fighters && battleState && (
-        <BattleHudOverlay fighters={fighters} state={battleState} controlsHint={controlsHint} statusMessage={haltedMessage ?? onlineStatus} />
-      )}
 
       <div className="sr-only">
         <p className="eyebrow">{t("battleStage.eyebrow")}</p>
@@ -242,6 +240,7 @@ function PlayableStage(props: {
     syncError: string;
     syncingFrame: (frame: number) => string;
   };
+  controlsHint: string;
   onRemoteRestart: () => void;
 }) {
   const accumulatorRef = useRef(0);
@@ -381,6 +380,7 @@ function PlayableStage(props: {
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       <HitSpark state={props.battleState} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
+      <BattleHudLayer fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <CameraRig state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffects={props.displayEffects} localSlot={props.localSlot} />
       <Physics gravity={[0, -8.5, 0]}>
@@ -392,11 +392,16 @@ function PlayableStage(props: {
   );
 }
 
-function BattleHudOverlay(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
+function BattleHudLayer(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
   const { t } = useI18n();
-  const p1CanvasRef = useRef<HTMLCanvasElement>(null);
-  const p2CanvasRef = useRef<HTMLCanvasElement>(null);
-  const centerCanvasRef = useRef<HTMLCanvasElement>(null);
+  const { camera, size } = useThree();
+  const groupRef = useRef<THREE.Group>(null);
+  const p1Ref = useRef<THREE.Mesh>(null);
+  const p2Ref = useRef<THREE.Mesh>(null);
+  const centerRef = useRef<THREE.Mesh>(null);
+  const p1Texture = useHudTexture(640, 190);
+  const p2Texture = useHudTexture(640, 190);
+  const centerTexture = useHudTexture(280, 220);
   const p1Runtime = props.state.fighters.p1;
   const p2Runtime = props.state.fighters.p2;
   const p1Health = Math.max(0, Math.min(1, p1Runtime.health / 100));
@@ -408,11 +413,7 @@ function BattleHudOverlay(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
   const seconds = Math.ceil(props.state.timer);
 
   useEffect(() => {
-    const canvas = p1CanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    drawFighterHudCanvas(canvas, {
+    drawFighterHudCanvas(p1Texture.canvas, {
       health: p1Health,
       name: props.fighters.p1.name,
       roundsWon: p1Runtime.roundsWon,
@@ -421,14 +422,11 @@ function BattleHudOverlay(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
       superReady: p1Runtime.superMeter >= SUPER_HITS_REQUIRED,
       maxLabel: t("battle.max"),
     });
-  }, [p1Health, p1Runtime.roundsWon, p1Runtime.superMeter, p1SuperRatio, props.fighters.p1.name, t]);
+    p1Texture.texture.needsUpdate = true;
+  }, [p1Health, p1Runtime.roundsWon, p1Runtime.superMeter, p1SuperRatio, p1Texture, props.fighters.p1.name, t]);
 
   useEffect(() => {
-    const canvas = p2CanvasRef.current;
-    if (!canvas) {
-      return;
-    }
-    drawFighterHudCanvas(canvas, {
+    drawFighterHudCanvas(p2Texture.canvas, {
       health: p2Health,
       name: props.fighters.p2.name,
       roundsWon: p2Runtime.roundsWon,
@@ -437,23 +435,75 @@ function BattleHudOverlay(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
       superReady: p2Runtime.superMeter >= SUPER_HITS_REQUIRED,
       maxLabel: t("battle.max"),
     });
-  }, [p2Health, p2Runtime.roundsWon, p2Runtime.superMeter, p2SuperRatio, props.fighters.p2.name, t]);
+    p2Texture.texture.needsUpdate = true;
+  }, [p2Health, p2Runtime.roundsWon, p2Runtime.superMeter, p2SuperRatio, p2Texture, props.fighters.p2.name, t]);
 
   useEffect(() => {
-    const canvas = centerCanvasRef.current;
-    if (!canvas) {
+    drawCenterHudCanvas(centerTexture.canvas, { hint, message, seconds });
+    centerTexture.texture.needsUpdate = true;
+  }, [centerTexture, hint, message, seconds]);
+
+  useFrame(() => {
+    const group = groupRef.current;
+    const p1 = p1Ref.current;
+    const p2 = p2Ref.current;
+    const center = centerRef.current;
+    if (!group || !p1 || !p2 || !center || !(camera instanceof THREE.PerspectiveCamera)) {
       return;
     }
-    drawCenterHudCanvas(canvas, { hint, message, seconds });
-  }, [hint, message, seconds]);
+    const distance = 4.25;
+    const height = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance;
+    const width = height * (size.width / Math.max(1, size.height));
+    const marginX = width * 0.024;
+    const marginY = height * 0.034;
+    const fighterWidth = Math.min(width * 0.42, 2.55);
+    const fighterHeight = fighterWidth * (190 / 640);
+    const centerWidth = Math.min(width * 0.14, 0.78);
+    const centerHeight = centerWidth * (220 / 280);
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+    group.position.copy(camera.position).addScaledVector(direction, distance);
+    group.quaternion.copy(camera.quaternion);
+    p1.position.set(-width / 2 + marginX + fighterWidth / 2, height / 2 - marginY - fighterHeight / 2, 0);
+    p2.position.set(width / 2 - marginX - fighterWidth / 2, height / 2 - marginY - fighterHeight / 2, 0);
+    center.position.set(0, height / 2 - marginY - centerHeight / 2, 0.002);
+    p1.scale.set(fighterWidth, fighterHeight, 1);
+    p2.scale.set(fighterWidth, fighterHeight, 1);
+    center.scale.set(centerWidth, centerHeight, 1);
+  });
 
   return (
-    <div className="battle-hud-overlay" aria-hidden="true">
-      <canvas ref={p1CanvasRef} className="battle-hud-panel battle-hud-fighter battle-hud-p1" width={640} height={190} />
-      <canvas ref={centerCanvasRef} className="battle-hud-panel battle-hud-center" width={280} height={220} />
-      <canvas ref={p2CanvasRef} className="battle-hud-panel battle-hud-fighter battle-hud-p2" width={640} height={190} />
-    </div>
+    <group ref={groupRef} renderOrder={80}>
+      <HudPlane meshRef={p1Ref} texture={p1Texture.texture} />
+      <HudPlane meshRef={centerRef} texture={centerTexture.texture} />
+      <HudPlane meshRef={p2Ref} texture={p2Texture.texture} />
+    </group>
   );
+}
+
+function HudPlane(props: { meshRef: React.RefObject<THREE.Mesh>; texture: THREE.Texture }) {
+  return (
+    <mesh ref={props.meshRef} renderOrder={80}>
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial map={props.texture} transparent depthTest={false} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+function useHudTexture(width: number, height: number) {
+  const hudTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return { canvas, texture };
+  }, [height, width]);
+
+  useEffect(() => () => hudTexture.texture.dispose(), [hudTexture]);
+
+  return hudTexture;
 }
 
 function TheaterSet(props: { background?: RuntimeBattleBackground }) {
@@ -1293,22 +1343,24 @@ function drawFighterHudCanvas(
   context.fill();
   context.stroke();
 
-  context.fillStyle = "#f8f4df";
-  context.font = "900 34px Arial, sans-serif";
-  context.textBaseline = "middle";
-  context.textAlign = "left";
-  context.fillText(fitCanvasText(context, options.name, 300), 154, 34);
-
-  context.fillStyle = "#f7b267";
-  context.font = "900 18px Arial, sans-serif";
-  context.textAlign = "center";
-  context.fillText(options.slot.toUpperCase(), 78, 42);
-  context.fillText(String(options.roundsWon), 78, 98);
-  if (options.superReady) {
-    context.fillStyle = "#f7b267";
-    context.font = "900 22px Arial, sans-serif";
+  if (isP1) {
+    context.fillStyle = "#f8f4df";
+    context.font = "900 34px Arial, sans-serif";
+    context.textBaseline = "middle";
     context.textAlign = "left";
-    context.fillText(options.maxLabel, 430, 114);
+    context.fillText(fitCanvasText(context, options.name, 300), 154, 34);
+
+    context.fillStyle = "#f7b267";
+    context.font = "900 18px Arial, sans-serif";
+    context.textAlign = "center";
+    context.fillText(options.slot.toUpperCase(), 78, 42);
+    context.fillText(String(options.roundsWon), 78, 98);
+    if (options.superReady) {
+      context.fillStyle = "#f7b267";
+      context.font = "900 22px Arial, sans-serif";
+      context.textAlign = "left";
+      context.fillText(options.maxLabel, 430, 114);
+    }
   }
 
   context.restore();

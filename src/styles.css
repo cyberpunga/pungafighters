@@ -1121,43 +1121,6 @@ button:disabled {
   font-weight: 800;
 }
 
-.battle-hud-overlay {
-  position: absolute;
-  top: clamp(6px, 1.7vw, 18px);
-  left: clamp(6px, 1.8vw, 22px);
-  right: clamp(6px, 1.8vw, 22px);
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(78px, 140px) minmax(0, 1fr);
-  align-items: start;
-  gap: clamp(4px, 1.1vw, 14px);
-  pointer-events: none;
-}
-
-.battle-hud-panel {
-  display: block;
-  width: 100%;
-  height: auto;
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.38));
-}
-
-.battle-hud-fighter {
-  max-width: min(420px, 100%);
-}
-
-.battle-hud-p1 {
-  justify-self: start;
-}
-
-.battle-hud-p2 {
-  justify-self: end;
-}
-
-.battle-hud-center {
-  justify-self: center;
-  max-width: 140px;
-}
-
 .fighter-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
