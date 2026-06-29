@@ -1,4 +1,4 @@
-import type { ActionSnapshot, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
+import type { ActionSnapshot, FighterFrameCollision, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
 
 export const NETPLAY_PROTOCOL_VERSION = 3;
 export const NETPLAY_INPUT_DELAY = 10;
@@ -21,6 +21,7 @@ export interface NetworkFighterFrameAsset {
   anchor: FrameAnchor;
   width: number;
   height: number;
+  collision?: FighterFrameCollision;
 }
 
 export interface NetworkVoiceClipAsset {

@@ -98,6 +98,19 @@ export interface FrameAnchor {
   y: number;
 }
 
+export interface CollisionBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FighterFrameCollision {
+  source: "alpha-v1";
+  hurtboxes: CollisionBox[];
+  attackBoxes?: CollisionBox[];
+}
+
 export interface FighterFrame {
   pose: FighterPose;
   blobId?: string;
@@ -105,6 +118,7 @@ export interface FighterFrame {
   anchor: FrameAnchor;
   width: number;
   height: number;
+  collision?: FighterFrameCollision;
 }
 
 export interface FighterProfile {

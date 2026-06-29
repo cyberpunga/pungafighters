@@ -4,6 +4,7 @@ import type {
   BattlePostEffect,
   BattlePostEffectSettings,
   FighterPose,
+  FighterFrameCollision,
   FighterProfile,
   LoadedBattleBackground,
   LoadedFighter,
@@ -15,6 +16,7 @@ import {
   getEnabledBattlePostEffects,
   normalizeBattlePostEffectSettings,
 } from "../game/render/postEffectSettings";
+import { createFrameCollisionMetadataFromBlob } from "../creator/collisionMetadata";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 import { AppError, missingPoseImageError } from "../i18n/errors";
 
@@ -112,11 +114,13 @@ export async function saveFighterDraft(input: {
 export async function saveImportedFighter(input: {
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs?: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   return saveFighterAssets({
     name: input.name,
     frameBlobs: input.frameBlobs,
+    frameCollisions: input.frameCollisions,
     voiceBlobs: input.voiceBlobs ?? {},
   });
 }
@@ -125,6 +129,7 @@ async function saveFighterAssets(input: {
   id?: string;
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   const db = await getDb();
@@ -138,6 +143,7 @@ async function saveFighterAssets(input: {
       FIGHTER_POSES.map(async (pose) => {
         const blob = input.frameBlobs[pose];
         const blobId = `${id}:frame:${pose}`;
+        const collision = input.frameCollisions?.[pose] ?? (await createFrameCollisionMetadataFromBlob(blob, pose));
         await tx.objectStore("imageBlobs").put(blob, blobId);
         return [
           pose,
@@ -147,6 +153,7 @@ async function saveFighterAssets(input: {
             anchor: { x: 0.5, y: 0.9 },
             width: 384,
             height: 384,
+            collision,
           },
         ];
       }),

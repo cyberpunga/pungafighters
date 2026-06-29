@@ -1,4 +1,4 @@
-import type { BattleConfig, FighterPose, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
+import type { BattleConfig, CollisionBox, FighterFrame, FighterPose, PlayerInputSnapshot, PlayerSlot } from "../../types/game";
 import { createEmptyActions } from "../input/actions";
 
 const BASE_ARENA_WIDTH = 960;
@@ -17,6 +17,7 @@ const HURTBOX = {
   bottomOffset: 10,
 } as const;
 const FIGHTER_BODY_SEPARATION = 230;
+const COLLISION_PIXEL_TO_BATTLE = 0.86;
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
@@ -106,6 +107,7 @@ export interface FighterRuntime {
   hasHitThisAttack: boolean;
   superHitsDelivered: number;
   hitStun: number;
+  frames?: FighterCollisionFrames;
 }
 
 export interface SuperFreezeState {
@@ -145,9 +147,17 @@ interface Box {
   bottom: number;
 }
 
+type FighterCollisionFrame = Pick<FighterFrame, "anchor" | "width" | "height" | "collision">;
+type FighterCollisionFrames = Record<FighterPose, FighterCollisionFrame>;
+
+export interface BattleDebugBox extends Box {
+  slot: PlayerSlot;
+  kind: "hurtbox" | "attack";
+}
+
 export function createBattleState(
   config: BattleConfig,
-  fighters: Record<PlayerSlot, { id: string; name: string }>,
+  fighters: Record<PlayerSlot, { id: string; name: string; frames?: FighterCollisionFrames }>,
 ): BattleState {
   return {
     frame: 0,
@@ -236,8 +246,8 @@ export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot)
 
 export function restartMatch(state: BattleState): BattleState {
   return createBattleState(state.config, {
-    p1: { id: state.fighters.p1.id, name: state.fighters.p1.name },
-    p2: { id: state.fighters.p2.id, name: state.fighters.p2.name },
+    p1: { id: state.fighters.p1.id, name: state.fighters.p1.name, frames: state.fighters.p1.frames },
+    p2: { id: state.fighters.p2.id, name: state.fighters.p2.name, frames: state.fighters.p2.frames },
   });
 }
 
@@ -266,7 +276,7 @@ export function getBattleChecksum(state: BattleState): string {
 
 function createRuntime(
   slot: PlayerSlot,
-  fighter: { id: string; name: string },
+  fighter: { id: string; name: string; frames?: FighterCollisionFrames },
   x: number,
   facing: 1 | -1,
 ): FighterRuntime {
@@ -288,6 +298,7 @@ function createRuntime(
     hasHitThisAttack: false,
     superHitsDelivered: 0,
     hitStun: 0,
+    frames: fighter.frames,
   };
 }
 
@@ -381,7 +392,7 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
   const active = attacker.attackElapsed >= attack.activeStart && attacker.attackElapsed <= attack.activeEnd;
   const facingDefender = attacker.facing === 1 ? defender.x >= attacker.x : defender.x <= attacker.x;
 
-  if (active && facingDefender && boxesOverlap(getAttackBox(attacker, attack), getHurtbox(defender))) {
+  if (active && facingDefender && anyBoxesOverlap(getAttackBoxes(attacker, attack), getHurtboxes(defender))) {
     if (isSpecial) {
       if (attacker.superHitsDelivered >= MAX_SUPER_HITS) {
         return;
@@ -444,7 +455,13 @@ function getRequestedAttack(fighter: FighterRuntime, input: ReturnType<typeof cr
   return input.kick ? ATTACKS.kick : input.punch ? ATTACKS.punch : undefined;
 }
 
-function getHurtbox(fighter: FighterRuntime): Box {
+function getHurtboxes(fighter: FighterRuntime): Box[] {
+  const frame = fighter.frames?.[fighter.pose] ?? fighter.frames?.idle;
+  const boxes = frame?.collision?.hurtboxes.flatMap((box) => frameBoxToBattleBox(fighter, frame, box)) ?? [];
+  return boxes.length ? boxes : [getFallbackHurtbox(fighter)];
+}
+
+function getFallbackHurtbox(fighter: FighterRuntime): Box {
   const bottom = fighter.y - HURTBOX.bottomOffset;
   return {
     left: fighter.x - HURTBOX.halfWidth,
@@ -454,7 +471,13 @@ function getHurtbox(fighter: FighterRuntime): Box {
   };
 }
 
-function getAttackBox(attacker: FighterRuntime, attack: AttackDef): Box {
+function getAttackBoxes(attacker: FighterRuntime, attack: AttackDef): Box[] {
+  const frame = attacker.frames?.[getAttackCollisionPose(attack)];
+  const boxes = frame?.collision?.attackBoxes?.flatMap((box) => frameBoxToBattleBox(attacker, frame, box)) ?? [];
+  return boxes.length ? boxes : [getFallbackAttackBox(attacker, attack)];
+}
+
+function getFallbackAttackBox(attacker: FighterRuntime, attack: AttackDef): Box {
   const bodyEdge = attacker.x + attacker.facing * HURTBOX.halfWidth;
   const reachEdge = bodyEdge + attacker.facing * attack.hitbox.reach;
   const centerY = attacker.y + attack.hitbox.centerYOffset;
@@ -466,8 +489,53 @@ function getAttackBox(attacker: FighterRuntime, attack: AttackDef): Box {
   };
 }
 
+function getAttackCollisionPose(attack: AttackDef): FighterPose {
+  return attack.kind === "kick" ? "kick" : "punch";
+}
+
+function frameBoxToBattleBox(fighter: FighterRuntime, frame: FighterCollisionFrame, box: CollisionBox): Box[] {
+  if (!isCollisionBox(box) || !isCollisionFrame(frame)) {
+    return [];
+  }
+  const anchorX = frame.anchor.x * frame.width;
+  const anchorY = frame.anchor.y * frame.height;
+  const localCenterX = (box.x + box.width / 2 - anchorX) * COLLISION_PIXEL_TO_BATTLE;
+  const localCenterY = (box.y + box.height / 2 - anchorY) * COLLISION_PIXEL_TO_BATTLE;
+  const width = box.width * COLLISION_PIXEL_TO_BATTLE;
+  const height = box.height * COLLISION_PIXEL_TO_BATTLE;
+  const centerX = fighter.x + fighter.facing * localCenterX;
+  const centerY = fighter.y + localCenterY;
+  return [
+    {
+      left: centerX - width / 2,
+      right: centerX + width / 2,
+      top: centerY - height / 2,
+      bottom: centerY + height / 2,
+    },
+  ];
+}
+
+function anyBoxesOverlap(a: Box[], b: Box[]): boolean {
+  return a.some((boxA) => b.some((boxB) => boxesOverlap(boxA, boxB)));
+}
+
 function boxesOverlap(a: Box, b: Box): boolean {
   return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+export function getBattleDebugBoxes(state: BattleState): BattleDebugBox[] {
+  const boxes: BattleDebugBox[] = [];
+  (["p1", "p2"] as const).forEach((slot) => {
+    const fighter = state.fighters[slot];
+    getHurtboxes(fighter).forEach((box) => boxes.push({ ...box, slot, kind: "hurtbox" }));
+    if (fighter.attack) {
+      const active = fighter.attackElapsed >= fighter.attack.activeStart && fighter.attackElapsed <= fighter.attack.activeEnd;
+      if (active) {
+        getAttackBoxes(fighter, fighter.attack).forEach((box) => boxes.push({ ...box, slot, kind: "attack" }));
+      }
+    }
+  });
+  return boxes;
 }
 
 function finishRound(state: BattleState) {
@@ -542,9 +610,57 @@ function fighterChecksum(fighter: FighterRuntime) {
     fighter.hasHitThisAttack ? 1 : 0,
     fighter.superHitsDelivered,
     fixed(fighter.hitStun),
+    collisionChecksum(fighter.frames),
   ].join(",");
 }
 
 function fixed(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function collisionChecksum(frames: FighterCollisionFrames | undefined) {
+  if (!frames) {
+    return "";
+  }
+  return (["idle", "punch", "kick", "hit", "victory"] as const)
+    .map((pose) => {
+      const frame = frames[pose];
+      const collision = frame?.collision;
+      return [
+        pose,
+        frame ? `${fixed(frame.anchor.x)}:${fixed(frame.anchor.y)}:${frame.width}:${frame.height}` : "",
+        collision?.source ?? "",
+        boxesChecksum(collision?.hurtboxes),
+        boxesChecksum(collision?.attackBoxes),
+      ].join("/");
+    })
+    .join(";");
+}
+
+function boxesChecksum(boxes: CollisionBox[] | undefined) {
+  return boxes?.map((box) => `${fixed(box.x)}:${fixed(box.y)}:${fixed(box.width)}:${fixed(box.height)}`).join("+") ?? "";
+}
+
+function isCollisionFrame(frame: FighterCollisionFrame): boolean {
+  return (
+    frame.width > 0 &&
+    frame.height > 0 &&
+    Number.isFinite(frame.anchor.x) &&
+    Number.isFinite(frame.anchor.y) &&
+    frame.anchor.x >= 0 &&
+    frame.anchor.x <= 1 &&
+    frame.anchor.y >= 0 &&
+    frame.anchor.y <= 1
+  );
+}
+
+function isCollisionBox(box: CollisionBox): boolean {
+  return (
+    Number.isFinite(box.x) &&
+    Number.isFinite(box.y) &&
+    Number.isFinite(box.width) &&
+    Number.isFinite(box.height) &&
+    box.width > 0 &&
+    box.height > 0
+  );
 }

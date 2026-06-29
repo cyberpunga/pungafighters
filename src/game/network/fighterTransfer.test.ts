@@ -39,6 +39,7 @@ describe("fighter network transfer", () => {
     const loaded = receiver.createLoadedFighter();
     expect(loaded.fighter.name).toBe("Chunk Champ");
     expect(Object.keys(loaded.fighter.frameUrls).sort()).toEqual([...FIGHTER_POSES].sort());
+    expect(loaded.fighter.frames.punch.collision?.attackBoxes?.[0]).toMatchObject({ x: 240, y: 124, width: 60, height: 42 });
     expect(loaded.fighter.voiceUrls.attack).toMatch(/^blob:/);
     loaded.revoke();
   });
@@ -132,6 +133,11 @@ function createLoadedFighter(input: { withVoice?: boolean } = {}): LoadedFighter
         anchor: { x: 0.5, y: 0.9 },
         width: 384,
         height: 384,
+        collision: {
+          source: "alpha-v1",
+          hurtboxes: [{ x: 140, y: 92, width: 110, height: 196 }],
+          attackBoxes: pose === "punch" ? [{ x: 240, y: 124, width: 60, height: 42 }] : undefined,
+        },
       },
     ]),
   ) as FighterProfile["frames"];

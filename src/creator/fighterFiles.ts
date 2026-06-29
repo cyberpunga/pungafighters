@@ -1,6 +1,6 @@
 import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE, normalizeCanvas } from "./imageProcessing";
 import { AppError } from "../i18n/errors";
-import type { FighterPose, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
+import type { CollisionBox, FighterFrameCollision, FighterPose, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
 
 export const FIGHTER_CHARACTER_IMPORT_ACCEPT = ".pungafighter.json,.json,application/json";
@@ -17,6 +17,7 @@ interface CharacterFileFrame {
   anchor: FrameAnchor;
   width: number;
   height: number;
+  collision?: FighterFrameCollision;
 }
 
 interface CharacterFileVoiceClip {
@@ -43,6 +44,7 @@ interface CharacterFile {
 export interface ImportedFighterAssets {
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }
 
@@ -77,6 +79,7 @@ export async function createFighterExportBlob(fighter: LoadedFighter): Promise<B
             anchor: frame.anchor,
             width: frame.width,
             height: frame.height,
+            collision: frame.collision,
           },
         ] as const;
       }),
@@ -202,6 +205,12 @@ async function readCharacterJsonFile(file: File): Promise<ImportedFighterAssets>
       return [pose, await dataUrlToBlob(frame.dataUrl)] as const;
     }),
   );
+  const frameCollisions = Object.fromEntries(
+    FIGHTER_POSES.flatMap((pose) => {
+      const collision = payload.frames[pose].collision;
+      return collision ? [[pose, collision] as const] : [];
+    }),
+  ) as Partial<Record<FighterPose, FighterFrameCollision>>;
 
   const voicePairs = await Promise.all(
     VOICE_CLIPS.map(async (clip) => {
@@ -219,6 +228,7 @@ async function readCharacterJsonFile(file: File): Promise<ImportedFighterAssets>
   return {
     name: cleanFighterName(payload.name),
     frameBlobs: Object.fromEntries(framePairs) as Record<FighterPose, Blob>,
+    frameCollisions,
     voiceBlobs: Object.fromEntries(voicePairs.filter(isDefined)) as Partial<Record<VoiceClipType, Blob>>,
   };
 }
@@ -240,7 +250,27 @@ function isCharacterPayload(value: unknown): value is CharacterFilePayload {
     return false;
   }
   const frames = value.frames;
-  return FIGHTER_POSES.every((pose) => isRecord(frames[pose]));
+  return FIGHTER_POSES.every((pose) => {
+    const frame = frames[pose];
+    return isRecord(frame) && (frame.collision === undefined || isFrameCollision(frame.collision));
+  });
+}
+
+function isFrameCollision(value: unknown): value is FighterFrameCollision {
+  if (!isRecord(value) || value.source !== "alpha-v1" || !Array.isArray(value.hurtboxes)) {
+    return false;
+  }
+  return value.hurtboxes.every(isCollisionBox) && (value.attackBoxes === undefined || (Array.isArray(value.attackBoxes) && value.attackBoxes.every(isCollisionBox)));
+}
+
+function isCollisionBox(value: unknown): value is CollisionBox {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return ["x", "y", "width", "height"].every((key) => {
+    const numberValue = value[key];
+    return typeof numberValue === "number" && Number.isFinite(numberValue);
+  });
 }
 
 async function urlToDataUrl(url: string): Promise<string> {

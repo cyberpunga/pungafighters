@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { BattleConfig, PlayerInputSnapshot } from "../../types/game";
+import type { BattleConfig, FighterPose, PlayerInputSnapshot } from "../../types/game";
 import { createEmptyActions } from "../input/actions";
 import { createBattleState, getBattleChecksum, stepBattleFrame, SUPER_HITS_REQUIRED, type BattleState } from "./battle";
 
@@ -258,6 +258,81 @@ describe("battle simulation", () => {
     expect(state.lastHit).toBeUndefined();
     expect(state.fighters.p2.health).toBe(100);
   });
+
+  it("uses derived punch attack boxes when fighter collision metadata exists", () => {
+    let state = createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 330, y: 130, width: 54, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    });
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 520, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
+
+    expect(state.lastHit).toMatchObject({ attacker: "p1", defender: "p2", damage: 8 });
+  });
+
+  it("misses when derived attack boxes do not reach the hurtbox", () => {
+    let state = createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 330, y: 130, width: 54, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    });
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 650, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
+
+    expect(state.lastHit).toBeUndefined();
+    expect(state.fighters.p2.health).toBe(100);
+  });
+
+  it("does not let behind-the-body metadata hit a forward defender", () => {
+    let state = createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 30, y: 130, width: 50, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    });
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 550, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
+
+    expect(state.lastHit).toBeUndefined();
+  });
+
+  it("includes fighter collision metadata in the deterministic checksum", () => {
+    const first = createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 330, y: 130, width: 54, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    });
+    const second = createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 320, y: 130, width: 54, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    });
+
+    expect(getBattleChecksum(first)).not.toBe(getBattleChecksum(second));
+    expect(getBattleChecksum(first)).toBe(getBattleChecksum(createBattleState(config, {
+      p1: { ...fighters.p1, frames: createCollisionFrames({ punchAttack: { x: 330, y: 130, width: 54, height: 40 } }) },
+      p2: { ...fighters.p2, frames: createCollisionFrames() },
+    })));
+  });
 });
 
 function emptyInputs(): PlayerInputSnapshot {
@@ -288,4 +363,23 @@ function waitUntilReady(state: BattleState, slot: "p1" | "p2"): BattleState {
     next = stepBattleFrame(next, emptyInputs());
   }
   throw new Error("Expected fighter to recover.");
+}
+
+function createCollisionFrames(input: { punchAttack?: { x: number; y: number; width: number; height: number } } = {}) {
+  return Object.fromEntries(
+    (["idle", "punch", "kick", "hit", "victory"] as FighterPose[]).map((pose) => [
+      pose,
+      {
+        pose,
+        anchor: { x: 0.5, y: 0.9 },
+        width: 384,
+        height: 384,
+        collision: {
+          source: "alpha-v1" as const,
+          hurtboxes: [{ x: 107, y: 100, width: 170, height: 200 }],
+          attackBoxes: pose === "punch" && input.punchAttack ? [input.punchAttack] : undefined,
+        },
+      },
+    ]),
+  ) as unknown as NonNullable<BattleState["fighters"]["p1"]["frames"]>;
 }

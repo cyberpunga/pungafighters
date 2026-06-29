@@ -1,4 +1,4 @@
-import type { FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../../types/game";
+import type { CollisionBox, FighterFrameCollision, FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../../types/game";
 import { FIGHTER_POSES, VOICE_CLIPS } from "../../types/game";
 import { AppError } from "../../i18n/errors";
 import type { NetworkAssetChunkHeader, NetworkFighterManifest } from "./protocol";
@@ -47,6 +47,7 @@ export async function serializeFighterForNetwork(fighter: LoadedFighter): Promis
           anchor: frame.anchor,
           width: frame.width,
           height: frame.height,
+          collision: frame.collision,
         },
       };
     }),
@@ -175,6 +176,7 @@ export class NetworkFighterAssetReceiver {
             anchor: frame.anchor,
             width: frame.width,
             height: frame.height,
+            collision: frame.collision,
           },
         ] as const;
       }),
@@ -259,7 +261,13 @@ function validateFighterManifest(manifest: NetworkFighterManifest) {
   if (!manifest || typeof manifest !== "object" || manifest.movesetId !== "basic-v1") {
     throw new Error("Opponent fighter manifest is invalid.");
   }
-  if (!manifest.frames || !FIGHTER_POSES.every((pose) => isManifestAsset(manifest.frames[pose]) && manifest.frames[pose].pose === pose)) {
+  if (
+    !manifest.frames ||
+    !FIGHTER_POSES.every((pose) => {
+      const frame = manifest.frames[pose];
+      return isManifestAsset(frame) && frame.pose === pose && (frame.collision === undefined || isFrameCollision(frame.collision));
+    })
+  ) {
     throw new Error("Opponent fighter manifest is invalid.");
   }
   if (
@@ -310,6 +318,27 @@ function isManifestAsset(value: unknown): value is ManifestAssetDescriptor {
     Number.isSafeInteger(asset.byteLength) &&
     asset.byteLength > 0
   );
+}
+
+function isFrameCollision(value: unknown): value is FighterFrameCollision {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const collision = value as Partial<FighterFrameCollision>;
+  return (
+    collision.source === "alpha-v1" &&
+    Array.isArray(collision.hurtboxes) &&
+    collision.hurtboxes.every(isCollisionBox) &&
+    (collision.attackBoxes === undefined || (Array.isArray(collision.attackBoxes) && collision.attackBoxes.every(isCollisionBox)))
+  );
+}
+
+function isCollisionBox(value: unknown): value is CollisionBox {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const box = value as Partial<CollisionBox>;
+  return [box.x, box.y, box.width, box.height].every((numberValue) => typeof numberValue === "number" && Number.isFinite(numberValue));
 }
 
 function createTransferAsset(assetId: string, blob: Blob, fallbackMimeType: string): NetworkFighterTransferAsset {

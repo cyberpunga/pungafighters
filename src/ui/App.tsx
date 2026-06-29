@@ -9,9 +9,11 @@ import {
   DEFAULT_BATTLE_POST_EFFECT_SETTINGS,
   getBattlePostEffectSettings,
   getLoadedBattleBackground,
+  getSetting,
   listLoadedFighters,
   saveBattleBackgroundImage,
   setBattlePostEffectSettings as saveBattlePostEffectSettings,
+  setSetting,
 } from "../storage/db";
 import { CreatorView } from "./CreatorView";
 import {
@@ -35,6 +37,7 @@ import { useI18n } from "../i18n/react";
 import { localizeError } from "../i18n/errors";
 
 type OnlineRole = "host" | "guest";
+const BATTLE_DEBUG_HITBOXES_SETTING_KEY = "battle-debug-hitboxes";
 
 interface OnlineBattle {
   config: BattleConfig;
@@ -71,6 +74,7 @@ export function App() {
   const [backgroundStatus, setBackgroundStatus] = useState("");
   const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
   const [battlePostEffectSettings, setBattlePostEffectSettings] = useState<BattlePostEffectSettings>(DEFAULT_BATTLE_POST_EFFECT_SETTINGS);
+  const [battleDebugHitboxes, setBattleDebugHitboxes] = useState(false);
   const battleBackgroundUrlRef = useRef<string | undefined>();
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
@@ -120,6 +124,18 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void getSetting(BATTLE_DEBUG_HITBOXES_SETTING_KEY, false).then((enabled) => {
+      if (active) {
+        setBattleDebugHitboxes(Boolean(enabled));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(
     () => () => {
       if (battleBackgroundUrlRef.current) {
@@ -162,6 +178,11 @@ export function App() {
   const updateBattlePostEffectSettings = useCallback((settings: BattlePostEffectSettings) => {
     setBattlePostEffectSettings(settings);
     void saveBattlePostEffectSettings(settings);
+  }, []);
+
+  const updateBattleDebugHitboxes = useCallback((enabled: boolean) => {
+    setBattleDebugHitboxes(enabled);
+    void setSetting(BATTLE_DEBUG_HITBOXES_SETTING_KEY, enabled);
   }, []);
 
   const exportFighterFile = useCallback(async (fighter: LoadedFighter) => {
@@ -225,7 +246,13 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <AppSettingsPanel battleActive={view === "battle"} battlePostEffectSettings={battlePostEffectSettings} onBattlePostEffectSettingsChange={updateBattlePostEffectSettings} />
+      <AppSettingsPanel
+        battleActive={view === "battle"}
+        battleDebugHitboxes={battleDebugHitboxes}
+        battlePostEffectSettings={battlePostEffectSettings}
+        onBattleDebugHitboxesChange={updateBattleDebugHitboxes}
+        onBattlePostEffectSettingsChange={updateBattlePostEffectSettings}
+      />
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (
@@ -325,6 +352,7 @@ export function App() {
             networkController={onlineBattle.controller}
             config={onlineBattle.config}
             background={onlineBattle.background}
+            collisionDebug={battleDebugHitboxes}
             displayEffectSettings={battlePostEffectSettings}
             loading={loading}
             onBack={exitOnlineBattle}
@@ -338,6 +366,7 @@ export function App() {
             selectedFighterIds={localBattleSelectedFighterIds}
             config={localBattleConfig}
             background={battleBackground}
+            collisionDebug={battleDebugHitboxes}
             displayEffectSettings={battlePostEffectSettings}
             loading={loading}
             onBack={exitLocalBattle}

@@ -1,5 +1,6 @@
 import type { FighterPose, FighterProfile, LoadedFighter } from "../../types/game";
 import { FIGHTER_POSES } from "../../types/game";
+import { createFrameCollisionMetadata } from "../../creator/collisionMetadata";
 
 const COLORS = {
   ember: {
@@ -25,7 +26,11 @@ export function getDefaultFighters(): LoadedFighter[] {
 
 function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)["ember"]): LoadedFighter {
   const now = "default";
-  const frameUrls = Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drawDefaultFrame(pose, colors)])) as Record<FighterPose, string>;
+  const renderedFrames = Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, drawDefaultFrame(pose, colors)])) as Record<
+    FighterPose,
+    ReturnType<typeof drawDefaultFrame>
+  >;
+  const frameUrls = Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, renderedFrames[pose].dataUrl])) as Record<FighterPose, string>;
   const frames = Object.fromEntries(
     FIGHTER_POSES.map((pose) => [
       pose,
@@ -35,6 +40,7 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
         anchor: { x: 0.5, y: 0.9 },
         width: 384,
         height: 384,
+        collision: renderedFrames[pose].collision,
       },
     ]),
   ) as FighterProfile["frames"];
@@ -53,13 +59,16 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
   };
 }
 
-function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]): string {
+function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]) {
   const canvas = document.createElement("canvas");
   canvas.width = 384;
   canvas.height = 384;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    return "";
+    return {
+      dataUrl: "",
+      collision: createFrameCollisionMetadata({ width: 384, height: 384, data: new Uint8ClampedArray(384 * 384 * 4) }, pose),
+    };
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -102,7 +111,10 @@ function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]): 
   }
 
   ctx.restore();
-  return canvas.toDataURL("image/png");
+  return {
+    dataUrl: canvas.toDataURL("image/png"),
+    collision: createFrameCollisionMetadata(ctx.getImageData(0, 0, canvas.width, canvas.height), pose),
+  };
 }
 
 function drawLimbs(ctx: CanvasRenderingContext2D, pose: FighterPose, colors: (typeof COLORS)["ember"]) {

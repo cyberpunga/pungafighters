@@ -88,7 +88,9 @@ const EFFECT_CONTROL_KEYS = {
 
 export function AppSettingsPanel(props: {
   battleActive?: boolean;
+  battleDebugHitboxes: boolean;
   battlePostEffectSettings: BattlePostEffectSettings;
+  onBattleDebugHitboxesChange: (enabled: boolean) => void;
   onBattlePostEffectSettingsChange: (settings: BattlePostEffectSettings) => void;
 }) {
   const { preference, setPreference, t } = useI18n();
@@ -177,6 +179,16 @@ export function AppSettingsPanel(props: {
       },
       [t("settings.battleDisplay")]: folder(
         {
+          battleDebugHitboxes: {
+            label: t("settings.battleDebugHitboxes"),
+            value: props.battleDebugHitboxes,
+            transient: false,
+            onChange: (enabled: boolean, _path: string, context: LevaOnChangeContext) => {
+              if (!context.initial) {
+                props.onBattleDebugHitboxesChange(enabled);
+              }
+            },
+          },
           clean: {
             ...button(() => {
               updateSettings(disableAllEffects(settingsRef.current));
@@ -250,12 +262,24 @@ export function AppSettingsPanel(props: {
       ),
     }),
     { store: settingsStore },
-    [preference, props.battlePostEffectSettings, props.onBattlePostEffectSettingsChange, setPreference, settingsStore, t],
+    [
+      preference,
+      props.battleDebugHitboxes,
+      props.battlePostEffectSettings,
+      props.onBattleDebugHitboxesChange,
+      props.onBattlePostEffectSettingsChange,
+      setPreference,
+      settingsStore,
+      t,
+    ],
   );
 
   useEffect(() => {
     syncingLevaRef.current = true;
-    setLevaValues(settingsToLevaValues(props.battlePostEffectSettings) as unknown as Parameters<typeof setLevaValues>[0]);
+    setLevaValues({
+      ...settingsToLevaValues(props.battlePostEffectSettings),
+      battleDebugHitboxes: props.battleDebugHitboxes,
+    } as unknown as Parameters<typeof setLevaValues>[0]);
     const syncReset = window.setTimeout(() => {
       syncingLevaRef.current = false;
     }, 0);
@@ -263,7 +287,7 @@ export function AppSettingsPanel(props: {
       window.clearTimeout(syncReset);
       syncingLevaRef.current = false;
     };
-  }, [props.battlePostEffectSettings, setLevaValues]);
+  }, [props.battleDebugHitboxes, props.battlePostEffectSettings, setLevaValues]);
 
   return (
     <LevaPanel

@@ -6,9 +6,11 @@ import type { NetworkInputController } from "../../game/network/networkInputCont
 import {
   BATTLE_TICK_SECONDS,
   createBattleState,
+  getBattleDebugBoxes,
   restartMatch,
   stepBattleFrame,
   type BattleState,
+  type BattleDebugBox,
   type FighterRuntime,
 } from "../../game/simulation/battle";
 import { createFighterRenderState, updateFighterRenderState } from "../../game/render/fighterAnimation";
@@ -32,6 +34,7 @@ import {
   CAMERA_NEAR_FOV,
   CAMERA_NEAR_Z,
   STAGE_JUMP_SCALE,
+  STAGE_X_RANGE,
   STAGE_Z,
   SUPER_MOMENT_SECONDS,
 } from "./constants";
@@ -46,6 +49,7 @@ export function BattleStageView(props: {
   selectedFighterIds: { p1: string; p2: string };
   config: BattleConfig;
   background?: RuntimeBattleBackground;
+  collisionDebug?: boolean;
   displayEffectSettings: BattlePostEffectSettings;
   loading: boolean;
   onBack: () => void;
@@ -162,6 +166,7 @@ export function BattleStageView(props: {
               <PlayableStage
                 battleState={battleState}
                 background={props.background}
+                collisionDebug={Boolean(props.collisionDebug)}
                 displayEffectSettings={props.displayEffectSettings}
                 fighters={fighters}
                 haltedMessage={haltedMessage}
@@ -205,6 +210,7 @@ function PlayableStage(props: {
   battleState: BattleState;
   background?: RuntimeBattleBackground;
   checksumHistoryRef: React.MutableRefObject<Map<number, string>>;
+  collisionDebug: boolean;
   displayEffectSettings: BattlePostEffectSettings;
   fighters: { p1: LoadedFighter; p2: LoadedFighter };
   haltedMessage?: string;
@@ -352,12 +358,44 @@ function PlayableStage(props: {
       <TheaterSet background={props.background} />
       <FightingStandee fighter={props.fighters.p1} runtime={props.battleState.fighters.p1} battleState={props.battleState} />
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
+      {props.collisionDebug && <CollisionDebugOverlay state={props.battleState} />}
       <HitSplashLayer splashes={hitSplashes} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
       <CameraRig lensSettings={props.displayEffectSettings.effects.lens} state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
       <ContactShadows position={[0, 0.025, STAGE_Z]} opacity={0.38} blur={2.4} scale={7} far={4} resolution={1024} />
     </>
+  );
+}
+
+function CollisionDebugOverlay(props: { state: BattleState }) {
+  const boxes = getBattleDebugBoxes(props.state);
+  return (
+    <group renderOrder={40}>
+      {boxes.map((box, index) => (
+        <CollisionDebugPlane key={`${box.slot}-${box.kind}-${index}`} box={box} arenaWidth={props.state.arenaWidth} groundY={props.state.groundY} />
+      ))}
+    </group>
+  );
+}
+
+function CollisionDebugPlane(props: { box: BattleDebugBox; arenaWidth: number; groundY: number }) {
+  const width = ((props.box.right - props.box.left) / props.arenaWidth) * STAGE_X_RANGE;
+  const height = (props.box.bottom - props.box.top) / STAGE_JUMP_SCALE;
+  const centerX = mapBattleX((props.box.left + props.box.right) / 2, props.arenaWidth);
+  const centerY = Math.max(0, (props.groundY - (props.box.top + props.box.bottom) / 2) / STAGE_JUMP_SCALE);
+  const color = props.box.kind === "attack" ? (props.box.slot === "p1" ? "#ffcf56" : "#9effff") : props.box.slot === "p1" ? "#f45b69" : "#2ec4b6";
+  const opacity = props.box.kind === "attack" ? 0.34 : 0.18;
+
+  if (width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return (
+    <mesh position={[centerX, centerY, STAGE_Z + (props.box.kind === "attack" ? 0.09 : 0.075)]} renderOrder={40}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
 
