@@ -50,6 +50,57 @@ describe("battle simulation", () => {
     expect(state.fighters.p2.x).toBe(1120);
   });
 
+  it("keeps fighters from walking through each other", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 560, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 640, y: state.groundY };
+
+    for (let frame = 0; frame < 40; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), right: true },
+        p2: { ...createEmptyActions(), left: true },
+      });
+    }
+
+    expect(state.fighters.p1.x).toBeLessThan(state.fighters.p2.x);
+    expect(state.fighters.p2.x - state.fighters.p1.x).toBeGreaterThanOrEqual(228);
+    expect(state.fighters.p1.facing).toBe(1);
+    expect(state.fighters.p2.facing).toBe(-1);
+  });
+
+  it("keeps body collision inside arena edges", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 86, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 104, y: state.groundY };
+
+    state = stepBattleFrame(state, {
+      p1: { ...createEmptyActions(), left: true },
+      p2: { ...createEmptyActions(), left: true },
+    });
+
+    expect(state.fighters.p1.x).toBe(80);
+    expect(state.fighters.p2.x).toBeGreaterThan(state.fighters.p1.x);
+    expect(state.fighters.p2.x - state.fighters.p1.x).toBeGreaterThanOrEqual(228);
+  });
+
+  it("lets a punch connect from the body collision boundary", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 550, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
+
+    expect(state.lastHit).toMatchObject({ attacker: "p1", defender: "p2", damage: 8 });
+  });
+
   it("resets new rounds to the widened arena start positions", () => {
     let state = createBattleState(config, fighters);
     state = {
@@ -177,7 +228,7 @@ describe("battle simulation", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };
     state.fighters.p1 = { ...state.fighters.p1, x: 320, y: state.groundY };
-    state.fighters.p2 = { ...state.fighters.p2, x: 470, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 610, y: state.groundY };
 
     for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
       state = stepBattleFrame(state, {

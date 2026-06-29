@@ -12,10 +12,11 @@ const P1_START_X = (ARENA_WIDTH * 250) / BASE_ARENA_WIDTH;
 const P2_START_X = (ARENA_WIDTH * 710) / BASE_ARENA_WIDTH;
 
 const HURTBOX = {
-  halfWidth: 32,
+  halfWidth: 78,
   height: 138,
   bottomOffset: 10,
 } as const;
+const FIGHTER_BODY_SEPARATION = 230;
 
 export const BATTLE_TICK_RATE = 60;
 export const BATTLE_TICK_SECONDS = 1 / BATTLE_TICK_RATE;
@@ -47,7 +48,7 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     pose: "punch",
     damage: 8,
     hitbox: {
-      reach: 58,
+      reach: 86,
       height: 74,
       centerYOffset: -94,
     },
@@ -61,7 +62,7 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     pose: "kick",
     damage: 12,
     hitbox: {
-      reach: 74,
+      reach: 116,
       height: 78,
       centerYOffset: -72,
     },
@@ -75,7 +76,7 @@ const ATTACKS: Record<AttackKind, AttackDef> = {
     pose: "punch",
     damage: 5,
     hitbox: {
-      reach: 98,
+      reach: 144,
       height: 106,
       centerYOffset: -96,
     },
@@ -216,6 +217,8 @@ export function stepBattleFrame(state: BattleState, inputs: PlayerInputSnapshot)
   next.timer = Math.max(0, next.timer - dt);
   const p1Attack = updateFighter(next.fighters.p1, next.fighters.p2, inputs.p1 ?? createEmptyActions(), dt);
   const p2Attack = updateFighter(next.fighters.p2, next.fighters.p1, inputs.p2 ?? createEmptyActions(), dt);
+  resolveFighterBodyCollision(next);
+  faceFighters(next);
   if (p1Attack === "special") {
     startSuperFreeze(next, "p1");
   } else if (p2Attack === "special") {
@@ -402,6 +405,35 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
     attacker.superMeter = Math.min(SUPER_HITS_REQUIRED, attacker.superMeter + 1);
     state.lastHit = { attacker: attackerSlot, defender: defenderSlot, damage, at: state.frame };
   }
+}
+
+function resolveFighterBodyCollision(state: BattleState) {
+  const p1 = state.fighters.p1;
+  const p2 = state.fighters.p2;
+  if (p2.x - p1.x >= FIGHTER_BODY_SEPARATION) {
+    return;
+  }
+
+  const halfDistance = FIGHTER_BODY_SEPARATION / 2;
+  const midpoint = (p1.x + p2.x) / 2;
+  let p1X = midpoint - halfDistance;
+  let p2X = midpoint + halfDistance;
+
+  if (p1X < ARENA_EDGE_PADDING) {
+    p1X = ARENA_EDGE_PADDING;
+    p2X = p1X + FIGHTER_BODY_SEPARATION;
+  } else if (p2X > state.arenaWidth - ARENA_EDGE_PADDING) {
+    p2X = state.arenaWidth - ARENA_EDGE_PADDING;
+    p1X = p2X - FIGHTER_BODY_SEPARATION;
+  }
+
+  p1.x = clamp(p1X, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  p2.x = clamp(p2X, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+}
+
+function faceFighters(state: BattleState) {
+  state.fighters.p1.facing = 1;
+  state.fighters.p2.facing = -1;
 }
 
 function getRequestedAttack(fighter: FighterRuntime, input: ReturnType<typeof createEmptyActions>): AttackDef | undefined {

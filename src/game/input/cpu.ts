@@ -2,12 +2,12 @@ import type { ActionSnapshot, PlayerSlot } from "../../types/game";
 import { SUPER_HITS_REQUIRED, type BattleState, type FighterRuntime } from "../simulation/battle";
 import { createEmptyActions } from "./actions";
 
-const APPROACH_DISTANCE = 128;
-const RETREAT_DISTANCE = 54;
-const BLOCK_DISTANCE = 148;
-const PUNCH_DISTANCE = 136;
-const KICK_DISTANCE = 158;
-const SPECIAL_DISTANCE = 176;
+const APPROACH_DISTANCE = 222;
+const RETREAT_DISTANCE = 128;
+const BLOCK_DISTANCE = 268;
+const PUNCH_DISTANCE = 240;
+const KICK_DISTANCE = 270;
+const SPECIAL_DISTANCE = 300;
 
 export function createCpuActions(state: BattleState, slot: PlayerSlot): ActionSnapshot {
   const actions = createEmptyActions();
