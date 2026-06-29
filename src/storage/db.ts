@@ -7,16 +7,18 @@ import type {
   FighterFrameCollision,
   FighterProfile,
   LoadedBattleBackground,
+  LoadedBattleBackgroundLayer,
   LoadedFighter,
   VoiceClipType,
 } from "../types/game";
-import { BATTLE_POST_EFFECTS, FIGHTER_POSES } from "../types/game";
+import { BATTLE_BACKGROUND_DEPTH_LAYERS, BATTLE_POST_EFFECTS, FIGHTER_POSES, type BattleBackgroundDepthLayerId } from "../types/game";
 import {
   createDefaultBattlePostEffectSettings,
   getEnabledBattlePostEffects,
   normalizeBattlePostEffectSettings,
 } from "../game/render/postEffectSettings";
 import { createFrameCollisionMetadataFromBlob } from "../creator/collisionMetadata";
+import { createBattleBackgroundDepthLayersFromBlob, type GeneratedBattleBackgroundLayer } from "../creator/backgroundDepthLayers";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 import { AppError, missingPoseImageError } from "../i18n/errors";
 
@@ -30,8 +32,21 @@ const BATTLE_DISPLAY_EFFECT_SETTING_KEY = "battle-display-effect";
 const BATTLE_POST_EFFECTS_SETTING_KEY = "battle-post-effects";
 const BATTLE_POST_EFFECT_SETTINGS_KEY = "battle-post-effect-settings";
 const BATTLE_BACKGROUND_BLOB_ID = "battle-background:current";
+const BATTLE_BACKGROUND_LAYER_BLOB_ID_PREFIX = "battle-background:current:layer";
 const BATTLE_BACKGROUND_MAX_BYTES = 10 * 1024 * 1024;
 const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+interface BattleBackgroundLayerRecord {
+  id: BattleBackgroundDepthLayerId;
+  blobId: string;
+  mimeType: string;
+  size: number;
+  depth: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  opacity: number;
+}
 
 interface BattleBackgroundRecord {
   id: "custom";
@@ -40,6 +55,7 @@ interface BattleBackgroundRecord {
   mimeType: string;
   size: number;
   updatedAt: string;
+  layers?: BattleBackgroundLayerRecord[];
 }
 
 export interface EditableFighterDraft {
@@ -271,7 +287,11 @@ export async function getLoadedBattleBackground(): Promise<LoadedBattleBackgroun
   }
 
   const blob = await db.get("imageBlobs", record.blobId);
-  return blob ? loadBattleBackground(record, blob) : undefined;
+  if (!blob) {
+    return undefined;
+  }
+  const layerBlobs = await loadBattleBackgroundLayerBlobs(record);
+  return loadBattleBackground(record, blob, layerBlobs);
 }
 
 export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattleBackground> {
@@ -284,6 +304,7 @@ export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattl
 
   const db = await getDb();
   const now = new Date().toISOString();
+  const layers = await createBackgroundDepthLayers(file);
   const record: BattleBackgroundRecord = {
     id: "custom",
     name: cleanBackgroundName(file.name),
@@ -291,21 +312,47 @@ export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattl
     mimeType: file.type || getImageMimeTypeFromName(file.name) || "image/png",
     size: file.size,
     updatedAt: now,
+    layers: layers.length
+      ? layers.map((layer) => ({
+          id: layer.id,
+          blobId: getBattleBackgroundLayerBlobId(layer.id),
+          mimeType: layer.mimeType,
+          size: layer.size,
+          depth: layer.depth,
+          scale: layer.scale,
+          offsetX: layer.offsetX,
+          offsetY: layer.offsetY,
+          opacity: layer.opacity,
+        }))
+      : undefined,
   };
   const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
-  await Promise.all([
+  const imageWrites: Promise<unknown>[] = [
     tx.objectStore("imageBlobs").put(file, BATTLE_BACKGROUND_BLOB_ID),
     tx.objectStore("settings").put(record, BATTLE_BACKGROUND_SETTING_KEY),
-  ]);
+    ...BATTLE_BACKGROUND_DEPTH_LAYERS.map((id) => tx.objectStore("imageBlobs").delete(getBattleBackgroundLayerBlobId(id))),
+    ...layers.map((layer) => tx.objectStore("imageBlobs").put(layer.blob, getBattleBackgroundLayerBlobId(layer.id))),
+  ];
+  await Promise.all(imageWrites);
   await tx.done;
-  return loadBattleBackground(record, file);
+  return loadBattleBackground(
+    record,
+    file,
+    new Map(layers.map((layer) => [getBattleBackgroundLayerBlobId(layer.id), layer.blob])),
+  );
 }
 
 export async function clearBattleBackgroundImage(): Promise<void> {
   const db = await getDb();
+  const record = await db.get("settings", BATTLE_BACKGROUND_SETTING_KEY);
+  const layerBlobIds = new Set([
+    ...BATTLE_BACKGROUND_DEPTH_LAYERS.map((id) => getBattleBackgroundLayerBlobId(id)),
+    ...(isBattleBackgroundRecord(record) ? (record.layers?.map((layer) => layer.blobId) ?? []) : []),
+  ]);
   const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
   await Promise.all([
     tx.objectStore("imageBlobs").delete(BATTLE_BACKGROUND_BLOB_ID),
+    ...[...layerBlobIds].map((blobId) => tx.objectStore("imageBlobs").delete(blobId)),
     tx.objectStore("settings").delete(BATTLE_BACKGROUND_SETTING_KEY),
   ]);
   await tx.done;
@@ -401,11 +448,39 @@ async function loadFighterAssets(fighter: FighterProfile): Promise<LoadedFighter
   };
 }
 
-function loadBattleBackground(record: BattleBackgroundRecord, blob: Blob): LoadedBattleBackground {
+function loadBattleBackground(
+  record: BattleBackgroundRecord,
+  blob: Blob,
+  layerBlobs: Map<string, Blob> = new Map(),
+): LoadedBattleBackground {
+  const layers = record.layers
+    ?.map((layer): LoadedBattleBackgroundLayer | undefined => {
+      const layerBlob = layerBlobs.get(layer.blobId);
+      if (!layerBlob) {
+        return undefined;
+      }
+      return {
+        ...layer,
+        imageUrl: URL.createObjectURL(layerBlob),
+      };
+    })
+    .filter((layer): layer is LoadedBattleBackgroundLayer => Boolean(layer));
   return {
     ...record,
     imageUrl: URL.createObjectURL(blob),
+    layers: layers?.length ? layers : undefined,
   };
+}
+
+async function loadBattleBackgroundLayerBlobs(record: BattleBackgroundRecord) {
+  const db = await getDb();
+  const pairs = await Promise.all(
+    (record.layers ?? []).map(async (layer) => {
+      const blob = await db.get("imageBlobs", layer.blobId);
+      return blob ? ([layer.blobId, blob] as const) : undefined;
+    }),
+  );
+  return new Map(pairs.filter((pair): pair is readonly [string, Blob] => Boolean(pair)));
 }
 
 function isSupportedBattleBackgroundFile(file: File) {
@@ -437,6 +512,18 @@ function cleanBackgroundName(filename: string) {
   const basename = filename.replace(/\.[^.]+$/, "");
   const cleaned = basename.trim().replace(/\s+/g, " ");
   return cleaned ? cleaned.slice(0, 48) : "Custom Background";
+}
+
+async function createBackgroundDepthLayers(file: File): Promise<GeneratedBattleBackgroundLayer[]> {
+  try {
+    return await createBattleBackgroundDepthLayersFromBlob(file);
+  } catch {
+    return [];
+  }
+}
+
+function getBattleBackgroundLayerBlobId(id: BattleBackgroundDepthLayerId) {
+  return `${BATTLE_BACKGROUND_LAYER_BLOB_ID_PREFIX}:${id}`;
 }
 
 async function fighterFrameToBlob(frame: FighterProfile["frames"][FighterPose]): Promise<Blob> {
@@ -473,6 +560,26 @@ function isBattleBackgroundRecord(value: unknown): value is BattleBackgroundReco
     typeof record.blobId === "string" &&
     typeof record.mimeType === "string" &&
     typeof record.size === "number" &&
-    typeof record.updatedAt === "string"
+    typeof record.updatedAt === "string" &&
+    (record.layers === undefined || (Array.isArray(record.layers) && record.layers.every(isBattleBackgroundLayerRecord)))
+  );
+}
+
+function isBattleBackgroundLayerRecord(value: unknown): value is BattleBackgroundLayerRecord {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const layer = value as Partial<BattleBackgroundLayerRecord>;
+  return (
+    typeof layer.id === "string" &&
+    BATTLE_BACKGROUND_DEPTH_LAYERS.includes(layer.id as BattleBackgroundDepthLayerId) &&
+    typeof layer.blobId === "string" &&
+    typeof layer.mimeType === "string" &&
+    typeof layer.size === "number" &&
+    typeof layer.depth === "number" &&
+    typeof layer.scale === "number" &&
+    typeof layer.offsetX === "number" &&
+    typeof layer.offsetY === "number" &&
+    typeof layer.opacity === "number"
   );
 }

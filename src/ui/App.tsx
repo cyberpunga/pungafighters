@@ -75,14 +75,18 @@ export function App() {
   const [battleBackground, setBattleBackground] = useState<LoadedBattleBackground | undefined>();
   const [battlePostEffectSettings, setBattlePostEffectSettings] = useState<BattlePostEffectSettings>(DEFAULT_BATTLE_POST_EFFECT_SETTINGS);
   const [battleDebugHitboxes, setBattleDebugHitboxes] = useState(false);
-  const battleBackgroundUrlRef = useRef<string | undefined>();
+  const battleBackgroundUrlsRef = useRef<string[]>([]);
   const onlineRole: OnlineRole = route === "onlineGuest" ? "guest" : "host";
 
   const setLoadedBattleBackground = useCallback((next: LoadedBattleBackground | undefined) => {
-    if (battleBackgroundUrlRef.current && battleBackgroundUrlRef.current !== next?.imageUrl) {
-      URL.revokeObjectURL(battleBackgroundUrlRef.current);
-    }
-    battleBackgroundUrlRef.current = next?.imageUrl;
+    const nextUrls = collectBattleBackgroundUrls(next);
+    const nextUrlSet = new Set(nextUrls);
+    battleBackgroundUrlsRef.current.forEach((url) => {
+      if (!nextUrlSet.has(url)) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    battleBackgroundUrlsRef.current = nextUrls;
     setBattleBackground(next);
   }, []);
 
@@ -138,9 +142,8 @@ export function App() {
 
   useEffect(
     () => () => {
-      if (battleBackgroundUrlRef.current) {
-        URL.revokeObjectURL(battleBackgroundUrlRef.current);
-      }
+      battleBackgroundUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      battleBackgroundUrlsRef.current = [];
     },
     [],
   );
@@ -375,4 +378,11 @@ export function App() {
       )}
     </main>
   );
+}
+
+function collectBattleBackgroundUrls(background: RuntimeBattleBackground | undefined) {
+  if (!background) {
+    return [];
+  }
+  return [background.imageUrl, ...(background.layers?.map((layer) => layer.imageUrl) ?? [])];
 }

@@ -3,12 +3,16 @@ import type { RuntimeBattleBackground } from "../../types/game";
 import { createAssetChunkEnvelope, parseAssetChunkEnvelope } from "./assetChunks";
 import {
   NETWORK_BACKGROUND_ASSET_ID,
+  NETWORK_BACKGROUND_LAYER_ASSET_ID_PREFIX,
   NetworkBackgroundAssetReceiver,
   serializeBattleBackgroundForNetwork,
   type NetworkBackgroundTransferAsset,
 } from "./backgroundTransfer";
 
 const BACKGROUND_DATA_URL = "data:image/png;base64,AAECAwQFBgcICQ==";
+const FAR_LAYER_DATA_URL = "data:image/png;base64,AQIDBAUGBwgJ";
+const MID_LAYER_DATA_URL = "data:image/png;base64,CQoLDA0ODxAR";
+const NEAR_LAYER_DATA_URL = "data:image/png;base64,EhMUFRYXGBka";
 
 describe("background network transfer", () => {
   it("sends default arena metadata without binary assets", async () => {
@@ -36,6 +40,25 @@ describe("background network transfer", () => {
     expect(loaded.background?.id).toBe("remote");
     expect(loaded.background?.name).toBe("Rooftop");
     expect(loaded.background?.imageUrl).toMatch(/^blob:/);
+    loaded.revoke();
+  });
+
+  it("round-trips optional depth layer assets with the host background", async () => {
+    const transfer = await serializeBattleBackgroundForNetwork(createBackground({ withLayers: true }));
+    const receiver = new NetworkBackgroundAssetReceiver(transfer.manifest);
+
+    expect(transfer.manifest.layers).toHaveLength(3);
+    expect(transfer.manifest.layers?.[0]?.assetId).toBe(`${NETWORK_BACKGROUND_LAYER_ASSET_ID_PREFIX}:far`);
+    expect(transfer.assets).toHaveLength(4);
+    expect(transfer.totalBytes).toBe(transfer.assets.reduce((total, asset) => total + asset.byteLength, 0));
+
+    for (const asset of transfer.assets) {
+      await receiveAsset(receiver, asset, 4);
+    }
+
+    const loaded = receiver.createRuntimeBackground();
+    expect(loaded.background?.layers?.map((layer) => layer.id)).toEqual(["far", "mid", "near"]);
+    expect(loaded.background?.layers?.map((layer) => layer.imageUrl)).toEqual([expect.stringMatching(/^blob:/), expect.stringMatching(/^blob:/), expect.stringMatching(/^blob:/)]);
     loaded.revoke();
   });
 
@@ -103,7 +126,7 @@ async function receiveAsset(receiver: NetworkBackgroundAssetReceiver, asset: Net
   }
 }
 
-function createBackground(): RuntimeBattleBackground {
+function createBackground(options: { withLayers?: boolean } = {}): RuntimeBattleBackground {
   return {
     id: "custom",
     name: "Rooftop",
@@ -111,5 +134,42 @@ function createBackground(): RuntimeBattleBackground {
     mimeType: "image/png",
     size: 12,
     updatedAt: "2026-05-14T00:00:00.000Z",
+    layers: options.withLayers
+      ? [
+          {
+            id: "far",
+            imageUrl: FAR_LAYER_DATA_URL,
+            mimeType: "image/png",
+            size: 9,
+            depth: 0.16,
+            scale: 1.01,
+            offsetX: 0,
+            offsetY: 0.04,
+            opacity: 1,
+          },
+          {
+            id: "mid",
+            imageUrl: MID_LAYER_DATA_URL,
+            mimeType: "image/png",
+            size: 9,
+            depth: 0.5,
+            scale: 1.045,
+            offsetX: 0,
+            offsetY: 0,
+            opacity: 1,
+          },
+          {
+            id: "near",
+            imageUrl: NEAR_LAYER_DATA_URL,
+            mimeType: "image/png",
+            size: 9,
+            depth: 0.86,
+            scale: 1.09,
+            offsetX: 0,
+            offsetY: -0.05,
+            opacity: 0.94,
+          },
+        ]
+      : undefined,
   };
 }

@@ -18,6 +18,7 @@
 - Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, imported battle background image blobs, audio blobs, and settings.
+- Imported battle backgrounds may include deterministic browser-generated depth layer PNGs. Compute them at save/import time, store them with the background record, transfer them only through optional manifest assets under the existing background cap, and keep them visual-only in the R3F renderer.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
 
 ## File Organization

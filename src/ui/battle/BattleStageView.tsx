@@ -428,12 +428,51 @@ function TheaterSet(props: { background?: RuntimeBattleBackground }) {
   );
 }
 
+const BACKDROP_WIDTH = 6.85;
+const BACKDROP_HEIGHT = 3.2;
+const BACKDROP_Y = 2.38;
+const BACKDROP_BASE_Z = -2.44;
+const BACKDROP_DEPTH_RANGE = 0.3;
+
 function CustomStageBackdrop(props: { background: RuntimeBattleBackground }) {
-  const texture = useTexture(props.background.imageUrl);
+  const layers = props.background.layers ?? [];
+  if (!layers.length) {
+    return <StageBackdropPlane imageUrl={props.background.imageUrl} opacity={1} z={-2.33} />;
+  }
+
+  return (
+    <group>
+      <StageBackdropPlane imageUrl={props.background.imageUrl} opacity={0.32} z={BACKDROP_BASE_Z - 0.02} />
+      {layers.map((layer) => (
+        <StageBackdropPlane
+          key={layer.id}
+          imageUrl={layer.imageUrl}
+          opacity={layer.opacity}
+          scale={layer.scale}
+          x={layer.offsetX}
+          y={BACKDROP_Y + layer.offsetY}
+          z={BACKDROP_BASE_Z + clamp(layer.depth, 0, 1) * BACKDROP_DEPTH_RANGE}
+          transparent
+        />
+      ))}
+    </group>
+  );
+}
+
+function StageBackdropPlane(props: {
+  imageUrl: string;
+  opacity: number;
+  scale?: number;
+  x?: number;
+  y?: number;
+  z: number;
+  transparent?: boolean;
+}) {
+  const texture = useTexture(props.imageUrl);
   useEffect(() => {
     const image = texture.image as HTMLImageElement | undefined;
     const imageAspect = image?.width && image.height ? image.width / image.height : 1;
-    const planeAspect = 6.85 / 3.2;
+    const planeAspect = BACKDROP_WIDTH / BACKDROP_HEIGHT;
     texture.offset.set(0, 0);
     texture.repeat.set(1, 1);
     if (imageAspect > planeAspect) {
@@ -448,9 +487,16 @@ function CustomStageBackdrop(props: { background: RuntimeBattleBackground }) {
   }, [texture]);
 
   return (
-    <mesh position={[0, 2.38, -2.33]}>
-      <planeGeometry args={[6.85, 3.2]} />
-      <meshBasicMaterial map={texture} toneMapped={false} />
+    <mesh position={[props.x ?? 0, props.y ?? BACKDROP_Y, props.z]}>
+      <planeGeometry args={[BACKDROP_WIDTH * (props.scale ?? 1), BACKDROP_HEIGHT * (props.scale ?? 1)]} />
+      <meshBasicMaterial
+        map={texture}
+        toneMapped={false}
+        transparent={props.transparent || props.opacity < 1}
+        opacity={props.opacity}
+        alphaTest={props.transparent ? 0.015 : 0}
+        depthWrite={false}
+      />
     </mesh>
   );
 }

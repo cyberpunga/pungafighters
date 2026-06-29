@@ -1,6 +1,14 @@
-import type { ActionSnapshot, FighterFrameCollision, FighterPose, FrameAnchor, PlayerSlot, VoiceClipType } from "../../types/game";
+import type {
+  ActionSnapshot,
+  BattleBackgroundDepthLayerId,
+  FighterFrameCollision,
+  FighterPose,
+  FrameAnchor,
+  PlayerSlot,
+  VoiceClipType,
+} from "../../types/game";
 
-export const NETPLAY_PROTOCOL_VERSION = 3;
+export const NETPLAY_PROTOCOL_VERSION = 4;
 export const NETPLAY_INPUT_DELAY = 10;
 export const NETPLAY_REPEAT_FRAMES = 24;
 export const NETPLAY_CHECKSUM_INTERVAL = 30;
@@ -49,12 +57,22 @@ export interface NetworkBattleBackgroundAsset {
   byteLength: number;
 }
 
+export interface NetworkBattleBackgroundLayerAsset extends NetworkBattleBackgroundAsset {
+  layerId: BattleBackgroundDepthLayerId;
+  depth: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  opacity: number;
+}
+
 export interface NetworkBattleBackgroundManifest {
   id: "default" | "custom";
   name: string;
   totalBytes: number;
   updatedAt?: string;
   asset?: NetworkBattleBackgroundAsset;
+  layers?: NetworkBattleBackgroundLayerAsset[];
 }
 
 export interface NetworkAssetChunkHeader {

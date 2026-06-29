@@ -2,11 +2,13 @@ export const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as cons
 export const VOICE_CLIPS = ["attack", "hit", "win"] as const;
 export const BATTLE_POST_EFFECTS = ["pixel", "bad-tv", "static", "crt-soft", "crt-strong", "lens"] as const;
 export const BATTLE_DISPLAY_EFFECTS = ["clean", ...BATTLE_POST_EFFECTS] as const;
+export const BATTLE_BACKGROUND_DEPTH_LAYERS = ["far", "mid", "near"] as const;
 
 export type FighterPose = (typeof FIGHTER_POSES)[number];
 export type VoiceClipType = (typeof VOICE_CLIPS)[number];
 export type BattlePostEffect = (typeof BATTLE_POST_EFFECTS)[number];
 export type BattleDisplayEffect = (typeof BATTLE_DISPLAY_EFFECTS)[number];
+export type BattleBackgroundDepthLayerId = (typeof BATTLE_BACKGROUND_DEPTH_LAYERS)[number];
 
 export interface PixelPostEffectConfig {
   enabled: boolean;
@@ -149,6 +151,7 @@ export interface LoadedBattleBackground {
   mimeType: string;
   size: number;
   updatedAt: string;
+  layers?: LoadedBattleBackgroundLayer[];
 }
 
 export interface RuntimeBattleBackground {
@@ -158,6 +161,27 @@ export interface RuntimeBattleBackground {
   mimeType: string;
   size: number;
   updatedAt: string;
+  blobId?: string;
+  layers?: RuntimeBattleBackgroundLayer[];
+}
+
+export interface BattleBackgroundLayerBase {
+  id: BattleBackgroundDepthLayerId;
+  imageUrl: string;
+  mimeType: string;
+  size: number;
+  depth: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  opacity: number;
+}
+
+export interface LoadedBattleBackgroundLayer extends BattleBackgroundLayerBase {
+  blobId: string;
+}
+
+export interface RuntimeBattleBackgroundLayer extends BattleBackgroundLayerBase {
   blobId?: string;
 }
 
