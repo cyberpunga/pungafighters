@@ -1,6 +1,4 @@
-import { Camera, Gamepad2 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
 import type { BattleConfig, BattlePostEffectSettings, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
 import type { NetworkInputController } from "../game/network/networkInputController";
 import { downloadFighterExport } from "../creator/fighterFiles";
@@ -27,14 +25,12 @@ import { AppSettingsPanel } from "./AppSettingsPanel";
 import { DEFAULT_LOCAL_BATTLE_MODE, getLocalPlayerControls } from "./localBattleMode";
 import { selectOnlineLocalFighter } from "./onlineSelection";
 import {
-  appRouteFromLocation,
-  appRouteToHref,
   appRouteToView,
   creatorEditFighterIdFromPathname,
   creatorEditRouteToHref,
-  type AppRoute,
-  type View,
 } from "./routes";
+import { Topbar } from "./Topbar";
+import { useAppRoute } from "./useAppRoute";
 import { useI18n } from "../i18n/react";
 import { localizeError } from "../i18n/errors";
 
@@ -350,87 +346,4 @@ export function App() {
       )}
     </main>
   );
-}
-
-function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
-  const { t } = useI18n();
-  const onRouteClick = (event: MouseEvent<HTMLAnchorElement>, route: AppRoute) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) {
-      return;
-    }
-    event.preventDefault();
-    props.onNavigate(route);
-  };
-
-  const fightActive = props.view === "menu" || props.view === "fighterSelect" || props.view === "online";
-
-  return (
-    <header className="topbar">
-      <a className="brand-button" href={appRouteToHref("menu")} onClick={(event) => onRouteClick(event, "menu")}>
-        <span className="brand-mark">PF</span>
-        <span>{t("app.brand")}</span>
-      </a>
-      <nav className="nav-cluster" aria-label={t("nav.primary")}>
-        <a
-          className={props.view === "creator" ? "icon-button active" : "icon-button"}
-          href={appRouteToHref("creator")}
-          onClick={(event) => onRouteClick(event, "creator")}
-          aria-current={props.view === "creator" ? "page" : undefined}
-          aria-label={t("nav.createFighter")}
-          title={t("nav.createFighter")}
-        >
-          <Camera size={19} />
-        </a>
-        <a
-          className={fightActive ? "icon-button active" : "icon-button"}
-          href={appRouteToHref("menu")}
-          onClick={(event) => onRouteClick(event, "menu")}
-          aria-current={fightActive ? "page" : undefined}
-          aria-label={t("nav.fightOptions")}
-          title={t("nav.fightOptions")}
-        >
-          <Gamepad2 size={19} />
-        </a>
-      </nav>
-    </header>
-  );
-}
-
-function useAppRoute(): [AppRoute, (route: AppRoute, options?: { href?: string; replace?: boolean }) => void, string] {
-  const [locationState, setLocationState] = useState(() => ({
-    route: appRouteFromLocation(window.location),
-    pathname: window.location.pathname,
-  }));
-  const { route, pathname } = locationState;
-
-  useEffect(() => {
-    const onPopState = () =>
-      setLocationState({
-        route: appRouteFromLocation(window.location),
-        pathname: window.location.pathname,
-      });
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  useEffect(() => {
-    if (route === "creator" && creatorEditFighterIdFromPathname(window.location.pathname)) {
-      return;
-    }
-    const href = appRouteToHref(route);
-    if (window.location.pathname !== href) {
-      window.history.replaceState({ appRoute: route }, "", href);
-    }
-  }, [route]);
-
-  const navigate = useCallback((nextRoute: AppRoute, options?: { href?: string; replace?: boolean }) => {
-    const href = options?.href ?? appRouteToHref(nextRoute);
-    if (window.location.pathname !== href) {
-      const method = options?.replace ? "replaceState" : "pushState";
-      window.history[method]({ appRoute: nextRoute }, "", href);
-    }
-    setLocationState({ route: nextRoute, pathname: window.location.pathname });
-  }, []);
-
-  return [route, navigate, pathname];
 }

@@ -1,0 +1,162 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #f8f4df;
+  background: #111018;
+  --ink: #111018;
+  --panel: #1d1a28;
+  --panel-strong: #282337;
+  --line: rgba(248, 244, 223, 0.16);
+  --text: #f8f4df;
+  --muted: #c6bea1;
+  --hot: #f45b69;
+  --aqua: #2ec4b6;
+  --gold: #f7b267;
+  --danger: #ff477e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(46, 196, 182, 0.08), transparent 34%),
+    radial-gradient(circle at 50% 0%, rgba(244, 91, 105, 0.16), transparent 32%),
+    var(--ink);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(16px, 4vw, 48px);
+  border-bottom: 1px solid var(--line);
+  background: rgba(17, 16, 24, 0.86);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.brand-button,
+.fighter-pick {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.brand-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--gold);
+  color: var(--gold);
+}
+
+.nav-cluster,
+.action-row,
+.voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon-button,
+.primary-button,
+.secondary-button {
+  border: 1px solid var(--line);
+  color: var(--text);
+  min-height: 42px;
+  border-radius: 8px;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.icon-button {
+  width: 42px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.icon-button:hover,
+.primary-button:hover,
+.secondary-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(248, 244, 223, 0.35);
+}
+
+.icon-button.active {
+  background: rgba(46, 196, 182, 0.18);
+  border-color: var(--aqua);
+}
+
+.icon-button.danger {
+  color: #ffd9e3;
+  border-color: rgba(255, 71, 126, 0.42);
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 18px;
+  font-weight: 800;
+}
+
+.primary-button {
+  background: var(--hot);
+}
+
+.secondary-button {
+  background: rgba(46, 196, 182, 0.18);
+}
+
+.full-width {
+  width: 100%;
+}

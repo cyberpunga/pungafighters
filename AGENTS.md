@@ -33,6 +33,9 @@
 - `src/game/network/`: WebRTC signaling, protocol messages, input buffering, and temporary peer asset transfer.
 - `src/i18n/`: typed locale dictionaries, browser-language detection, translation helpers, and React i18n provider.
 - `src/ui/`: React views and reusable UI components.
+- `src/ui/battle/`: React Three Fiber battle stage implementation, HUD, frame-loop helpers, audio, and visual-only debris helpers.
+- `src/ui/creator/`: creator view implementation, creator-specific UI components, and draft/object URL lifecycle helpers.
+- `src/styles/`: stylesheet sections imported by `src/styles.css`; preserve existing class names when moving styles.
 - `workers/turn/`: Cloudflare Worker that exchanges server-side TURN secrets for short-lived browser ICE server credentials.
 - `workers/generation/`: Cloudflare Worker that proxies server-side Gemini character spritesheet and single-pose generation.
 

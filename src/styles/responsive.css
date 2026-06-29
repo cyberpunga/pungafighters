@@ -1,0 +1,157 @@
+@media (max-width: 860px) {
+  .home-fight-options,
+  .home-hero-band,
+  .creator-grid,
+  .fight-mode-grid,
+  .online-grid,
+  .pose-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-view {
+    padding: clamp(18px, 5vw, 28px);
+  }
+
+  .home-hero-band {
+    min-height: auto;
+    gap: 16px;
+    padding-bottom: 18px;
+  }
+
+  .hero-copy {
+    gap: 13px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(46px, 13vw, 58px);
+    line-height: 0.96;
+  }
+
+  .hero-copy p {
+    font-size: 16px;
+    line-height: 1.45;
+  }
+
+  .home-quick-actions {
+    gap: 8px;
+  }
+
+  .home-quick-actions .primary-button,
+  .home-quick-actions .secondary-button {
+    padding: 0 14px;
+  }
+
+  .home-stat-row {
+    gap: 8px;
+  }
+
+  .home-stat-row span {
+    min-width: 104px;
+    padding: 8px 10px;
+  }
+
+  .home-versus-stage {
+    min-height: 250px;
+  }
+
+  .versus-grid {
+    padding-inline: 8px;
+    padding-bottom: 42px;
+  }
+
+  .featured-fighter img {
+    width: min(100%, 150px);
+  }
+
+  .featured-fighter-name {
+    max-width: 126px;
+    font-size: 12px;
+  }
+
+  .versus-badge {
+    width: 54px;
+    font-size: 20px;
+  }
+
+  .fighter-marquee {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .online-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .local-mode-options {
+    grid-template-columns: 1fr;
+  }
+
+  .duel-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .stage-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .sound-grid,
+  .creator-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .creator-method-row,
+  .generation-field-grid,
+  .import-inline-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .required-action-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .generation-camera-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .generation-camera-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1400px) {
+  .creator-source-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pose-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pose-frame-preview,
+  .pose-frame-preview img,
+  .pose-frame-preview video {
+    min-height: 220px;
+    height: 220px;
+    width: 100%;
+  }
+
+  .sound-card {
+    align-items: start;
+    flex-direction: column;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

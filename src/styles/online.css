@@ -1,0 +1,123 @@
+.online-view {
+  margin: clamp(16px, 3vw, 32px);
+  display: grid;
+  gap: 22px;
+}
+
+.online-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.online-header h2 {
+  margin: 0;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+.online-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.65fr) minmax(320px, 1fr);
+  gap: 18px;
+}
+
+.online-panel {
+  border: 1px solid var(--line);
+  background: rgba(29, 26, 40, 0.82);
+  border-radius: 8px;
+  padding: clamp(16px, 2vw, 22px);
+}
+
+.online-fighter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.online-stage {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.online-fighter img {
+  width: 108px;
+  height: 108px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #111018;
+}
+
+.online-stage img,
+.online-stage .background-preview-default {
+  width: 108px;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: cover;
+  background-color: #111018;
+}
+
+.online-fighter div {
+  display: grid;
+  gap: 4px;
+}
+
+.online-stage div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.online-fighter span,
+.online-stage span,
+.connection-status {
+  color: var(--muted);
+}
+
+.online-fighter strong,
+.online-stage strong {
+  font-size: 22px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  line-height: 1.4;
+}
+
+.invite-steps {
+  display: grid;
+  gap: 14px;
+}
+
+.code-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: start;
+}
+
+.code-box textarea {
+  min-height: 152px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
