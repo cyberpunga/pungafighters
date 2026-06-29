@@ -84,6 +84,8 @@ export interface BattlePostEffectSettings {
 export type InputAction =
   | "left"
   | "right"
+  | "up"
+  | "down"
   | "jump"
   | "block"
   | "punch"

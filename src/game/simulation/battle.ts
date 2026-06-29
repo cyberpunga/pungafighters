@@ -2,14 +2,18 @@ import type { BattleConfig, CollisionBox, FighterFrame, FighterPose, PlayerInput
 import { createEmptyActions } from "../input/actions";
 
 const BASE_ARENA_WIDTH = 960;
-const ARENA_WIDTH = 1200;
+const ARENA_WIDTH = 1800;
+const ARENA_DEPTH = 420;
 const GROUND_Y = 430;
 const MOVE_SPEED = 250;
+const DEPTH_MOVE_SPEED = 185;
 const JUMP_SPEED = -650;
 const GRAVITY = 1800;
 const ARENA_EDGE_PADDING = 80;
+const ARENA_DEPTH_PADDING = 44;
 const P1_START_X = (ARENA_WIDTH * 250) / BASE_ARENA_WIDTH;
 const P2_START_X = (ARENA_WIDTH * 710) / BASE_ARENA_WIDTH;
+const START_Z = ARENA_DEPTH / 2;
 
 const HURTBOX = {
   halfWidth: 78,
@@ -17,6 +21,7 @@ const HURTBOX = {
   bottomOffset: 10,
 } as const;
 const FIGHTER_BODY_SEPARATION = 230;
+const ATTACK_DEPTH_REACH = 115;
 const COLLISION_PIXEL_TO_BATTLE = 0.86;
 
 export const BATTLE_TICK_RATE = 60;
@@ -93,6 +98,7 @@ export interface FighterRuntime {
   id: string;
   name: string;
   x: number;
+  z: number;
   y: number;
   velocityY: number;
   facing: 1 | -1;
@@ -126,6 +132,7 @@ export interface BattleState {
   frame: number;
   status: "countdown" | "running" | "roundOver" | "matchOver";
   arenaWidth: number;
+  arenaDepth: number;
   groundY: number;
   config: BattleConfig;
   fighters: Record<PlayerSlot, FighterRuntime>;
@@ -163,6 +170,7 @@ export function createBattleState(
     frame: 0,
     status: "countdown",
     arenaWidth: ARENA_WIDTH,
+    arenaDepth: ARENA_DEPTH,
     groundY: GROUND_Y,
     config,
     round: 1,
@@ -285,6 +293,7 @@ function createRuntime(
     id: fighter.id,
     name: fighter.name,
     x,
+    z: START_Z,
     y: GROUND_Y,
     velocityY: 0,
     facing,
@@ -359,7 +368,9 @@ function updateFighter(
 
   if (!fighter.attack && fighter.hitStun <= 0) {
     const move = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    const depthMove = (input.down ? 1 : 0) - (input.up ? 1 : 0);
     fighter.x += move * MOVE_SPEED * dt;
+    fighter.z += depthMove * DEPTH_MOVE_SPEED * dt;
     if (input.jump && fighter.y >= GROUND_Y) {
       fighter.velocityY = JUMP_SPEED;
     }
@@ -372,6 +383,7 @@ function updateFighter(
     fighter.velocityY = 0;
   }
   fighter.x = clamp(fighter.x, ARENA_EDGE_PADDING, ARENA_WIDTH - ARENA_EDGE_PADDING);
+  fighter.z = clamp(fighter.z, ARENA_DEPTH_PADDING, ARENA_DEPTH - ARENA_DEPTH_PADDING);
 
   return startedAttack;
 }
@@ -389,10 +401,11 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
     return;
   }
 
+  const depthAligned = Math.abs(attacker.z - defender.z) <= ATTACK_DEPTH_REACH;
   const active = attacker.attackElapsed >= attack.activeStart && attacker.attackElapsed <= attack.activeEnd;
   const facingDefender = attacker.facing === 1 ? defender.x >= attacker.x : defender.x <= attacker.x;
 
-  if (active && facingDefender && anyBoxesOverlap(getAttackBoxes(attacker, attack), getHurtboxes(defender))) {
+  if (depthAligned && active && facingDefender && anyBoxesOverlap(getAttackBoxes(attacker, attack), getHurtboxes(defender))) {
     if (isSpecial) {
       if (attacker.superHitsDelivered >= MAX_SUPER_HITS) {
         return;
@@ -421,25 +434,34 @@ function resolveAttack(state: BattleState, attackerSlot: PlayerSlot, defenderSlo
 function resolveFighterBodyCollision(state: BattleState) {
   const p1 = state.fighters.p1;
   const p2 = state.fighters.p2;
-  if (p2.x - p1.x >= FIGHTER_BODY_SEPARATION) {
+  const dx = p2.x - p1.x;
+  const dz = p2.z - p1.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance >= FIGHTER_BODY_SEPARATION) {
     return;
   }
 
-  const halfDistance = FIGHTER_BODY_SEPARATION / 2;
-  const midpoint = (p1.x + p2.x) / 2;
-  let p1X = midpoint - halfDistance;
-  let p2X = midpoint + halfDistance;
+  const fallbackDirection = p1.x <= p2.x ? 1 : -1;
+  const normalX = distance > 0.001 ? dx / distance : fallbackDirection;
+  const normalZ = distance > 0.001 ? dz / distance : 0;
+  const push = (FIGHTER_BODY_SEPARATION - distance) / 2;
 
-  if (p1X < ARENA_EDGE_PADDING) {
-    p1X = ARENA_EDGE_PADDING;
-    p2X = p1X + FIGHTER_BODY_SEPARATION;
-  } else if (p2X > state.arenaWidth - ARENA_EDGE_PADDING) {
-    p2X = state.arenaWidth - ARENA_EDGE_PADDING;
-    p1X = p2X - FIGHTER_BODY_SEPARATION;
+  p1.x = clamp(p1.x - normalX * push, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  p1.z = clamp(p1.z - normalZ * push, ARENA_DEPTH_PADDING, state.arenaDepth - ARENA_DEPTH_PADDING);
+  p2.x = clamp(p2.x + normalX * push, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  p2.z = clamp(p2.z + normalZ * push, ARENA_DEPTH_PADDING, state.arenaDepth - ARENA_DEPTH_PADDING);
+
+  const nextDistance = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+  if (nextDistance >= FIGHTER_BODY_SEPARATION - 0.001) {
+    return;
   }
 
-  p1.x = clamp(p1X, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
-  p2.x = clamp(p2X, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  const extra = FIGHTER_BODY_SEPARATION - nextDistance;
+  if (p1.x <= p2.x) {
+    p2.x = clamp(p2.x + extra, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  } else {
+    p1.x = clamp(p1.x + extra, ARENA_EDGE_PADDING, state.arenaWidth - ARENA_EDGE_PADDING);
+  }
 }
 
 function faceFighters(state: BattleState) {
@@ -596,6 +618,7 @@ function fighterChecksum(fighter: FighterRuntime) {
     fighter.slot,
     fighter.id,
     fixed(fighter.x),
+    fixed(fighter.z),
     fixed(fighter.y),
     fixed(fighter.velocityY),
     fighter.facing,

@@ -20,9 +20,12 @@ describe("battle simulation", () => {
   it("uses a widened arena with start positions derived from the original spacing", () => {
     const state = createBattleState(config, fighters);
 
-    expect(state.arenaWidth).toBe(1200);
-    expect(state.fighters.p1.x).toBeCloseTo(312.5);
-    expect(state.fighters.p2.x).toBeCloseTo(887.5);
+    expect(state.arenaWidth).toBe(1800);
+    expect(state.arenaDepth).toBe(420);
+    expect(state.fighters.p1.x).toBeCloseTo(468.75);
+    expect(state.fighters.p2.x).toBeCloseTo(1331.25);
+    expect(state.fighters.p1.z).toBeCloseTo(210);
+    expect(state.fighters.p2.z).toBeCloseTo(210);
   });
 
   it("advances one deterministic frame at a time", () => {
@@ -39,7 +42,7 @@ describe("battle simulation", () => {
     let state = createBattleState(config, fighters);
     state = { ...state, status: "running", countdown: 0 };
     state.fighters.p1 = { ...state.fighters.p1, x: 78, y: state.groundY };
-    state.fighters.p2 = { ...state.fighters.p2, x: 1122, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 1722, y: state.groundY };
 
     state = stepBattleFrame(state, {
       p1: { ...createEmptyActions(), left: true },
@@ -47,7 +50,24 @@ describe("battle simulation", () => {
     });
 
     expect(state.fighters.p1.x).toBe(80);
-    expect(state.fighters.p2.x).toBe(1120);
+    expect(state.fighters.p2.x).toBe(1720);
+  });
+
+  it("moves fighters through stage depth and clamps them inside the lane", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, z: 46 };
+    state.fighters.p2 = { ...state.fighters.p2, z: 374 };
+
+    for (let frame = 0; frame < 12; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), up: true },
+        p2: { ...createEmptyActions(), down: true },
+      });
+    }
+
+    expect(state.fighters.p1.z).toBe(44);
+    expect(state.fighters.p2.z).toBe(376);
   });
 
   it("keeps fighters from walking through each other", () => {
@@ -112,13 +132,15 @@ describe("battle simulation", () => {
       winner: undefined,
     };
     state.fighters.p1 = { ...state.fighters.p1, x: 80, roundsWon: 1 };
-    state.fighters.p2 = { ...state.fighters.p2, x: 1120 };
+    state.fighters.p2 = { ...state.fighters.p2, x: 1720 };
 
     state = stepBattleFrame(state, emptyInputs());
 
     expect(state.round).toBe(2);
-    expect(state.fighters.p1.x).toBeCloseTo(312.5);
-    expect(state.fighters.p2.x).toBeCloseTo(887.5);
+    expect(state.fighters.p1.x).toBeCloseTo(468.75);
+    expect(state.fighters.p2.x).toBeCloseTo(1331.25);
+    expect(state.fighters.p1.z).toBeCloseTo(210);
+    expect(state.fighters.p2.z).toBeCloseTo(210);
     expect(state.fighters.p1.roundsWon).toBe(1);
   });
 
@@ -254,6 +276,23 @@ describe("battle simulation", () => {
     state.fighters.p1 = { ...state.fighters.p1, attackElapsed: 0.1 };
     state.fighters.p2 = { ...state.fighters.p2, y: state.groundY - 150, velocityY: 0 };
     state = stepBattleFrame(state, emptyInputs());
+
+    expect(state.lastHit).toBeUndefined();
+    expect(state.fighters.p2.health).toBe(100);
+  });
+
+  it("requires depth alignment with the active attack box", () => {
+    let state = createBattleState(config, fighters);
+    state = { ...state, status: "running", countdown: 0 };
+    state.fighters.p1 = { ...state.fighters.p1, x: 320, z: 110, y: state.groundY };
+    state.fighters.p2 = { ...state.fighters.p2, x: 390, z: 300, y: state.groundY };
+
+    for (let frame = 0; frame < 20 && !state.lastHit; frame += 1) {
+      state = stepBattleFrame(state, {
+        p1: { ...createEmptyActions(), punch: frame === 0 },
+        p2: createEmptyActions(),
+      });
+    }
 
     expect(state.lastHit).toBeUndefined();
     expect(state.fighters.p2.health).toBe(100);

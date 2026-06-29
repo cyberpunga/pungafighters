@@ -42,6 +42,7 @@ function createRuntime(overrides: Partial<FighterRuntime> = {}): FighterRuntime 
     id: "p1",
     name: "One",
     x: 320,
+    z: 210,
     y: groundY,
     velocityY: 0,
     facing: 1,

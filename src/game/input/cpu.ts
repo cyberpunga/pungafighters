@@ -8,6 +8,7 @@ const BLOCK_DISTANCE = 268;
 const PUNCH_DISTANCE = 240;
 const KICK_DISTANCE = 270;
 const SPECIAL_DISTANCE = 300;
+const DEPTH_ALIGNMENT_DISTANCE = 42;
 
 export function createCpuActions(state: BattleState, slot: PlayerSlot): ActionSnapshot {
   const actions = createEmptyActions();
@@ -22,12 +23,15 @@ export function createCpuActions(state: BattleState, slot: PlayerSlot): ActionSn
     return actions;
   }
 
-  const distance = Math.abs(opponent.x - fighter.x);
+  const horizontalDistance = Math.abs(opponent.x - fighter.x);
+  const depthDistance = Math.abs(opponent.z - fighter.z);
+  const distance = Math.hypot(opponent.x - fighter.x, opponent.z - fighter.z);
   const offsetFrame = state.frame + (slot === "p1" ? 0 : 31);
   const toward = getHorizontalAction(fighter, opponent, "toward");
   const away = getHorizontalAction(fighter, opponent, "away");
+  const depthToward = getDepthAction(fighter, opponent);
 
-  if (isThreatenedBy(opponent, distance)) {
+  if (isThreatenedBy(opponent, horizontalDistance, depthDistance)) {
     actions.block = true;
     if (distance < BLOCK_DISTANCE * 0.55 && offsetFrame % 90 < 26) {
       actions[away] = true;
@@ -36,7 +40,10 @@ export function createCpuActions(state: BattleState, slot: PlayerSlot): ActionSn
   }
 
   if (!fighter.attack) {
-    if (distance > APPROACH_DISTANCE) {
+    if (depthDistance > DEPTH_ALIGNMENT_DISTANCE) {
+      actions[depthToward] = true;
+    }
+    if (horizontalDistance > APPROACH_DISTANCE) {
       actions[toward] = true;
     } else if (distance < RETREAT_DISTANCE && offsetFrame % 70 < 18) {
       actions[away] = true;
@@ -74,6 +81,10 @@ function getHorizontalAction(fighter: FighterRuntime, opponent: FighterRuntime, 
   return opponentOnRight ? "left" : "right";
 }
 
-function isThreatenedBy(opponent: FighterRuntime, distance: number): boolean {
-  return Boolean(opponent.attack && opponent.attackElapsed < opponent.attack.activeEnd && distance < BLOCK_DISTANCE);
+function getDepthAction(fighter: FighterRuntime, opponent: FighterRuntime): "up" | "down" {
+  return opponent.z > fighter.z ? "down" : "up";
+}
+
+function isThreatenedBy(opponent: FighterRuntime, horizontalDistance: number, depthDistance: number): boolean {
+  return Boolean(opponent.attack && opponent.attackElapsed < opponent.attack.activeEnd && horizontalDistance < BLOCK_DISTANCE && depthDistance < 120);
 }

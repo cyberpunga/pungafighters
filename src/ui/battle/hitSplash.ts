@@ -1,6 +1,5 @@
 import type { BattleState } from "../../game/simulation/battle";
-import { STAGE_Z } from "./constants";
-import { mapBattleX, seededUnit } from "./math";
+import { mapBattleX, mapBattleZ, seededUnit } from "./math";
 
 export interface HitSplashDroplet {
   angle: number;
@@ -31,7 +30,7 @@ export function createHitSplash(state: BattleState): HitSplashBurst | undefined 
   const origin: [number, number, number] = [
     mapBattleX(defender.x, state.arenaWidth) - direction * 0.14,
     1.18,
-    STAGE_Z + 0.16,
+    mapBattleZ(defender.z, state.arenaDepth) + 0.16,
   ];
   const impactScale = Math.min(1.45, 0.85 + hit.damage / 18);
 

@@ -13,8 +13,10 @@ export interface FighterRenderState {
   poseElapsed: number;
   crossfadeElapsed: number;
   previousX: number;
+  previousZ: number;
   previousY: number;
   velocityX: number;
+  velocityZ: number;
   idleOffset: number;
   wasGrounded: boolean;
   landElapsed: number;
@@ -45,8 +47,10 @@ export function createFighterRenderState(runtime: FighterRuntime, idleOffset: nu
     poseElapsed: 0,
     crossfadeElapsed: CROSSFADE_SECONDS,
     previousX: runtime.x,
+    previousZ: runtime.z,
     previousY: runtime.y,
     velocityX: 0,
+    velocityZ: 0,
     idleOffset,
     wasGrounded: true,
     landElapsed: LAND_SQUASH_SECONDS,
@@ -67,6 +71,7 @@ export function updateFighterRenderState(
   const targetPose = knockedOut ? "hit" : runtime.pose;
 
   renderState.velocityX = (runtime.x - renderState.previousX) / dt;
+  renderState.velocityZ = (runtime.z - renderState.previousZ) / dt;
   renderState.poseElapsed += deltaSeconds;
   renderState.crossfadeElapsed = Math.min(CROSSFADE_SECONDS, renderState.crossfadeElapsed + deltaSeconds);
   renderState.landElapsed = Math.min(LAND_SQUASH_SECONDS, renderState.landElapsed + deltaSeconds);
@@ -90,6 +95,7 @@ export function updateFighterRenderState(
   }
   renderState.wasGrounded = grounded;
   renderState.previousX = runtime.x;
+  renderState.previousZ = runtime.z;
   renderState.previousY = runtime.y;
 
   const current = resolveTransform(renderState, runtime, groundY);
@@ -117,7 +123,7 @@ function resolveTransform(renderState: FighterRenderState, runtime: FighterRunti
   const activeAttack =
     runtime.attack && runtime.attackElapsed >= runtime.attack.activeStart && runtime.attackElapsed <= runtime.attack.activeEnd;
   const grounded = runtime.y >= groundY - 1 && Math.abs(runtime.velocityY) < 1;
-  const moving = grounded && Math.abs(renderState.velocityX) > 24 && !runtime.attack && runtime.hitStun <= 0;
+  const moving = grounded && Math.hypot(renderState.velocityX, renderState.velocityZ) > 24 && !runtime.attack && runtime.hitStun <= 0;
 
   let offsetX = 0;
   let offsetY = 0;
@@ -136,7 +142,7 @@ function resolveTransform(renderState: FighterRenderState, runtime: FighterRunti
   }
 
   if (moving) {
-    const stride = Math.sin((runtime.x * 0.045 + renderState.idleOffset) * Math.PI);
+    const stride = Math.sin(((runtime.x + runtime.z * 0.7) * 0.045 + renderState.idleOffset) * Math.PI);
     offsetY += Math.abs(stride) * -4;
     rotation += clamp(renderState.velocityX / 900, -0.09, 0.09);
     scaleX += 0.018;

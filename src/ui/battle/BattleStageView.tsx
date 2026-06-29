@@ -39,10 +39,11 @@ import {
   SUPER_MOMENT_SECONDS,
 } from "./constants";
 import { createHitSplash, type HitSplashBurst } from "./hitSplash";
-import { addSmoothExp, clamp, easeOutBack, getFighterBillboardGeometry, getSlotAccent, mapBattleX } from "./math";
+import { addSmoothExp, clamp, easeOutBack, getFighterBillboardGeometry, getSlotAccent, mapBattleX, mapBattleZ } from "./math";
 import { unlockStageAudio, useStageBattleAudio } from "./stageAudio";
 import { formatBattleMessage, formatStageControls, isEditableTarget, isStageControlCode, readStageInputs, selectStageFighters } from "./stageInput";
 import { afterStageSimulationFrame, processStageNetworkEvents } from "./stageNetwork";
+import { StagePropsLayer } from "./StagePropsLayer";
 
 export function BattleStageView(props: {
   fighters: LoadedFighter[];
@@ -356,6 +357,7 @@ function PlayableStage(props: {
       <spotLight color="#f45b69" intensity={1.7} position={[4.5, 2.4, 2.4]} angle={0.48} penumbra={0.7} />
 
       <TheaterSet background={props.background} />
+      <StagePropsLayer state={props.battleState} />
       <FightingStandee fighter={props.fighters.p1} runtime={props.battleState.fighters.p1} battleState={props.battleState} />
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       {props.collisionDebug && <CollisionDebugOverlay state={props.battleState} />}
@@ -403,10 +405,10 @@ function TheaterSet(props: { background?: RuntimeBattleBackground }) {
   return (
     <group>
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[8.4, 5.4]} />
+        <planeGeometry args={[10.8, 5.4]} />
         <meshStandardMaterial color="#272132" roughness={0.88} metalness={0.03} />
       </mesh>
-      <gridHelper args={[8.2, 18, "#f7b267", "#464153"]} position={[0, 0.018, 0]} />
+      <gridHelper args={[10.4, 24, "#f7b267", "#464153"]} position={[0, 0.018, 0]} />
       <mesh receiveShadow position={[0, 2.25, -2.35]}>
         <planeGeometry args={[8.4, 4.6]} />
         <meshStandardMaterial color="#1d1a28" roughness={0.92} />
@@ -532,6 +534,7 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
     const frame = updateFighterRenderState(renderStateRef.current, props.runtime, props.battleState.superFreeze ? 0 : deltaSeconds, props.battleState.groundY);
     const positionX = mapBattleX(frame.current.x, props.battleState.arenaWidth);
     const positionY = Math.max(0, (props.battleState.groundY - frame.current.y) / STAGE_JUMP_SCALE);
+    const positionZ = mapBattleZ(props.runtime.z, props.battleState.arenaDepth);
     let pushbackX = 0;
     let pushbackRotation = 0;
     if (pushbackRef.current) {
@@ -544,7 +547,7 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
         pushbackRef.current = null;
       }
     }
-    groupRef.current.position.set(positionX + pushbackX, positionY, STAGE_Z);
+    groupRef.current.position.set(positionX + pushbackX, positionY, positionZ);
     groupRef.current.rotation.set(0, props.runtime.facing === 1 ? 0.13 : -0.13, frame.current.rotation + pushbackRotation);
     groupRef.current.scale.set(Math.abs(frame.current.scaleX), frame.current.scaleY, 1);
   });
@@ -955,7 +958,7 @@ function SuperStageMoment(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
 
 function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; state: BattleState }) {
   const { camera } = useThree();
-  const cameraBaseRef = useRef({ x: 0, y: 2.35, z: 6.4, fov: 39, lookX: 0, lookY: 1.05 });
+  const cameraBaseRef = useRef({ x: 0, y: 2.35, z: 6.4, fov: 39, lookX: 0, lookY: 1.05, lookZ: 0 });
   const shakeRef = useRef(0);
   const lungeRef = useRef(0);
   const orbitPhaseRef = useRef(0);
@@ -977,11 +980,15 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; sta
     lungeRef.current = Math.max(0, lungeRef.current + addSmoothExp(lungeRef.current, props.state.superFreeze ? 0.2 : 0, 7, deltaSeconds));
     const p1X = mapBattleX(props.state.fighters.p1.x, props.state.arenaWidth);
     const p2X = mapBattleX(props.state.fighters.p2.x, props.state.arenaWidth);
+    const p1Z = mapBattleZ(props.state.fighters.p1.z, props.state.arenaDepth);
+    const p2Z = mapBattleZ(props.state.fighters.p2.z, props.state.arenaDepth);
     const midpointX = (p1X + p2X) / 2;
+    const midpointZ = (p1Z + p2Z) / 2;
     const distance = Math.abs(p2X - p1X);
     const spread = clamp((distance - CAMERA_CLOSE_DISTANCE) / (CAMERA_FAR_DISTANCE - CAMERA_CLOSE_DISTANCE), 0, 1);
     const targetX = clamp(midpointX * 0.42, -0.72, 0.72);
     const targetLookX = clamp(midpointX * 0.32, -0.58, 0.58);
+    const targetLookZ = clamp(midpointZ * 0.22, -0.28, 0.28);
     const targetY = 2.22 + spread * 0.34;
     const targetLookY = 1.08 + spread * 0.08;
     const targetZ = CAMERA_NEAR_Z + (CAMERA_FAR_Z - CAMERA_NEAR_Z) * spread;
@@ -992,6 +999,7 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; sta
     cameraBase.z += addSmoothExp(cameraBase.z, targetZ, 3.6, deltaSeconds);
     cameraBase.lookX += addSmoothExp(cameraBase.lookX, targetLookX, 4.2, deltaSeconds);
     cameraBase.lookY += addSmoothExp(cameraBase.lookY, targetLookY, 4.2, deltaSeconds);
+    cameraBase.lookZ += addSmoothExp(cameraBase.lookZ, targetLookZ, 4.2, deltaSeconds);
     cameraBase.fov += addSmoothExp(cameraBase.fov, targetFov, 4.8, deltaSeconds);
     const shake = shakeRef.current > 0 ? Math.sin(props.state.frame * 1.7) * shakeRef.current : 0;
     const superLean = props.state.lastSuper && props.state.frame - props.state.lastSuper.at < 50 ? (props.state.lastSuper.attacker === "p1" ? -0.08 : 0.08) : 0;
@@ -1005,10 +1013,10 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; sta
     const orbitAngle = Math.sin(orbitPhaseRef.current) * lensOrbitAmount;
     if (Math.abs(orbitAngle) > 0.0001) {
       const offsetX = cameraX - cameraBase.lookX;
-      const offsetZ = cameraZ;
+      const offsetZ = cameraZ - cameraBase.lookZ;
       const cos = Math.cos(orbitAngle);
       const sin = Math.sin(orbitAngle);
-      camera.position.set(cameraBase.lookX + offsetX * cos + offsetZ * sin, cameraY, offsetZ * cos - offsetX * sin);
+      camera.position.set(cameraBase.lookX + offsetX * cos + offsetZ * sin, cameraY, cameraBase.lookZ + offsetZ * cos - offsetX * sin);
     } else {
       camera.position.set(cameraX, cameraY, cameraZ);
     }
@@ -1016,7 +1024,7 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; sta
       camera.fov = cameraBase.fov;
       camera.updateProjectionMatrix();
     }
-    camera.lookAt(cameraBase.lookX, cameraBase.lookY, 0);
+    camera.lookAt(cameraBase.lookX, cameraBase.lookY, cameraBase.lookZ);
     camera.rotation.z += rollRef.current;
   });
   return null;

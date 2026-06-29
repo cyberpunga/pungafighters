@@ -13,7 +13,7 @@
 - React views are route-backed through `src/ui/routes.ts`; keep browser history/back-forward behavior intact when adding screens.
 - React Three Fiber owns the 2.5D local and online standee battle direction and should stay a thin renderer over simulation state.
 - React Three Rapier may add visual-only physics juice such as debris, props, and wobble; never use it as the source of combat hit detection.
-- Simulation owns combat rules, health, timer, rounds, positions, and hit detection. Do not put gameplay rules directly in renderer callbacks.
+- Simulation owns combat rules, health, timer, rounds, x/y/z fighter positions, and hit detection. Do not put gameplay rules directly in renderer callbacks.
 - WebRTC invite matches use manual copy/paste signaling and DataChannels. Keep GunDB, relays, TURN, matchmaking, and persistent remote imports out unless explicitly requested.
 - Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.

@@ -52,16 +52,19 @@ Captured, single-image, and spritesheet sources are saveable immediately as norm
 
 Player 1:
 
-- `A` / `D`: move
-- `W`: jump
-- `S`: block
+- `A` / `D`: move left/right
+- `W` / `S`: move through stage depth
+- `L`: jump
+- `I`: block
 - `J`: punch
 - `K`: kick
 - `J` + `K`: super when charged
 
 Player 2:
 
-- Arrow keys: move, jump, block
+- Arrow keys: move left/right and through stage depth
+- `3`: jump
+- `0`: block
 - `1`: punch
 - `2`: kick
 - `1` + `2`: super when charged

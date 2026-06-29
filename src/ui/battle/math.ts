@@ -1,8 +1,12 @@
 import type { LoadedFighter, PlayerSlot } from "../../types/game";
-import { STAGE_X_RANGE } from "./constants";
+import { STAGE_DEPTH_RANGE, STAGE_X_RANGE, STAGE_Z } from "./constants";
 
 export function mapBattleX(x: number, arenaWidth: number) {
   return (x / arenaWidth - 0.5) * STAGE_X_RANGE;
+}
+
+export function mapBattleZ(z: number, arenaDepth: number) {
+  return STAGE_Z + (z / arenaDepth - 0.5) * STAGE_DEPTH_RANGE;
 }
 
 export function getFighterBillboardGeometry(fighter: LoadedFighter, height: number, pose: LoadedFighter["frames"]["idle"]["pose"]) {
