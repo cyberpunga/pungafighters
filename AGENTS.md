@@ -49,6 +49,7 @@
 - Keep center playfield readable during battle.
 - When adding assets or generated media, prefer local placeholders or user-generated content.
 - Keep image-generation API keys server-side in the Worker; never put Gemini or other model-provider secrets in browser code.
+- Keep creator generation photo/reference-centered. Do not add prompt-only or free-text prompt creator flows unless explicitly requested.
 - Keep saved character import in the creator/editor flow so imported fighters load as editable drafts before saving.
 - Keep creator image acquisition separate from cutout processing: captured, per-action imported, and spritesheet-split source images should be saveable as normalized frames, with processing as an optional per-action or all-action step.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.

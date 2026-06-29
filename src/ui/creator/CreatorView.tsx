@@ -108,41 +108,10 @@ const GENERATION_MODEL_OPTIONS = [
     valueLabelKey: "creator.customModelValue",
   },
 ] as const;
-const GENERATION_PROMPT_MAX_LENGTH = 700;
-const GENERATION_STYLE_SUGGESTIONS = [
-  {
-    labelKey: "creator.generationStyle.pixelArt",
-    promptKey: "creator.generationStylePrompt.pixelArt",
-  },
-  {
-    labelKey: "creator.generationStyle.clayStopMotion",
-    promptKey: "creator.generationStylePrompt.clayStopMotion",
-  },
-  {
-    labelKey: "creator.generationStyle.inkSketch",
-    promptKey: "creator.generationStylePrompt.inkSketch",
-  },
-  {
-    labelKey: "creator.generationStyle.watercolor",
-    promptKey: "creator.generationStylePrompt.watercolor",
-  },
-  {
-    labelKey: "creator.generationStyle.comicBook",
-    promptKey: "creator.generationStylePrompt.comicBook",
-  },
-  {
-    labelKey: "creator.generationStyle.toyPhoto",
-    promptKey: "creator.generationStylePrompt.toyPhoto",
-  },
-  {
-    labelKey: "creator.generationStyle.paperCutout",
-    promptKey: "creator.generationStylePrompt.paperCutout",
-  },
-  {
-    labelKey: "creator.generationStyle.realisticCostumePhoto",
-    promptKey: "creator.generationStylePrompt.realisticCostumePhoto",
-  },
-] as const;
+const REFERENCE_STRIP_PROMPT =
+  "Create a five-pose local fighting game spritesheet from the provided photo reference. Preserve the photographed subject as the fighter identity.";
+const REFERENCE_POSE_PROMPT =
+  "Create the requested fighting game pose from the provided photo reference. Preserve the photographed subject as the fighter identity.";
 const POSE_FRAME_HISTORY_LIMIT = 12;
 
 type GenerationModelOption = (typeof GENERATION_MODEL_OPTIONS)[number]["value"];
@@ -189,12 +158,10 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeCreationPanel, setActiveCreationPanel] = useState<CreationPanel | undefined>();
   const [activePoseGenerator, setActivePoseGenerator] = useState<FighterPose | undefined>();
-  const [generationPrompt, setGenerationPrompt] = useState("");
   const [generationModel, setGenerationModel] = useState<GenerationModelOption>("");
   const [generationCustomModel, setGenerationCustomModel] = useState("");
   const [generationReferenceFile, setGenerationReferenceFile] = useState<File | undefined>();
   const [generationCameraOpen, setGenerationCameraOpen] = useState(false);
-  const [poseGenerationPrompts, setPoseGenerationPrompts] = useState<Partial<Record<FighterPose, string>>>({});
   const [poseGenerationReferenceFiles, setPoseGenerationReferenceFiles] = useState<Partial<Record<FighterPose, File>>>({});
   const [cameraStatus, setCameraStatus] = useState(() => t("creator.cameraOff"));
   const [providerId, setProviderId] = useState<SegmentationProviderId>(DEFAULT_SEGMENTATION_PROVIDER_ID);
@@ -869,42 +836,31 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
   };
 
-  const appendGenerationStyleSuggestion = (stylePrompt: string) => {
-    if (creatorBusy) {
-      return;
-    }
-    setGenerationPrompt((currentPrompt) => {
-      const cleanedCurrentPrompt = currentPrompt.trim();
-      const separator = cleanedCurrentPrompt ? "\n" : "";
-      return `${cleanedCurrentPrompt}${separator}${stylePrompt}`.slice(0, GENERATION_PROMPT_MAX_LENGTH);
-    });
-  };
-
   const generateFighterDraft = async () => {
     if (creatorBusy) {
       return;
     }
-    if (!generationPrompt.trim() && !generationReferenceFile) {
-      setCameraStatus(t("creator.generationNeedsPromptOrReference"));
+    if (!generationReferenceFile) {
+      setCameraStatus(t("creator.generationNeedsReference"));
       return;
     }
 
     setActiveOperation({ type: "generate" });
     try {
       setCameraStatus(t("creator.generatingStripStatus"));
-      const referenceImage = generationReferenceFile ? await fileToReferenceImage(generationReferenceFile) : undefined;
+      const referenceImage = await fileToReferenceImage(generationReferenceFile);
       const result = await generateCharacterImage({
         mode: "strip",
-        prompt: generationPrompt.trim(),
+        prompt: REFERENCE_STRIP_PROMPT,
         model: getSelectedGenerationModel(generationModel, generationCustomModel),
-        images: referenceImage ? [referenceImage] : undefined,
+        images: [referenceImage],
       });
       const file = dataUrlToFile(result.image.dataUrl, "generated-fighter-strip.png");
       const imported = await readSpritesheetDraftFile(file);
       replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
-      setName(createGeneratedFighterName(generationPrompt, t("creator.generatedFighterName")));
+      setName(t("creator.generatedFighterName"));
       setEditingFighterId(undefined);
       setActiveCreationPanel(undefined);
       setCameraStatus(t("creator.generatedStripLoaded", { model: result.model }));
@@ -915,10 +871,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     }
   };
 
-  const setPoseGenerationPrompt = (pose: FighterPose, prompt: string) => {
-    setPoseGenerationPrompts((current) => ({ ...current, [pose]: prompt }));
-  };
-
   const setPoseGenerationReferenceFile = (pose: FighterPose, file: File | undefined) => {
     setPoseGenerationReferenceFiles((current) => ({ ...current, [pose]: file }));
   };
@@ -927,13 +879,12 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     if (creatorBusy) {
       return;
     }
-    const prompt = poseGenerationPrompts[pose]?.trim() ?? "";
     const explicitReference = poseGenerationReferenceFiles[pose];
     const currentDraft = draftsRef.current[pose];
     const defaultReference = currentDraft?.frame?.blob ?? currentDraft?.source?.blob;
     const referenceBlob = explicitReference ?? defaultReference;
-    if (!prompt && !referenceBlob) {
-      setCameraStatus(t("creator.poseGenerationNeedsPromptOrReference", { pose: poseLabel(t, pose) }));
+    if (!referenceBlob) {
+      setCameraStatus(t("creator.poseGenerationNeedsReference", { pose: poseLabel(t, pose) }));
       return;
     }
 
@@ -944,7 +895,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const result = await generateCharacterImage({
         mode: "pose",
         pose,
-        prompt,
+        prompt: REFERENCE_POSE_PROMPT,
         model: getSelectedGenerationModel(generationModel, generationCustomModel),
         images: referenceImage ? [referenceImage] : undefined,
       });
@@ -1151,7 +1102,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     setCaptureDelays((current) => ({ ...current, [pose]: delay }));
   };
 
-  const usePromptOnlyGeneration = () => {
+  const clearGenerationReference = () => {
     setGenerationReferenceFile(undefined);
     setGenerationCameraOpen(false);
     if (generationReferenceInputRef.current) {
@@ -1218,16 +1169,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                   <span className="field-label-text">{t("creator.generationStartingPoint")}</span>
                   <div className="generation-camera-actions">
                     <button
-                      className={generationReferenceFile ? "secondary-button" : "secondary-button reference-choice-active"}
-                      type="button"
-                      onClick={usePromptOnlyGeneration}
-                      disabled={creatorBusy}
-                    >
-                      <Sparkles size={16} />
-                      {t("creator.promptOnly")}
-                    </button>
-                    <button
-                      className="secondary-button"
+                      className={generationReferenceFile ? "secondary-button reference-choice-active" : "secondary-button"}
                       type="button"
                       onClick={() => generationReferenceInputRef.current?.click()}
                       disabled={creatorBusy}
@@ -1282,7 +1224,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                     <button
                       className="icon-button"
                       type="button"
-                      onClick={usePromptOnlyGeneration}
+                      onClick={clearGenerationReference}
                       disabled={creatorBusy}
                       title={t("creator.removeReference")}
                     >
@@ -1291,34 +1233,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
                     </button>
                   </div>
                 )}
-              </div>
-
-              <label className="field-label">
-                {t("creator.characterPrompt")}
-                <textarea
-                  value={generationPrompt}
-                  onChange={(event) => setGenerationPrompt(event.target.value)}
-                  placeholder={t("creator.characterPromptPlaceholder")}
-                  disabled={creatorBusy}
-                  maxLength={GENERATION_PROMPT_MAX_LENGTH}
-                />
-              </label>
-
-              <div className="generation-style-suggestions" aria-label={t("creator.generationStyleSuggestions")}>
-                <span>{t("creator.generationStyleSuggestions")}</span>
-                <div>
-                  {GENERATION_STYLE_SUGGESTIONS.map((style) => (
-                    <button
-                      className="generation-style-chip"
-                      type="button"
-                      key={style.labelKey}
-                      onClick={() => appendGenerationStyleSuggestion(t(style.promptKey))}
-                      disabled={creatorBusy}
-                    >
-                      {t(style.labelKey)}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <label className="field-label">
@@ -1432,7 +1346,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
               const canUndoFrame = Boolean(draft?.frame && frameHistory?.past.length);
               const canRedoFrame = Boolean(draft?.frame && frameHistory?.future.length);
               const poseText = poseLabel(t, pose);
-              const poseGenerationPrompt = poseGenerationPrompts[pose] ?? "";
               const poseReferenceFile = poseGenerationReferenceFiles[pose];
               const isPoseGeneratorOpen = activePoseGenerator === pose;
               const isCaptureFocus = activeCreationPanel === "capture" && firstIncompletePose === pose;
@@ -1578,16 +1491,6 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
 
                     {isPoseGeneratorOpen && (
                       <div className="pose-generator-panel">
-                        <label className="field-label">
-                          {t("creator.posePrompt", { pose: poseText })}
-                          <textarea
-                            value={poseGenerationPrompt}
-                            onChange={(event) => setPoseGenerationPrompt(pose, event.target.value)}
-                            placeholder={t("creator.posePromptPlaceholder", { pose: poseText })}
-                            disabled={creatorBusy}
-                            maxLength={GENERATION_PROMPT_MAX_LENGTH}
-                          />
-                        </label>
                         <div className="generation-field-grid">
                           <label className="field-label">
                             {t("creator.model")}
@@ -1759,17 +1662,6 @@ function getSelectedGenerationModel(model: GenerationModelOption, customModel: s
     return customModel.trim() || undefined;
   }
   return model || undefined;
-}
-
-function createGeneratedFighterName(prompt: string, fallbackName: string) {
-  const words = prompt
-    .trim()
-    .replace(/[^a-z0-9\s-]/gi, "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 4);
-
-  return words.length ? words.join(" ").slice(0, 32) : fallbackName;
 }
 
 function getGeneratedPoseSourceCanvas(
