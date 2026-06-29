@@ -15,6 +15,7 @@ import { createFighterRenderState, updateFighterRenderState } from "../../game/r
 import {
   FIGHTER_POSES,
   type BattleConfig,
+  type BattlePostEffectConfigMap,
   type BattlePostEffectSettings,
   type LoadedFighter,
   type PlayerSlot,
@@ -353,7 +354,7 @@ function PlayableStage(props: {
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       <HitSplashLayer splashes={hitSplashes} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
-      <CameraRig state={props.battleState} />
+      <CameraRig lensSettings={props.displayEffectSettings.effects.lens} state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
       <ContactShadows position={[0, 0.025, STAGE_Z]} opacity={0.38} blur={2.4} scale={7} far={4} resolution={1024} />
     </>
@@ -869,11 +870,12 @@ function SuperStageMoment(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
   );
 }
 
-function CameraRig(props: { state: BattleState }) {
+function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; state: BattleState }) {
   const { camera } = useThree();
   const cameraBaseRef = useRef({ x: 0, y: 2.35, z: 6.4, fov: 39, lookX: 0, lookY: 1.05 });
   const shakeRef = useRef(0);
   const lungeRef = useRef(0);
+  const orbitPhaseRef = useRef(0);
   const rollRef = useRef(0);
   const lastHitAtRef = useRef(-1);
   const lastSuperAtRef = useRef(-1);
@@ -911,7 +913,22 @@ function CameraRig(props: { state: BattleState }) {
     const shake = shakeRef.current > 0 ? Math.sin(props.state.frame * 1.7) * shakeRef.current : 0;
     const superLean = props.state.lastSuper && props.state.frame - props.state.lastSuper.at < 50 ? (props.state.lastSuper.attacker === "p1" ? -0.08 : 0.08) : 0;
     rollRef.current += addSmoothExp(rollRef.current, shake * 0.04 + superLean, 14, deltaSeconds);
-    camera.position.set(cameraBase.x + shake, cameraBase.y + shake * 0.3, cameraBase.z - (props.state.superFreeze ? 0.35 : 0) - lungeRef.current);
+    const cameraY = cameraBase.y + shake * 0.3;
+    const cameraZ = cameraBase.z - (props.state.superFreeze ? 0.35 : 0) - lungeRef.current;
+    const cameraX = cameraBase.x + shake;
+    const lensOrbitAmount = props.lensSettings.enabled ? props.lensSettings.cameraOrbitAmount : 0;
+    const lensOrbitSpeed = props.lensSettings.enabled ? props.lensSettings.cameraOrbitSpeed : 0;
+    orbitPhaseRef.current += deltaSeconds * lensOrbitSpeed * Math.PI * 2;
+    const orbitAngle = Math.sin(orbitPhaseRef.current) * lensOrbitAmount;
+    if (Math.abs(orbitAngle) > 0.0001) {
+      const offsetX = cameraX - cameraBase.lookX;
+      const offsetZ = cameraZ;
+      const cos = Math.cos(orbitAngle);
+      const sin = Math.sin(orbitAngle);
+      camera.position.set(cameraBase.lookX + offsetX * cos + offsetZ * sin, cameraY, offsetZ * cos - offsetX * sin);
+    } else {
+      camera.position.set(cameraX, cameraY, cameraZ);
+    }
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = cameraBase.fov;
       camera.updateProjectionMatrix();

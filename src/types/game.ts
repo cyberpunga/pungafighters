@@ -57,6 +57,8 @@ export interface LensPostEffectConfig {
   motionBoost: number;
   hitBoost: number;
   superBoost: number;
+  cameraOrbitAmount: number;
+  cameraOrbitSpeed: number;
   resolutionScale: number;
   vignetteOffset: number;
   vignetteDarkness: number;
