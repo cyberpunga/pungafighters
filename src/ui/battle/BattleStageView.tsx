@@ -421,8 +421,6 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
   const groupRef = useRef<THREE.Group>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const renderStateRef = useRef(createFighterRenderState(props.runtime, props.runtime.slot === "p1" ? 0 : 0.7));
-  const lastPushbackHitAtRef = useRef(-1);
-  const pushbackRef = useRef<{ direction: number; progress: number } | null>(null);
   const geometry = useMemo(() => {
     const height = 2.35;
     const frame = props.fighter.frames.idle;
@@ -439,39 +437,20 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
     if (!groupRef.current) {
       return;
     }
-    const hit = props.battleState.lastHit;
-    if (hit && hit.defender === props.runtime.slot && hit.at !== lastPushbackHitAtRef.current) {
-      lastPushbackHitAtRef.current = hit.at;
-      const attacker = props.battleState.fighters[hit.attacker];
-      const direction = props.runtime.x >= attacker.x ? 1 : -1;
-      pushbackRef.current = { direction, progress: 0 };
-    }
     const renderState = renderStateRef.current;
-    const frame = updateFighterRenderState(renderState, props.runtime, props.battleState.superFreeze ? 0 : deltaSeconds, props.battleState.groundY);
+    updateFighterRenderState(renderState, props.runtime, props.battleState.superFreeze ? 0 : deltaSeconds, props.battleState.groundY);
     const spriteId = resolveSpriteId(props.runtime, renderState, props.battleState.groundY);
     const texture = textures[spriteId];
     if (materialRef.current && materialRef.current.map !== texture) {
       materialRef.current.map = texture;
       materialRef.current.needsUpdate = true;
     }
-    const positionX = mapBattleX(frame.current.x, props.battleState.arenaWidth);
-    const positionY = Math.max(0, (props.battleState.groundY - frame.current.y) / STAGE_JUMP_SCALE);
+    const positionX = mapBattleX(props.runtime.x, props.battleState.arenaWidth);
+    const positionY = Math.max(0, (props.battleState.groundY - props.runtime.y) / STAGE_JUMP_SCALE);
     const positionZ = mapBattleZ(props.runtime.z, props.battleState.arenaDepth);
-    let pushbackX = 0;
-    let pushbackRotation = 0;
-    if (pushbackRef.current) {
-      pushbackRef.current.progress += deltaSeconds * 6.4;
-      const progress = Math.min(1, pushbackRef.current.progress);
-      const recoil = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
-      pushbackX = pushbackRef.current.direction * recoil * 0.18;
-      pushbackRotation = -pushbackRef.current.direction * recoil * 0.08;
-      if (progress >= 1) {
-        pushbackRef.current = null;
-      }
-    }
-    groupRef.current.position.set(positionX + pushbackX, positionY, positionZ);
-    groupRef.current.rotation.set(0, props.runtime.facing === 1 ? 0.13 : -0.13, frame.current.rotation + pushbackRotation);
-    groupRef.current.scale.set(Math.abs(frame.current.scaleX), frame.current.scaleY, 1);
+    groupRef.current.position.set(positionX, positionY, positionZ);
+    groupRef.current.rotation.set(0, props.runtime.facing === 1 ? 0.13 : -0.13, 0);
+    groupRef.current.scale.set(1, 1, 1);
   });
 
   const texture = textures[FIGHTER_POSE_PRIMARY_SPRITES[props.runtime.pose]];

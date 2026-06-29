@@ -258,20 +258,20 @@ function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCoun
       : "\nUser instructions: invent an original fighter.\n";
 
   const referenceDirection = hasReferenceImages
-    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Use the same character, not a redesigned or inspired version. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. Only change the pose in each spritesheet cell. Do not reinterpret, redesign, restyle, simplify, cartoonify, or invent a different fighter.\n`
+    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Use the same character, not a redesigned or inspired version. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. If the reference is photographic, keep the output photographic like re-posed cutout photos of the same person; do not draw, paint, cartoonify, render, illustrate, or convert the person into game art. Only change the pose in each spritesheet cell. Do not reinterpret, redesign, restyle, simplify, cartoonify, or invent a different fighter.\n`
     : "";
 
   const characterDirection = hasReferenceImages
     ? "Character: use the same character from the provided reference image(s)."
     : "Character: create an original fighter.";
 
-  return `Create a single horizontal 13-cell spritesheet for a fighting-game character.
+  return `Create a single 13-cell spritesheet for a fighting-game character.
 
-Canvas: 13:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00) across the whole image. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
+Canvas: PNG. Prefer a 13:1 horizontal strip. If you cannot make a horizontal strip, use a compact row-major grid instead. Use a fully opaque solid chroma key green background (#00ff00) across the whole image and as clear gutters between cells. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
 
 ${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character identity, design, outfit, colors, scale, medium, rendering style, lighting, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
-Pose order from left to right:
+Pose order in reading order, left-to-right within each row and top-to-bottom across rows:
 
 1. idle stance, frame A
 2. idle stance, frame B with a subtle breathing/weight-shift variation
@@ -287,7 +287,7 @@ Pose order from left to right:
 12. victory pose, frame A
 13. victory pose, frame B with a subtle celebratory variation
 
-Format compatibility: make the final image easy to crop by splitting it into ${FIGHTER_SPRITES.length} equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all cells. The walk frames must loop cleanly and keep the body centered enough that the character does not drift inside the cell.
+Format compatibility: include exactly ${FIGHTER_SPRITES.length} separate full-body character cutouts, one per cell, in the pose order above. Keep the cells separated by visible chroma green gutters so each cutout can be detected as its own isolated foreground object. Keep every limb, prop, and effect inside its own cell. Keep the feet on a consistent baseline within each row. The walk frames must loop cleanly and keep the body centered enough that the character does not drift inside the cell.
 
 Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }
@@ -302,7 +302,7 @@ function buildCharacterPosePrompt(userPrompt: unknown, referenceImageCount: numb
       : "\nUser instructions: invent an original fighter.\n";
 
   const referenceDirection = hasReferenceImages
-    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. Generate only the requested action pose.\n`
+    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. If the reference is photographic, keep the output photographic like a re-posed cutout photo of the same person; do not draw, paint, cartoonify, render, illustrate, or convert the person into game art. Generate only the requested action pose.\n`
     : "";
 
   const characterDirection = hasReferenceImages

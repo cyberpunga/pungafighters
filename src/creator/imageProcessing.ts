@@ -2,6 +2,8 @@ export const NORMALIZED_FRAME_SIZE = 384;
 const DEFAULT_FRAME_ANCHOR_Y = 0.9;
 const DEFAULT_PADDING_SCALE = 0.92;
 const ALPHA_TRIM_THRESHOLD = 12;
+const CHROMA_GREEN_MIN = 130;
+const CHROMA_GREEN_DOMINANCE = 1.35;
 
 export interface NormalizeCanvasOptions {
   paddingScale?: number;
@@ -101,6 +103,34 @@ export function imageSourceToCanvas(source: CanvasImageSource): HTMLCanvasElemen
   return canvas;
 }
 
+export function chromaKeyGreenCanvas(source: CanvasImageSource): HTMLCanvasElement {
+  const { width, height } = getCanvasSourceSize(source);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    return canvas;
+  }
+
+  ctx.drawImage(source, 0, 0, width, height);
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    for (let index = 0; index < imageData.data.length; index += 4) {
+      const red = imageData.data[index];
+      const green = imageData.data[index + 1];
+      const blue = imageData.data[index + 2];
+      if (isChromaGreen(red, green, blue)) {
+        imageData.data[index + 3] = 0;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch {
+    return canvas;
+  }
+  return canvas;
+}
+
 export function videoToSourceCanvas(video: HTMLVideoElement): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = video.videoWidth || 640;
@@ -132,6 +162,10 @@ function getCanvasSourceSize(source: CanvasImageSource) {
     width: Math.max(1, Math.round(width || NORMALIZED_FRAME_SIZE)),
     height: Math.max(1, Math.round(height || NORMALIZED_FRAME_SIZE)),
   };
+}
+
+function isChromaGreen(red: number, green: number, blue: number) {
+  return green >= CHROMA_GREEN_MIN && green >= red * CHROMA_GREEN_DOMINANCE && green >= blue * CHROMA_GREEN_DOMINANCE;
 }
 
 function getSourceDrawBounds(source: CanvasImageSource, width: number, height: number, trimTransparentPadding: boolean) {
