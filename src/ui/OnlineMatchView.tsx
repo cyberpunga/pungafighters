@@ -132,7 +132,7 @@ export function OnlineMatchView(props: {
       <div className="online-grid">
         <section className="online-panel">
           <div className="online-fighter">
-            <img src={props.localFighter.frameUrls.idle} alt="" />
+            <img src={props.localFighter.spriteFrameUrls?.idle1 || props.localFighter.frameUrls.idle} alt="" />
             <div>
               <span>{props.role === "host" ? t("common.player1") : t("common.player2")}</span>
               <strong>{props.localFighter.name}</strong>

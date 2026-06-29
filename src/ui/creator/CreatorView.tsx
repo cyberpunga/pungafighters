@@ -57,11 +57,14 @@ import {
   createDraftsFromFrameBlobs,
   createDraftsFromSourceAndFrameBlobs,
   createPoseDraft,
+  createSpriteBlobRecord,
+  createSpriteDrafts,
   createVoiceBlobRecord,
   createVoiceDrafts,
   revokeDraft,
   revokeDraftAsset,
   revokeDrafts,
+  revokeSpriteDrafts,
   revokeVoiceDrafts,
   type CaptureDelay,
   type DraftAsset,
@@ -69,6 +72,7 @@ import {
   type PoseDrafts,
   type PoseFrameHistories,
   type PoseFrameSnapshot,
+  type SpriteDrafts,
   type VoiceDrafts,
 } from "./draftAssets";
 import { CutoutSettingsDrawer } from "./CutoutSettingsDrawer";
@@ -109,7 +113,7 @@ const GENERATION_MODEL_OPTIONS = [
   },
 ] as const;
 const REFERENCE_STRIP_PROMPT =
-  "Create a five-pose local fighting game spritesheet from the provided photo reference. Preserve the photographed subject as the fighter identity.";
+  "Create a thirteen-cell local fighting game sprite set from the provided photo reference. Preserve the photographed subject as the fighter identity.";
 const REFERENCE_POSE_PROMPT =
   "Create the requested fighting game pose from the provided photo reference. Preserve the photographed subject as the fighter identity.";
 const POSE_FRAME_HISTORY_LIMIT = 12;
@@ -143,6 +147,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecorderSession | null>(null);
   const draftsRef = useRef<PoseDrafts>({});
+  const spriteDraftsRef = useRef<SpriteDrafts>({});
   const voiceDraftsRef = useRef<VoiceDrafts>({});
   const providerLoadIdRef = useRef(0);
   const countdownTimeoutRef = useRef<number | undefined>();
@@ -151,6 +156,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   const [name, setName] = useState(() => t("creator.newFighter"));
   const [editingFighterId, setEditingFighterId] = useState<string | undefined>();
   const [drafts, setDrafts] = useState<PoseDrafts>({});
+  const [spriteDrafts, setSpriteDrafts] = useState<SpriteDrafts>({});
   const [poseFrameHistories, setPoseFrameHistories] = useState<PoseFrameHistories>({});
   const [voiceDrafts, setVoiceDrafts] = useState<VoiceDrafts>({});
   const [recording, setRecording] = useState<VoiceClipType | undefined>();
@@ -187,6 +193,13 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     setPoseFrameHistories({});
     setDrafts((current) => {
       revokeDrafts(current);
+      return nextDrafts;
+    });
+  }, []);
+
+  const replaceSpriteDrafts = useCallback((nextDrafts: SpriteDrafts) => {
+    setSpriteDrafts((current) => {
+      revokeSpriteDrafts(current);
       return nextDrafts;
     });
   }, []);
@@ -404,6 +417,10 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
   }, [drafts]);
 
   useEffect(() => {
+    spriteDraftsRef.current = spriteDrafts;
+  }, [spriteDrafts]);
+
+  useEffect(() => {
     voiceDraftsRef.current = voiceDrafts;
   }, [voiceDrafts]);
 
@@ -423,6 +440,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       }
       audioRef.current?.pause();
       revokeDrafts(draftsRef.current);
+      revokeSpriteDrafts(spriteDraftsRef.current);
       revokeVoiceDrafts(voiceDraftsRef.current);
     };
   }, []);
@@ -434,6 +452,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         setEditingFighterId(undefined);
         setName(t("creator.newFighter"));
         replaceDrafts({});
+        replaceSpriteDrafts({});
         replaceVoiceDrafts({});
         setPreviewPose(undefined);
         setCameraStatus(t("creator.cameraOff"));
@@ -461,6 +480,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
         setPlayingClip(undefined);
         audioRef.current?.pause();
         replaceDrafts(createDraftsFromFrameBlobs(draft.frameBlobs, true));
+        replaceSpriteDrafts(createSpriteDrafts(draft.spriteFrameBlobs));
         replaceVoiceDrafts(createVoiceDrafts(draft.voiceBlobs));
         setName(draft.name);
         setPreviewPose(undefined);
@@ -481,7 +501,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     return () => {
       cancelled = true;
     };
-  }, [props.editFighterId, replaceDrafts, replaceVoiceDrafts, t]);
+  }, [props.editFighterId, replaceDrafts, replaceSpriteDrafts, replaceVoiceDrafts, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -788,6 +808,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       recorderRef.current = null;
       setRecording(undefined);
       replaceDrafts(createDraftsFromFrameBlobs(imported.frameBlobs, true));
+      replaceSpriteDrafts(createSpriteDrafts(imported.spriteFrameBlobs));
       setPreviewPose(undefined);
       replaceVoiceDrafts(createVoiceDrafts(imported.voiceBlobs));
       setName(imported.name);
@@ -809,6 +830,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       setCameraStatus(t("appStatus.importingFile", { name: file.name }));
       const imported = await readSpritesheetDraftFile(file);
       replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
+      replaceSpriteDrafts(createSpriteDrafts(imported.spriteFrameBlobs));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
       setName(imported.name);
@@ -858,6 +880,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
       const file = dataUrlToFile(result.image.dataUrl, "generated-fighter-strip.png");
       const imported = await readSpritesheetDraftFile(file);
       replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
+      replaceSpriteDrafts(createSpriteDrafts(imported.spriteFrameBlobs));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
       setName(t("creator.generatedFighterName"));
@@ -1021,6 +1044,7 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
           FighterPose,
           Blob
         >,
+        spriteFrameBlobs: createSpriteBlobRecord(spriteDrafts),
         voiceBlobs: createVoiceBlobRecord(voiceDrafts),
       });
       await props.onSaved();

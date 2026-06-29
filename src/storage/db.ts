@@ -3,6 +3,7 @@ import type {
   BattleDisplayEffect,
   BattlePostEffect,
   BattlePostEffectSettings,
+  FighterSpriteId,
   FighterPose,
   FighterFrameCollision,
   FighterProfile,
@@ -11,7 +12,14 @@ import type {
   LoadedFighter,
   VoiceClipType,
 } from "../types/game";
-import { BATTLE_BACKGROUND_DEPTH_LAYERS, BATTLE_POST_EFFECTS, FIGHTER_POSES, type BattleBackgroundDepthLayerId } from "../types/game";
+import {
+  BATTLE_BACKGROUND_DEPTH_LAYERS,
+  BATTLE_POST_EFFECTS,
+  FIGHTER_POSE_PRIMARY_SPRITES,
+  FIGHTER_POSES,
+  FIGHTER_SPRITES,
+  type BattleBackgroundDepthLayerId,
+} from "../types/game";
 import {
   createDefaultBattlePostEffectSettings,
   getEnabledBattlePostEffects,
@@ -68,6 +76,7 @@ export interface EditableFighterDraft {
   name: string;
   isDefault: boolean;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }
 
@@ -127,6 +136,7 @@ export async function saveFighterDraft(input: {
   id?: string;
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   return saveFighterAssets(input);
@@ -135,12 +145,14 @@ export async function saveFighterDraft(input: {
 export async function saveImportedFighter(input: {
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
   frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs?: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
   return saveFighterAssets({
     name: input.name,
     frameBlobs: input.frameBlobs,
+    spriteFrameBlobs: input.spriteFrameBlobs,
     frameCollisions: input.frameCollisions,
     voiceBlobs: input.voiceBlobs ?? {},
   });
@@ -150,6 +162,7 @@ async function saveFighterAssets(input: {
   id?: string;
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
   frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }): Promise<FighterProfile> {
@@ -181,6 +194,37 @@ async function saveFighterAssets(input: {
     ),
   ) as FighterProfile["frames"];
 
+  const spriteFrames = input.spriteFrameBlobs
+    ? (Object.fromEntries(
+        await Promise.all(
+          FIGHTER_SPRITES.flatMap((spriteId) => {
+            const blob = input.spriteFrameBlobs?.[spriteId];
+            if (!blob) {
+              return [];
+            }
+            const pose = getPoseForSprite(spriteId);
+            const blobId = `${id}:sprite:${spriteId}`;
+            return [
+              (async () => {
+                await tx.objectStore("imageBlobs").put(blob, blobId);
+                return [
+                  spriteId,
+                  {
+                    pose,
+                    spriteId,
+                    blobId,
+                    anchor: { x: 0.5, y: 0.9 },
+                    width: 384,
+                    height: 384,
+                  },
+                ] as const;
+              })(),
+            ];
+          }),
+        ),
+      ) as FighterProfile["spriteFrames"])
+    : undefined;
+
   const voiceClips: FighterProfile["voiceClips"] = {};
   await Promise.all(
     Object.entries(input.voiceBlobs).map(async ([clip, blob]) => {
@@ -200,6 +244,13 @@ async function saveFighterAssets(input: {
       }
     }),
   );
+  await Promise.all(
+    Object.values(existing?.spriteFrames ?? {}).map(async (frame) => {
+      if (frame?.blobId && !spriteFrames?.[frame.spriteId ?? FIGHTER_POSE_PRIMARY_SPRITES[frame.pose]]?.blobId) {
+        await tx.objectStore("imageBlobs").delete(frame.blobId);
+      }
+    }),
+  );
 
   const fighter: FighterProfile = {
     id,
@@ -207,6 +258,7 @@ async function saveFighterAssets(input: {
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     frames,
+    ...(spriteFrames ? { spriteFrames } : {}),
     voiceClips,
     movesetId: "basic-v1",
   };
@@ -226,6 +278,7 @@ export async function loadEditableFighterDraft(id: string): Promise<EditableFigh
       frameBlobs: Object.fromEntries(
         await Promise.all(FIGHTER_POSES.map(async (pose) => [pose, await fighterFrameToBlob(defaultFighter.frames[pose])] as const)),
       ) as Record<FighterPose, Blob>,
+      spriteFrameBlobs: await loadSpriteFrameBlobs(defaultFighter),
       voiceBlobs: {},
     };
   }
@@ -263,6 +316,7 @@ export async function loadEditableFighterDraft(id: string): Promise<EditableFigh
     name: fighter.name,
     isDefault: false,
     frameBlobs,
+    spriteFrameBlobs: await loadSpriteFrameBlobs(fighter),
     voiceBlobs,
   };
 }
@@ -427,6 +481,26 @@ async function loadFighterAssets(fighter: FighterProfile): Promise<LoadedFighter
       return [pose, blob ? URL.createObjectURL(blob) : ""] as const;
     }),
   );
+  const spriteFramePairs = await Promise.all(
+    FIGHTER_SPRITES.flatMap((spriteId) => {
+      const frame = fighter.spriteFrames?.[spriteId];
+      if (!frame) {
+        return [];
+      }
+      return [
+        (async () => {
+          if (frame.dataUrl) {
+            return [spriteId, frame.dataUrl] as const;
+          }
+          if (!frame.blobId) {
+            return [spriteId, ""] as const;
+          }
+          const blob = await db.get("imageBlobs", frame.blobId);
+          return [spriteId, blob ? URL.createObjectURL(blob) : ""] as const;
+        })(),
+      ];
+    }),
+  );
 
   const voicePairs = await Promise.all(
     Object.entries(fighter.voiceClips).map(async ([clip, blobId]) => {
@@ -441,6 +515,9 @@ async function loadFighterAssets(fighter: FighterProfile): Promise<LoadedFighter
   return {
     ...fighter,
     frameUrls: Object.fromEntries(framePairs) as LoadedFighter["frameUrls"],
+    spriteFrameUrls: spriteFramePairs.length
+      ? (Object.fromEntries(spriteFramePairs.filter(([, url]) => Boolean(url))) as LoadedFighter["spriteFrameUrls"])
+      : undefined,
     voiceUrls: Object.fromEntries(voicePairs.filter(([, url]) => Boolean(url))) as Partial<Record<VoiceClipType, string>>,
   };
 }
@@ -583,6 +660,40 @@ async function fighterFrameToBlob(frame: FighterProfile["frames"][FighterPose]):
     throw missingPoseImageError(frame.pose);
   }
   return blob;
+}
+
+async function loadSpriteFrameBlobs(fighter: FighterProfile): Promise<Partial<Record<FighterSpriteId, Blob>> | undefined> {
+  if (!fighter.spriteFrames) {
+    return undefined;
+  }
+  const pairs = (
+    await Promise.all(
+      FIGHTER_SPRITES.map(async (spriteId) => {
+        const frame = fighter.spriteFrames?.[spriteId];
+        if (!frame) {
+          return undefined;
+        }
+        return [spriteId, await fighterFrameToBlob(frame)] as const;
+      }),
+    )
+  ).filter((pair): pair is readonly [FighterSpriteId, Blob] => Boolean(pair));
+  return pairs.length ? (Object.fromEntries(pairs) as Partial<Record<FighterSpriteId, Blob>>) : undefined;
+}
+
+function getPoseForSprite(spriteId: FighterSpriteId): FighterPose {
+  if (spriteId.startsWith("punch")) {
+    return "punch";
+  }
+  if (spriteId.startsWith("kick")) {
+    return "kick";
+  }
+  if (spriteId === "hit") {
+    return "hit";
+  }
+  if (spriteId.startsWith("victory")) {
+    return "victory";
+  }
+  return "idle";
 }
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {

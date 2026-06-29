@@ -4,21 +4,22 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import * as THREE from "three";
 import type { NetworkInputController } from "../../game/network/networkInputController";
 import {
-  BATTLE_TICK_SECONDS,
   createBattleState,
   getBattleDebugBoxes,
   restartMatch,
-  stepBattleFrame,
   type BattleState,
   type BattleDebugBox,
   type FighterRuntime,
 } from "../../game/simulation/battle";
 import { createFighterRenderState, updateFighterRenderState } from "../../game/render/fighterAnimation";
 import {
-  FIGHTER_POSES,
+  FIGHTER_ANIMATION_CLIPS,
+  FIGHTER_POSE_PRIMARY_SPRITES,
+  FIGHTER_SPRITES,
   type BattleConfig,
   type BattlePostEffectConfigMap,
   type BattlePostEffectSettings,
+  type FighterSpriteId,
   type LoadedFighter,
   type PlayerSlot,
   type RuntimeBattleBackground,
@@ -38,12 +39,12 @@ import {
   STAGE_Z,
   SUPER_MOMENT_SECONDS,
 } from "./constants";
-import { createHitSplash, type HitSplashBurst } from "./hitSplash";
+import type { HitSplashBurst } from "./hitSplash";
 import { addSmoothExp, clamp, easeOutBack, getFighterBillboardGeometry, getSlotAccent, mapBattleX, mapBattleZ } from "./math";
 import { unlockStageAudio, useStageBattleAudio } from "./stageAudio";
-import { formatBattleMessage, formatStageControls, isEditableTarget, isStageControlCode, readStageInputs, selectStageFighters } from "./stageInput";
-import { afterStageSimulationFrame, processStageNetworkEvents } from "./stageNetwork";
+import { formatBattleMessage, formatStageControls, isEditableTarget, isStageControlCode, selectStageFighters } from "./stageInput";
 import { StagePropsLayer } from "./StagePropsLayer";
+import { useBattleStageLoop } from "./useBattleStageLoop";
 
 export function BattleStageView(props: {
   fighters: LoadedFighter[];
@@ -233,108 +234,21 @@ function PlayableStage(props: {
   };
   onRemoteRestart: () => void;
 }) {
-  const accumulatorRef = useRef(0);
-  const battleStateRef = useRef(props.battleState);
-  const onlineStatusRef = useRef<string | undefined>(props.onlineStatus);
-  const haltedMessageRef = useRef<string | undefined>(props.haltedMessage);
-  const lastSplashHitAtRef = useRef(-1);
-  const splashCleanupTimeoutsRef = useRef<number[]>([]);
-  const [hitSplashes, setHitSplashes] = useState<HitSplashBurst[]>([]);
-
-  useEffect(() => {
-    battleStateRef.current = props.battleState;
-    if (props.battleState.frame === 0) {
-      accumulatorRef.current = 0;
-      lastSplashHitAtRef.current = -1;
-      setHitSplashes([]);
-    }
-  }, [props.battleState]);
-
-  useEffect(() => {
-    onlineStatusRef.current = props.onlineStatus;
-  }, [props.onlineStatus]);
-
-  useEffect(() => {
-    haltedMessageRef.current = props.haltedMessage;
-  }, [props.haltedMessage]);
-
-  useEffect(
-    () => () => {
-      splashCleanupTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
-      splashCleanupTimeoutsRef.current = [];
-    },
-    [],
-  );
-
-  useFrame((_, deltaSeconds) => {
-    processStageNetworkEvents({
-      checksumHistory: props.checksumHistoryRef.current,
-      haltedMessageRef,
-      networkController: props.networkController,
-      onHalt: props.setHaltedMessage,
-      onRemoteRestart: props.onRemoteRestart,
-      copy: props.onlineCopy,
-      pendingRemoteChecksums: props.pendingRemoteChecksumsRef.current,
-    });
-
-    if (haltedMessageRef.current) {
-      return;
-    }
-
-    accumulatorRef.current += Math.min(deltaSeconds, 0.1);
-    let next = battleStateRef.current;
-    let steps = 0;
-    while (accumulatorRef.current >= BATTLE_TICK_SECONDS && steps < 6) {
-      const inputs = readStageInputs({
-        localSlot: props.localSlot,
-        mode: props.mode,
-        networkController: props.networkController,
-        onlineCopy: props.onlineCopy,
-        onOnlineStatus: (message) => {
-          if (message !== onlineStatusRef.current) {
-            onlineStatusRef.current = message;
-            props.setOnlineStatus(message);
-          }
-        },
-        pressedCodes: props.pressedCodesRef.current,
-        state: next,
-      });
-      if (!inputs) {
-        accumulatorRef.current = Math.min(accumulatorRef.current, BATTLE_TICK_SECONDS);
-        break;
-      }
-      next = stepBattleFrame(next, inputs);
-      afterStageSimulationFrame({
-        checksumHistory: props.checksumHistoryRef.current,
-        mode: props.mode,
-        networkController: props.networkController,
-        onHalt: props.setHaltedMessage,
-        haltedMessageRef,
-        syncError: props.onlineCopy.syncError,
-        pendingRemoteChecksums: props.pendingRemoteChecksumsRef.current,
-        state: next,
-      });
-      accumulatorRef.current -= BATTLE_TICK_SECONDS;
-      steps += 1;
-    }
-    if (next !== battleStateRef.current) {
-      battleStateRef.current = next;
-      props.setBattleState(next);
-    }
-
-    const hit = next.lastHit;
-    if (hit && hit.at !== lastSplashHitAtRef.current) {
-      lastSplashHitAtRef.current = hit.at;
-      const splash = createHitSplash(next);
-      if (!splash) {
-        return;
-      }
-      setHitSplashes((current) => [...current, splash].slice(-5));
-      const timeout = window.setTimeout(() => {
-        setHitSplashes((current) => current.filter((currentSplash) => currentSplash.id !== splash.id));
-      }, 1250);
-      splashCleanupTimeoutsRef.current.push(timeout);
-    }
+  const { hitSplashes } = useBattleStageLoop({
+    battleState: props.battleState,
+    checksumHistoryRef: props.checksumHistoryRef,
+    haltedMessage: props.haltedMessage,
+    localSlot: props.localSlot,
+    mode: props.mode,
+    networkController: props.networkController,
+    onlineCopy: props.onlineCopy,
+    onlineStatus: props.onlineStatus,
+    pendingRemoteChecksumsRef: props.pendingRemoteChecksumsRef,
+    pressedCodesRef: props.pressedCodesRef,
+    setBattleState: props.setBattleState,
+    setHaltedMessage: props.setHaltedMessage,
+    setOnlineStatus: props.setOnlineStatus,
+    onRemoteRestart: props.onRemoteRestart,
   });
 
   return (
@@ -503,8 +417,9 @@ function StageBackdropPlane(props: {
 }
 
 function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntime; battleState: BattleState }) {
-  const textures = usePoseTextures(props.fighter);
+  const textures = useSpriteTextures(props.fighter);
   const groupRef = useRef<THREE.Group>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const renderStateRef = useRef(createFighterRenderState(props.runtime, props.runtime.slot === "p1" ? 0 : 0.7));
   const lastPushbackHitAtRef = useRef(-1);
   const pushbackRef = useRef<{ direction: number; progress: number } | null>(null);
@@ -531,7 +446,14 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
       const direction = props.runtime.x >= attacker.x ? 1 : -1;
       pushbackRef.current = { direction, progress: 0 };
     }
-    const frame = updateFighterRenderState(renderStateRef.current, props.runtime, props.battleState.superFreeze ? 0 : deltaSeconds, props.battleState.groundY);
+    const renderState = renderStateRef.current;
+    const frame = updateFighterRenderState(renderState, props.runtime, props.battleState.superFreeze ? 0 : deltaSeconds, props.battleState.groundY);
+    const spriteId = resolveSpriteId(props.runtime, renderState, props.battleState.groundY);
+    const texture = textures[spriteId];
+    if (materialRef.current && materialRef.current.map !== texture) {
+      materialRef.current.map = texture;
+      materialRef.current.needsUpdate = true;
+    }
     const positionX = mapBattleX(frame.current.x, props.battleState.arenaWidth);
     const positionY = Math.max(0, (props.battleState.groundY - frame.current.y) / STAGE_JUMP_SCALE);
     const positionZ = mapBattleZ(props.runtime.z, props.battleState.arenaDepth);
@@ -552,7 +474,7 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
     groupRef.current.scale.set(Math.abs(frame.current.scaleX), frame.current.scaleY, 1);
   });
 
-  const texture = textures[props.runtime.pose];
+  const texture = textures[FIGHTER_POSE_PRIMARY_SPRITES[props.runtime.pose]];
   const tint = props.runtime.hitStun > 0 ? "#f8f4df" : props.runtime.blocking ? "#d9d2b6" : props.runtime.attack?.kind === "special" ? "#f7b267" : "#ffffff";
   const alpha = props.runtime.blocking ? 0.78 : 1;
   const facingScale = props.runtime.facing === 1 ? 1 : -1;
@@ -561,7 +483,7 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
     <group ref={groupRef}>
       <mesh castShadow position={[0, geometry.centerY, -0.025]} scale={[facingScale, 1, 1]}>
         <planeGeometry args={[geometry.width, geometry.height]} />
-        <meshStandardMaterial map={texture} color={tint} transparent opacity={alpha} alphaTest={0.08} roughness={0.72} side={THREE.DoubleSide} />
+        <meshStandardMaterial ref={materialRef} map={texture} color={tint} transparent opacity={alpha} alphaTest={0.08} roughness={0.72} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
@@ -1034,21 +956,28 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; loc
   return null;
 }
 
-function usePoseTextures(fighter: LoadedFighter): Record<LoadedFighter["frames"]["idle"]["pose"], THREE.Texture> {
-  const textureList = useTexture(FIGHTER_POSES.map((pose) => fighter.frameUrls[pose])) as THREE.Texture[];
+function useSpriteTextures(fighter: LoadedFighter): Record<FighterSpriteId, THREE.Texture> {
+  const urls = FIGHTER_SPRITES.map((spriteId) => {
+    const pose = getPoseForSprite(spriteId);
+    return fighter.spriteFrameUrls?.[spriteId] || fighter.frameUrls[pose];
+  });
+  const textureList = useTexture(urls) as THREE.Texture[];
   return useMemo(() => {
-    const pairs = FIGHTER_POSES.map((pose, index) => {
+    const pairs = FIGHTER_SPRITES.map((spriteId, index) => {
       const texture = textureList[index];
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.needsUpdate = true;
-      return [pose, texture] as const;
+      return [spriteId, texture] as const;
     });
-    return Object.fromEntries(pairs) as Record<LoadedFighter["frames"]["idle"]["pose"], THREE.Texture>;
+    return Object.fromEntries(pairs) as Record<FighterSpriteId, THREE.Texture>;
   }, [textureList]);
 }
 
 function useVictoryTextures(fighters: { p1: LoadedFighter; p2: LoadedFighter }): Record<PlayerSlot, THREE.Texture> {
-  const textureList = useTexture([fighters.p1.frameUrls.victory, fighters.p2.frameUrls.victory]) as THREE.Texture[];
+  const textureList = useTexture([
+    fighters.p1.spriteFrameUrls?.victory1 || fighters.p1.frameUrls.victory,
+    fighters.p2.spriteFrameUrls?.victory1 || fighters.p2.frameUrls.victory,
+  ]) as THREE.Texture[];
   return useMemo(() => {
     textureList.forEach((texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -1056,4 +985,44 @@ function useVictoryTextures(fighters: { p1: LoadedFighter; p2: LoadedFighter }):
     });
     return { p1: textureList[0], p2: textureList[1] };
   }, [textureList]);
+}
+
+function resolveSpriteId(runtime: FighterRuntime, renderState: ReturnType<typeof createFighterRenderState>, groundY: number): FighterSpriteId {
+  const grounded = runtime.y >= groundY - 1 && Math.abs(runtime.velocityY) < 1;
+  const moving = grounded && Math.hypot(renderState.velocityX, renderState.velocityZ) > 24 && !runtime.attack && runtime.hitStun <= 0;
+  if (runtime.attack?.kind === "kick") {
+    return runtime.attackElapsed < runtime.attack.activeStart ? "kickWindup" : "kickStrike";
+  }
+  if (runtime.attack) {
+    return runtime.attackElapsed < runtime.attack.activeStart ? "punchWindup" : "punchStrike";
+  }
+  if (runtime.hitStun > 0 || runtime.pose === "hit") {
+    return "hit";
+  }
+  if (runtime.pose === "victory") {
+    const frames = FIGHTER_ANIMATION_CLIPS.victory;
+    return frames[Math.floor(renderState.poseElapsed * 4) % frames.length];
+  }
+  if (moving) {
+    const frames = FIGHTER_ANIMATION_CLIPS.walk;
+    return frames[Math.floor(renderState.poseElapsed * 10) % frames.length];
+  }
+  const frames = FIGHTER_ANIMATION_CLIPS.idle;
+  return frames[Math.floor((renderState.poseElapsed + renderState.idleOffset) * 1.4) % frames.length];
+}
+
+function getPoseForSprite(spriteId: FighterSpriteId) {
+  if (spriteId.startsWith("punch")) {
+    return "punch";
+  }
+  if (spriteId.startsWith("kick")) {
+    return "kick";
+  }
+  if (spriteId === "hit") {
+    return "hit";
+  }
+  if (spriteId.startsWith("victory")) {
+    return "victory";
+  }
+  return "idle";
 }

@@ -94,7 +94,7 @@ export function MenuView(props: {
         <div className="fighter-marquee" aria-label={t("menu.fighterGallery")}>
           {featuredFighters.map((fighter) => (
             <div className="fighter-card marquee-card" key={fighter.id}>
-              <img src={fighter.frameUrls.idle} alt="" />
+              <img src={fighter.spriteFrameUrls?.idle1 || fighter.frameUrls.idle} alt="" />
               <strong>{fighter.name}</strong>
               <span>{fighter.isDefault ? t("menu.defaultFighter") : t("menu.customFighter")}</span>
             </div>
@@ -108,7 +108,7 @@ export function MenuView(props: {
 function FeaturedFighter(props: { fighter: LoadedFighter; side: "left" | "right" }) {
   return (
     <div className={`featured-fighter ${props.side}`}>
-      <img src={props.fighter.frameUrls.idle} alt="" />
+      <img src={props.fighter.spriteFrameUrls?.idle1 || props.fighter.frameUrls.idle} alt="" />
       <div className="featured-fighter-name">
         {props.fighter.isDefault ? <Trophy size={15} /> : <Sparkles size={15} />}
         <strong>{props.fighter.name}</strong>

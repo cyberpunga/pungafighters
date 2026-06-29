@@ -1,5 +1,5 @@
-import type { FighterPose, FighterProfile, LoadedFighter } from "../../types/game";
-import { FIGHTER_POSES } from "../../types/game";
+import type { FighterPose, FighterProfile, FighterSpriteId, LoadedFighter } from "../../types/game";
+import { FIGHTER_POSE_PRIMARY_SPRITES, FIGHTER_POSES, FIGHTER_SPRITES } from "../../types/game";
 import { createFrameCollisionMetadata } from "../../creator/collisionMetadata";
 
 const COLORS = {
@@ -30,7 +30,14 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
     FighterPose,
     ReturnType<typeof drawDefaultFrame>
   >;
+  const renderedSpriteFrames = Object.fromEntries(
+    FIGHTER_SPRITES.map((spriteId) => [spriteId, drawDefaultFrame(getPoseForSprite(spriteId), colors, spriteId)]),
+  ) as Record<FighterSpriteId, ReturnType<typeof drawDefaultFrame>>;
   const frameUrls = Object.fromEntries(FIGHTER_POSES.map((pose) => [pose, renderedFrames[pose].dataUrl])) as Record<FighterPose, string>;
+  const spriteFrameUrls = Object.fromEntries(FIGHTER_SPRITES.map((spriteId) => [spriteId, renderedSpriteFrames[spriteId].dataUrl])) as Record<
+    FighterSpriteId,
+    string
+  >;
   const frames = Object.fromEntries(
     FIGHTER_POSES.map((pose) => [
       pose,
@@ -44,6 +51,23 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
       },
     ]),
   ) as FighterProfile["frames"];
+  const spriteFrames = Object.fromEntries(
+    FIGHTER_SPRITES.map((spriteId) => {
+      const pose = getPoseForSprite(spriteId);
+      return [
+        spriteId,
+        {
+          pose,
+          spriteId,
+          dataUrl: spriteFrameUrls[spriteId],
+          anchor: { x: 0.5, y: 0.9 },
+          width: 384,
+          height: 384,
+          collision: FIGHTER_POSE_PRIMARY_SPRITES[pose] === spriteId ? renderedSpriteFrames[spriteId].collision : undefined,
+        },
+      ];
+    }),
+  ) as FighterProfile["spriteFrames"];
 
   return {
     id,
@@ -51,7 +75,9 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
     createdAt: now,
     updatedAt: now,
     frames,
+    spriteFrames,
     frameUrls,
+    spriteFrameUrls,
     voiceClips: {},
     voiceUrls: {},
     movesetId: "basic-v1",
@@ -59,7 +85,7 @@ function createDefaultFighter(id: string, name: string, colors: (typeof COLORS)[
   };
 }
 
-function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]) {
+function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"], spriteId?: FighterSpriteId) {
   const canvas = document.createElement("canvas");
   canvas.width = 384;
   canvas.height = 384;
@@ -75,7 +101,8 @@ function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]) {
   ctx.save();
   ctx.translate(192, 206);
 
-  const lean = pose === "kick" ? -0.2 : pose === "punch" ? 0.15 : pose === "hit" ? -0.28 : 0;
+  const spriteLean = spriteId === "walk1" || spriteId === "walk3" ? 0.08 : spriteId === "walk2" || spriteId === "walk4" ? -0.08 : 0;
+  const lean = pose === "kick" ? -0.2 : pose === "punch" ? 0.15 : pose === "hit" ? -0.28 : spriteLean;
   ctx.rotate(lean);
 
   ctx.fillStyle = colors.ink;
@@ -100,7 +127,7 @@ function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]) {
   ctx.lineWidth = 18;
   ctx.lineCap = "round";
   ctx.strokeStyle = colors.ink;
-  drawLimbs(ctx, pose, colors);
+  drawLimbs(ctx, pose, colors, spriteId);
 
   if (pose === "victory") {
     ctx.strokeStyle = colors.trim;
@@ -117,10 +144,15 @@ function drawDefaultFrame(pose: FighterPose, colors: (typeof COLORS)["ember"]) {
   };
 }
 
-function drawLimbs(ctx: CanvasRenderingContext2D, pose: FighterPose, colors: (typeof COLORS)["ember"]) {
+function drawLimbs(ctx: CanvasRenderingContext2D, pose: FighterPose, colors: (typeof COLORS)["ember"], spriteId?: FighterSpriteId) {
   ctx.strokeStyle = colors.ink;
   ctx.beginPath();
-  if (pose === "punch") {
+  if (spriteId === "punchWindup") {
+    ctx.moveTo(40, -38);
+    ctx.lineTo(18, -82);
+    ctx.moveTo(-40, -30);
+    ctx.lineTo(-92, -8);
+  } else if (pose === "punch") {
     ctx.moveTo(40, -38);
     ctx.lineTo(130, -58);
     ctx.moveTo(-40, -30);
@@ -136,7 +168,22 @@ function drawLimbs(ctx: CanvasRenderingContext2D, pose: FighterPose, colors: (ty
     ctx.moveTo(-40, -38);
     ctx.lineTo(-76, 8);
   }
-  if (pose === "kick") {
+  if (spriteId === "walk1" || spriteId === "walk3") {
+    ctx.moveTo(26, 52);
+    ctx.lineTo(82, 126);
+    ctx.moveTo(-28, 52);
+    ctx.lineTo(-82, 112);
+  } else if (spriteId === "walk2" || spriteId === "walk4") {
+    ctx.moveTo(26, 52);
+    ctx.lineTo(72, 108);
+    ctx.moveTo(-28, 52);
+    ctx.lineTo(-34, 134);
+  } else if (spriteId === "kickWindup") {
+    ctx.moveTo(26, 52);
+    ctx.lineTo(42, 122);
+    ctx.moveTo(-28, 52);
+    ctx.lineTo(-112, 90);
+  } else if (pose === "kick") {
     ctx.moveTo(26, 52);
     ctx.lineTo(124, 88);
     ctx.moveTo(-28, 52);
@@ -148,6 +195,22 @@ function drawLimbs(ctx: CanvasRenderingContext2D, pose: FighterPose, colors: (ty
     ctx.lineTo(-56, 128);
   }
   ctx.stroke();
+}
+
+function getPoseForSprite(spriteId: FighterSpriteId): FighterPose {
+  if (spriteId.startsWith("punch")) {
+    return "punch";
+  }
+  if (spriteId.startsWith("kick")) {
+    return "kick";
+  }
+  if (spriteId === "hit") {
+    return "hit";
+  }
+  if (spriteId.startsWith("victory")) {
+    return "victory";
+  }
+  return "idle";
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

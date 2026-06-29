@@ -1,7 +1,7 @@
 import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE, normalizeCanvas } from "./imageProcessing";
 import { AppError } from "../i18n/errors";
-import type { CollisionBox, FighterFrameCollision, FighterPose, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
-import { FIGHTER_POSES, VOICE_CLIPS } from "../types/game";
+import type { CollisionBox, FighterFrameCollision, FighterPose, FighterSpriteId, FrameAnchor, LoadedFighter, VoiceClipType } from "../types/game";
+import { FIGHTER_POSE_PRIMARY_SPRITES, FIGHTER_POSES, FIGHTER_SPRITES, VOICE_CLIPS } from "../types/game";
 
 export const FIGHTER_CHARACTER_IMPORT_ACCEPT = ".pungafighter.json,.json,application/json";
 export const FIGHTER_IMAGE_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
@@ -9,10 +9,11 @@ export const FIGHTER_IMPORT_ACCEPT = `${FIGHTER_CHARACTER_IMPORT_ACCEPT},${FIGHT
 export const SPRITESHEET_IMPORT_ACCEPT = FIGHTER_IMAGE_IMPORT_ACCEPT;
 
 const CHARACTER_FILE_FORMAT = "punga-fighters.character";
-const CHARACTER_FILE_VERSION = 1;
+const CHARACTER_FILE_VERSION = 2;
 
 interface CharacterFileFrame {
   pose: FighterPose;
+  spriteId?: FighterSpriteId;
   dataUrl: string;
   anchor: FrameAnchor;
   width: number;
@@ -31,6 +32,7 @@ interface CharacterFilePayload {
   updatedAt?: string;
   movesetId?: "basic-v1";
   frames: Record<FighterPose, CharacterFileFrame>;
+  spriteFrames?: Partial<Record<FighterSpriteId, CharacterFileFrame>>;
   voiceClips?: Partial<Record<VoiceClipType, CharacterFileVoiceClip>>;
 }
 
@@ -44,6 +46,7 @@ interface CharacterFile {
 export interface ImportedFighterAssets {
   name: string;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
   frameCollisions?: Partial<Record<FighterPose, FighterFrameCollision>>;
   voiceBlobs: Partial<Record<VoiceClipType, Blob>>;
 }
@@ -52,6 +55,8 @@ export interface ImportedSpritesheetAssets {
   name: string;
   sourceBlobs: Record<FighterPose, Blob>;
   frameBlobs: Record<FighterPose, Blob>;
+  spriteSourceBlobs?: Partial<Record<FighterSpriteId, Blob>>;
+  spriteFrameBlobs?: Partial<Record<FighterSpriteId, Blob>>;
 }
 
 export async function downloadFighterExport(fighter: LoadedFighter): Promise<void> {
@@ -85,6 +90,33 @@ export async function createFighterExportBlob(fighter: LoadedFighter): Promise<B
       }),
     ),
   ) as Record<FighterPose, CharacterFileFrame>;
+  const spriteFrames = fighter.spriteFrames
+    ? (Object.fromEntries(
+        await Promise.all(
+          FIGHTER_SPRITES.flatMap((spriteId) => {
+            const frame = fighter.spriteFrames?.[spriteId];
+            const url = fighter.spriteFrameUrls?.[spriteId];
+            if (!frame || !url) {
+              return [];
+            }
+            return [
+              (async () => [
+                spriteId,
+                {
+                  pose: frame.pose,
+                  spriteId,
+                  dataUrl: frame.dataUrl || (await urlToDataUrl(url)),
+                  anchor: frame.anchor,
+                  width: frame.width,
+                  height: frame.height,
+                  collision: frame.collision,
+                },
+              ])(),
+            ];
+          }),
+        ),
+      ) as Partial<Record<FighterSpriteId, CharacterFileFrame>>)
+    : undefined;
 
   const voicePairs = await Promise.all(
     VOICE_CLIPS.map(async (clip) => {
@@ -104,6 +136,7 @@ export async function createFighterExportBlob(fighter: LoadedFighter): Promise<B
       updatedAt: fighter.updatedAt,
       movesetId: "basic-v1",
       frames,
+      ...(spriteFrames && Object.keys(spriteFrames).length ? { spriteFrames } : {}),
       voiceClips: Object.fromEntries(voicePairs.filter(isDefined)) as Partial<Record<VoiceClipType, CharacterFileVoiceClip>>,
     },
   };
@@ -133,6 +166,7 @@ export async function readSpritesheetFighterFile(file: File): Promise<ImportedFi
   return {
     name: imported.name,
     frameBlobs: imported.frameBlobs,
+    spriteFrameBlobs: imported.spriteFrameBlobs,
     voiceBlobs: {},
   };
 }
@@ -144,8 +178,9 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
   const image = await decodeImageBlob(file, new AppError("error.spritesheetRead"));
   try {
     const horizontal = image.width >= image.height;
-    const columns = horizontal ? FIGHTER_POSES.length : 1;
-    const rows = horizontal ? 1 : FIGHTER_POSES.length;
+    const inferredCells = getSpritesheetCellIds(image.width, image.height, horizontal);
+    const columns = horizontal ? inferredCells.length : 1;
+    const rows = horizontal ? 1 : inferredCells.length;
     const cellWidth = image.width / columns;
     const cellHeight = image.height / rows;
 
@@ -154,7 +189,7 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
     }
 
     const pairs = await Promise.all(
-      FIGHTER_POSES.map(async (pose, index) => {
+      inferredCells.map(async (cellId, index) => {
         const cellCanvas = document.createElement("canvas");
         cellCanvas.width = Math.round(cellWidth);
         cellCanvas.height = Math.round(cellHeight);
@@ -168,17 +203,37 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
 
         const sourceBlob = await canvasToPngBlob(cellCanvas);
         const normalized = normalizeCanvas(cellCanvas, { paddingScale: 1, anchorY: 0.9 });
-        return [pose, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
+        return [cellId, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
       }),
     );
 
-    const sourcePairs = pairs.map(([pose, blobs]) => [pose, blobs.sourceBlob] as const);
-    const framePairs = pairs.map(([pose, blobs]) => [pose, blobs.frameBlob] as const);
+    const sourcePairs = FIGHTER_POSES.map((pose) => {
+      const sourceCellId = isFullSpriteSheet(inferredCells) ? FIGHTER_POSE_PRIMARY_SPRITES[pose] : pose;
+      const blobs = pairs.find(([cellId]) => cellId === sourceCellId)?.[1];
+      return [pose, blobs?.sourceBlob] as const;
+    });
+    const framePairs = FIGHTER_POSES.map((pose) => {
+      const sourceCellId = isFullSpriteSheet(inferredCells) ? FIGHTER_POSE_PRIMARY_SPRITES[pose] : pose;
+      const blobs = pairs.find(([cellId]) => cellId === sourceCellId)?.[1];
+      return [pose, blobs?.frameBlob] as const;
+    });
+    const spriteSourcePairs = isFullSpriteSheet(inferredCells)
+      ? pairs.map(([spriteId, blobs]) => [spriteId, blobs.sourceBlob] as const)
+      : [];
+    const spriteFramePairs = isFullSpriteSheet(inferredCells)
+      ? pairs.map(([spriteId, blobs]) => [spriteId, blobs.frameBlob] as const)
+      : [];
 
     return {
       name: nameFromFile(file.name),
       sourceBlobs: Object.fromEntries(sourcePairs) as Record<FighterPose, Blob>,
       frameBlobs: Object.fromEntries(framePairs) as Record<FighterPose, Blob>,
+      ...(spriteSourcePairs.length
+        ? { spriteSourceBlobs: Object.fromEntries(spriteSourcePairs) as Partial<Record<FighterSpriteId, Blob>> }
+        : {}),
+      ...(spriteFramePairs.length
+        ? { spriteFrameBlobs: Object.fromEntries(spriteFramePairs) as Partial<Record<FighterSpriteId, Blob>> }
+        : {}),
     };
   } finally {
     image.close();
@@ -205,6 +260,18 @@ async function readCharacterJsonFile(file: File): Promise<ImportedFighterAssets>
       return [pose, await dataUrlToBlob(frame.dataUrl)] as const;
     }),
   );
+  const spriteFramePairs = await Promise.all(
+    FIGHTER_SPRITES.flatMap((spriteId) => {
+      const frame = payload.spriteFrames?.[spriteId];
+      if (!frame) {
+        return [];
+      }
+      if (!isRecord(frame) || typeof frame.dataUrl !== "string" || !frame.dataUrl.startsWith("data:image/")) {
+        throw new Error(`The ${spriteId} sprite is invalid.`);
+      }
+      return [(async () => [spriteId, await dataUrlToBlob(frame.dataUrl)] as const)()];
+    }),
+  );
   const frameCollisions = Object.fromEntries(
     FIGHTER_POSES.flatMap((pose) => {
       const collision = payload.frames[pose].collision;
@@ -228,6 +295,9 @@ async function readCharacterJsonFile(file: File): Promise<ImportedFighterAssets>
   return {
     name: cleanFighterName(payload.name),
     frameBlobs: Object.fromEntries(framePairs) as Record<FighterPose, Blob>,
+    spriteFrameBlobs: spriteFramePairs.length
+      ? (Object.fromEntries(spriteFramePairs) as Partial<Record<FighterSpriteId, Blob>>)
+      : undefined,
     frameCollisions,
     voiceBlobs: Object.fromEntries(voicePairs.filter(isDefined)) as Partial<Record<VoiceClipType, Blob>>,
   };
@@ -238,11 +308,22 @@ function getCharacterPayload(value: unknown): CharacterFilePayload | undefined {
     return undefined;
   }
 
-  if (value.format === CHARACTER_FILE_FORMAT && value.version === CHARACTER_FILE_VERSION && isRecord(value.fighter)) {
+  if (value.format === CHARACTER_FILE_FORMAT && (value.version === 1 || value.version === CHARACTER_FILE_VERSION) && isRecord(value.fighter)) {
     return isCharacterPayload(value.fighter) ? value.fighter : undefined;
   }
 
   return isCharacterPayload(value) ? value : undefined;
+}
+
+function getSpritesheetCellIds(width: number, height: number, horizontal: boolean): readonly (FighterPose | FighterSpriteId)[] {
+  const major = horizontal ? width : height;
+  const minor = horizontal ? height : width;
+  const ratio = major / Math.max(1, minor);
+  return ratio > 8 ? FIGHTER_SPRITES : FIGHTER_POSES;
+}
+
+function isFullSpriteSheet(cells: readonly (FighterPose | FighterSpriteId)[]): cells is readonly FighterSpriteId[] {
+  return cells.length === FIGHTER_SPRITES.length;
 }
 
 function isCharacterPayload(value: unknown): value is CharacterFilePayload {

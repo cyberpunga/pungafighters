@@ -1,10 +1,26 @@
 export const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
+export const FIGHTER_SPRITES = [
+  "idle1",
+  "idle2",
+  "walk1",
+  "walk2",
+  "walk3",
+  "walk4",
+  "punchWindup",
+  "punchStrike",
+  "kickWindup",
+  "kickStrike",
+  "hit",
+  "victory1",
+  "victory2",
+] as const;
 export const VOICE_CLIPS = ["attack", "hit", "win"] as const;
 export const BATTLE_POST_EFFECTS = ["pixel", "bad-tv", "static", "crt-soft", "crt-strong", "lens"] as const;
 export const BATTLE_DISPLAY_EFFECTS = ["clean", ...BATTLE_POST_EFFECTS] as const;
 export const BATTLE_BACKGROUND_DEPTH_LAYERS = ["far", "mid", "near"] as const;
 
 export type FighterPose = (typeof FIGHTER_POSES)[number];
+export type FighterSpriteId = (typeof FIGHTER_SPRITES)[number];
 export type VoiceClipType = (typeof VOICE_CLIPS)[number];
 export type BattlePostEffect = (typeof BATTLE_POST_EFFECTS)[number];
 export type BattleDisplayEffect = (typeof BATTLE_DISPLAY_EFFECTS)[number];
@@ -97,6 +113,23 @@ export type PlayerControl = "human" | "cpu";
 export type PlayerControls = Record<PlayerSlot, PlayerControl>;
 export type LocalBattleMode = "p1-vs-p2" | "p1-vs-cpu" | "cpu-vs-cpu";
 
+export const FIGHTER_POSE_PRIMARY_SPRITES = {
+  idle: "idle1",
+  punch: "punchStrike",
+  kick: "kickStrike",
+  hit: "hit",
+  victory: "victory1",
+} as const satisfies Record<FighterPose, FighterSpriteId>;
+
+export const FIGHTER_ANIMATION_CLIPS = {
+  idle: ["idle1", "idle2"],
+  walk: ["walk1", "walk2", "walk3", "walk4"],
+  punch: ["punchWindup", "punchStrike"],
+  kick: ["kickWindup", "kickStrike"],
+  hit: ["hit"],
+  victory: ["victory1", "victory2"],
+} as const satisfies Record<string, readonly FighterSpriteId[]>;
+
 export interface FrameAnchor {
   x: number;
   y: number;
@@ -117,6 +150,7 @@ export interface FighterFrameCollision {
 
 export interface FighterFrame {
   pose: FighterPose;
+  spriteId?: FighterSpriteId;
   blobId?: string;
   dataUrl?: string;
   anchor: FrameAnchor;
@@ -131,6 +165,7 @@ export interface FighterProfile {
   createdAt: string;
   updatedAt: string;
   frames: Record<FighterPose, FighterFrame>;
+  spriteFrames?: Partial<Record<FighterSpriteId, FighterFrame>>;
   voiceClips: Partial<Record<VoiceClipType, string>>;
   movesetId: "basic-v1";
   isDefault?: boolean;
@@ -190,6 +225,7 @@ export interface RuntimeBattleBackgroundLayer extends BattleBackgroundLayerBase 
 
 export interface LoadedFighter extends FighterProfile {
   frameUrls: Record<FighterPose, string>;
+  spriteFrameUrls?: Partial<Record<FighterSpriteId, string>>;
   voiceUrls: Partial<Record<VoiceClipType, string>>;
 }
 

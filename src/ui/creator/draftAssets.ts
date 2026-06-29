@@ -1,5 +1,5 @@
-import type { FighterPose, VoiceClipType } from "../../types/game";
-import { FIGHTER_POSES, VOICE_CLIPS } from "../../types/game";
+import type { FighterPose, FighterSpriteId, VoiceClipType } from "../../types/game";
+import { FIGHTER_SPRITES, FIGHTER_POSES, VOICE_CLIPS } from "../../types/game";
 
 export const CAPTURE_DELAYS = [0, 5, 10, 15] as const;
 export type CaptureDelay = (typeof CAPTURE_DELAYS)[number];
@@ -28,6 +28,7 @@ export interface PoseFrameHistory {
 
 export type PoseDrafts = Partial<Record<FighterPose, PoseDraft>>;
 export type PoseFrameHistories = Partial<Record<FighterPose, PoseFrameHistory>>;
+export type SpriteDrafts = Partial<Record<FighterSpriteId, DraftAsset>>;
 export type VoiceDrafts = Partial<Record<VoiceClipType, DraftAsset>>;
 
 export function createDefaultCaptureDelays(): Record<FighterPose, CaptureDelay> {
@@ -65,6 +66,23 @@ export function createDraftsFromSourceAndFrameBlobs(
   ) as PoseDrafts;
 }
 
+export function createSpriteDrafts(spriteFrameBlobs: Partial<Record<FighterSpriteId, Blob>> | undefined): SpriteDrafts {
+  return Object.fromEntries(
+    FIGHTER_SPRITES.flatMap((spriteId) => {
+      const blob = spriteFrameBlobs?.[spriteId];
+      return blob ? [[spriteId, createDraftAsset(blob)] as const] : [];
+    }),
+  ) as SpriteDrafts;
+}
+
+export function createSpriteBlobRecord(spriteDrafts: SpriteDrafts): Partial<Record<FighterSpriteId, Blob>> | undefined {
+  const entries = FIGHTER_SPRITES.flatMap((spriteId) => {
+    const draft = spriteDrafts[spriteId];
+    return draft ? [[spriteId, draft.blob] as const] : [];
+  });
+  return entries.length ? (Object.fromEntries(entries) as Partial<Record<FighterSpriteId, Blob>>) : undefined;
+}
+
 export function createVoiceDrafts(voiceBlobs: Partial<Record<VoiceClipType, Blob>>): VoiceDrafts {
   return Object.fromEntries(
     Object.entries(voiceBlobs).flatMap(([clip, blob]) => (blob ? [[clip, createDraftAsset(blob)]] : [])),
@@ -85,6 +103,10 @@ export function revokeDrafts(drafts: PoseDrafts) {
 }
 
 export function revokeVoiceDrafts(drafts: VoiceDrafts) {
+  Object.values(drafts).forEach(revokeDraftAsset);
+}
+
+export function revokeSpriteDrafts(drafts: SpriteDrafts) {
   Object.values(drafts).forEach(revokeDraftAsset);
 }
 

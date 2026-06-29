@@ -3,12 +3,13 @@ import type {
   BattleBackgroundDepthLayerId,
   FighterFrameCollision,
   FighterPose,
+  FighterSpriteId,
   FrameAnchor,
   PlayerSlot,
   VoiceClipType,
 } from "../../types/game";
 
-export const NETPLAY_PROTOCOL_VERSION = 4;
+export const NETPLAY_PROTOCOL_VERSION = 5;
 export const NETPLAY_INPUT_DELAY = 10;
 export const NETPLAY_REPEAT_FRAMES = 24;
 export const NETPLAY_CHECKSUM_INTERVAL = 30;
@@ -32,6 +33,10 @@ export interface NetworkFighterFrameAsset {
   collision?: FighterFrameCollision;
 }
 
+export interface NetworkFighterSpriteAsset extends NetworkFighterFrameAsset {
+  spriteId: FighterSpriteId;
+}
+
 export interface NetworkVoiceClipAsset {
   clip: VoiceClipType;
   assetId: string;
@@ -48,6 +53,7 @@ export interface NetworkFighterManifest {
   isDefault?: boolean;
   totalBytes: number;
   frames: Record<FighterPose, NetworkFighterFrameAsset>;
+  spriteFrames?: Partial<Record<FighterSpriteId, NetworkFighterSpriteAsset>>;
   voiceClips: Partial<Record<VoiceClipType, NetworkVoiceClipAsset>>;
 }
 

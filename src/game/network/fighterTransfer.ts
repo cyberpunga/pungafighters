@@ -1,5 +1,5 @@
-import type { CollisionBox, FighterFrameCollision, FighterPose, FighterProfile, LoadedFighter, VoiceClipType } from "../../types/game";
-import { FIGHTER_POSES, VOICE_CLIPS } from "../../types/game";
+import type { CollisionBox, FighterFrameCollision, FighterPose, FighterProfile, FighterSpriteId, LoadedFighter, VoiceClipType } from "../../types/game";
+import { FIGHTER_POSE_PRIMARY_SPRITES, FIGHTER_POSES, FIGHTER_SPRITES, VOICE_CLIPS } from "../../types/game";
 import { AppError } from "../../i18n/errors";
 import type { NetworkAssetChunkHeader, NetworkFighterManifest } from "./protocol";
 
@@ -79,8 +79,51 @@ export async function serializeFighterForNetwork(fighter: LoadedFighter): Promis
       }),
     )
   ).filter(isDefined);
+  const spriteResults = fighter.spriteFrames
+    ? (
+        await Promise.all(
+          FIGHTER_SPRITES.flatMap((spriteId) => {
+            const frame = fighter.spriteFrames?.[spriteId];
+            const url = fighter.spriteFrameUrls?.[spriteId];
+            if (!frame || !url) {
+              return [];
+            }
+            return [
+              (async () => {
+                const rawBlob = await urlToBlob(frame.dataUrl || url);
+                const blob = await maybeReencodeFrameBlob(rawBlob);
+                if (blob.size <= 0) {
+                  throw new Error(`Could not prepare the ${spriteId} sprite for online play.`);
+                }
+                const assetId = `sprite:${spriteId}`;
+                const asset = createTransferAsset(assetId, blob, "image/png");
+                return {
+                  spriteId,
+                  asset,
+                  manifest: {
+                    pose: frame.pose,
+                    spriteId,
+                    assetId,
+                    mimeType: asset.mimeType,
+                    byteLength: asset.byteLength,
+                    anchor: frame.anchor,
+                    width: frame.width,
+                    height: frame.height,
+                    collision: frame.collision,
+                  },
+                };
+              })(),
+            ];
+          }),
+        )
+      ).filter(isDefined)
+    : [];
 
-  const assets = [...frameResults.map((result) => result.asset), ...voiceResults.map((result) => result.asset)];
+  const assets = [
+    ...frameResults.map((result) => result.asset),
+    ...spriteResults.map((result) => result.asset),
+    ...voiceResults.map((result) => result.asset),
+  ];
   const totalBytes = assets.reduce((total, asset) => total + asset.byteLength, 0);
   if (totalBytes > NETWORK_FIGHTER_MAX_BYTES) {
     throw new Error(`This fighter is ${formatBytes(totalBytes)}. Online fighters must be under ${formatBytes(NETWORK_FIGHTER_MAX_BYTES)}.`);
@@ -95,6 +138,9 @@ export async function serializeFighterForNetwork(fighter: LoadedFighter): Promis
     isDefault: fighter.isDefault,
     totalBytes,
     frames: Object.fromEntries(frameResults.map((result) => [result.pose, result.manifest])) as NetworkFighterManifest["frames"],
+    spriteFrames: spriteResults.length
+      ? (Object.fromEntries(spriteResults.map((result) => [result.spriteId, result.manifest])) as NetworkFighterManifest["spriteFrames"])
+      : undefined,
     voiceClips: Object.fromEntries(voiceResults.map((result) => [result.clip, result.manifest])) as NetworkFighterManifest["voiceClips"],
   };
 
@@ -165,6 +211,15 @@ export class NetworkFighterAssetReceiver {
       objectUrls.push(url);
       return [clip, url] as const;
     }).filter(isDefined);
+    const spriteFrameUrlPairs = FIGHTER_SPRITES.flatMap((spriteId) => {
+      const frame = this.manifest.spriteFrames?.[spriteId];
+      if (!frame) {
+        return [];
+      }
+      const url = URL.createObjectURL(this.getBlob(frame.assetId));
+      objectUrls.push(url);
+      return [[spriteId, url] as const];
+    });
 
     const frames = Object.fromEntries(
       FIGHTER_POSES.map((pose) => {
@@ -181,6 +236,27 @@ export class NetworkFighterAssetReceiver {
         ] as const;
       }),
     ) as FighterProfile["frames"];
+    const spriteFrames = Object.fromEntries(
+      FIGHTER_SPRITES.flatMap((spriteId) => {
+        const frame = this.manifest.spriteFrames?.[spriteId];
+        if (!frame) {
+          return [];
+        }
+        return [
+          [
+            spriteId,
+            {
+              pose: frame.pose,
+              spriteId,
+              anchor: frame.anchor,
+              width: frame.width,
+              height: frame.height,
+              collision: frame.collision,
+            },
+          ] as const,
+        ];
+      }),
+    ) as FighterProfile["spriteFrames"];
 
     return {
       fighter: {
@@ -190,6 +266,12 @@ export class NetworkFighterAssetReceiver {
         updatedAt: this.manifest.updatedAt,
         frames,
         frameUrls: Object.fromEntries(frameUrlPairs) as LoadedFighter["frameUrls"],
+        ...(spriteFrameUrlPairs.length
+          ? {
+              spriteFrames,
+              spriteFrameUrls: Object.fromEntries(spriteFrameUrlPairs) as LoadedFighter["spriteFrameUrls"],
+            }
+          : {}),
         voiceClips: {},
         voiceUrls: Object.fromEntries(voiceUrlPairs) as LoadedFighter["voiceUrls"],
         movesetId: this.manifest.movesetId,
@@ -271,6 +353,15 @@ function validateFighterManifest(manifest: NetworkFighterManifest) {
     throw new Error("Opponent fighter manifest is invalid.");
   }
   if (
+    manifest.spriteFrames &&
+    !FIGHTER_SPRITES.every((spriteId) => {
+      const frame = manifest.spriteFrames?.[spriteId];
+      return !frame || (isManifestAsset(frame) && frame.spriteId === spriteId && frame.pose === getPoseForSprite(spriteId));
+    })
+  ) {
+    throw new Error("Opponent fighter manifest is invalid.");
+  }
+  if (
     manifest.voiceClips &&
     !VOICE_CLIPS.every((clip) => {
       const voice = manifest.voiceClips[clip];
@@ -298,12 +389,26 @@ function validateFighterManifest(manifest: NetworkFighterManifest) {
 
 function getManifestAssets(manifest: NetworkFighterManifest): ManifestAssetDescriptor[] {
   const frameAssets = FIGHTER_POSES.map((pose) => manifest.frames?.[pose]);
+  const spriteFrameAssets = FIGHTER_SPRITES.map((spriteId) => manifest.spriteFrames?.[spriteId]);
   const voiceAssets = VOICE_CLIPS.map((clip) => manifest.voiceClips?.[clip]).filter(isDefined);
-  return [...frameAssets, ...voiceAssets].filter(isDefined).map((asset) => ({
+  return [...frameAssets, ...spriteFrameAssets, ...voiceAssets].filter(isDefined).map((asset) => ({
     assetId: asset.assetId,
     mimeType: asset.mimeType,
     byteLength: asset.byteLength,
   }));
+}
+
+function getPoseForSprite(spriteId: FighterSpriteId): FighterPose {
+  return (Object.entries(FIGHTER_POSE_PRIMARY_SPRITES).find(([, primarySpriteId]) => primarySpriteId === spriteId)?.[0] as FighterPose | undefined)
+    ?? (spriteId.startsWith("punch")
+      ? "punch"
+      : spriteId.startsWith("kick")
+        ? "kick"
+        : spriteId === "hit"
+          ? "hit"
+          : spriteId.startsWith("victory")
+            ? "victory"
+            : "idle");
 }
 
 function isManifestAsset(value: unknown): value is ManifestAssetDescriptor {

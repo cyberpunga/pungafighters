@@ -12,6 +12,21 @@ const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const MAX_REFERENCE_IMAGES = 14;
 const MAX_REFERENCE_IMAGE_BYTES = 12 * 1024 * 1024;
 const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
+const FIGHTER_SPRITES = [
+  "idle1",
+  "idle2",
+  "walk1",
+  "walk2",
+  "walk3",
+  "walk4",
+  "punchWindup",
+  "punchStrike",
+  "kickWindup",
+  "kickStrike",
+  "hit",
+  "victory1",
+  "victory2",
+] as const;
 
 const MODEL_ALIASES: Record<string, string> = {
   "nano-banana": "gemini-2.5-flash-image",
@@ -250,21 +265,29 @@ function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCoun
     ? "Character: use the same character from the provided reference image(s)."
     : "Character: create an original fighter.";
 
-  return `Create a single horizontal 5-cell spritesheet for a fighting-game character.
+  return `Create a single horizontal 13-cell spritesheet for a fighting-game character.
 
-Canvas: 5:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00) across the whole image. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
+Canvas: 13:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00) across the whole image. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
 
 ${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character identity, design, outfit, colors, scale, medium, rendering style, lighting, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
 Pose order from left to right:
 
-1. idle stance
-2. forward punch
-3. forward kick
-4. getting hit / recoil pose
-5. victory pose
+1. idle stance, frame A
+2. idle stance, frame B with a subtle breathing/weight-shift variation
+3. walk cycle frame 1, left foot forward
+4. walk cycle frame 2, passing step
+5. walk cycle frame 3, right foot forward
+6. walk cycle frame 4, passing step
+7. punch windup
+8. punch strike, forward fist extended
+9. kick windup
+10. kick strike, forward leg extended
+11. getting hit / recoil pose
+12. victory pose, frame A
+13. victory pose, frame B with a subtle celebratory variation
 
-Format compatibility: make the final image easy to crop by splitting it into five equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all five cells.
+Format compatibility: make the final image easy to crop by splitting it into ${FIGHTER_SPRITES.length} equal vertical slices. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across all cells. The walk frames must loop cleanly and keep the body centered enough that the character does not drift inside the cell.
 
 Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }

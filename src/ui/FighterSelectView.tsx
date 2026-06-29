@@ -267,7 +267,7 @@ function FighterGrid(props: {
           <article className={classes.join(" ")} key={fighter.id}>
             <button type="button" className="fighter-pick" onClick={() => props.onSelect(fighter.id)}>
               <span className="fighter-portrait">
-                <img src={fighter.frameUrls.idle} alt="" />
+                <img src={fighter.spriteFrameUrls?.idle1 || fighter.frameUrls.idle} alt="" />
                 <span className="fighter-markers" aria-hidden="true">
                   {selectedSlots.map((slot) => (
                     <span className={`cursor-badge ${slot}`} key={slot}>

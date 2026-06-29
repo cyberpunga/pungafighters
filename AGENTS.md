@@ -18,6 +18,7 @@
 - Online setup asset transfer uses manifest metadata plus chunked DataChannel binary payloads: fighters have a 12 MB selected-fighter cap, and host-selected custom backgrounds use the 10 MB imported-background cap. Do not reintroduce single-message data URL setup payloads.
 - TURN config is loaded through `VITE_RTC_ICE_SERVERS_URL` or temporary `VITE_RTC_ICE_SERVERS_JSON`; never put Cloudflare TURN keys or API tokens in browser code.
 - IndexedDB stores saveable data: fighter profiles, generated image blobs, imported battle background image blobs, audio blobs, and settings.
+- Fighter profiles keep five gameplay pose frames for simulation/collision and may also keep generated animation sprite frames (`idle1`, `walk1`, `punchWindup`, etc.) for renderer-only texture cycling.
 - Imported battle backgrounds may include deterministic browser-generated depth layer PNGs. Compute them at save/import time, store them with the background record, transfer them only through optional manifest assets under the existing background cap, and keep them visual-only in the R3F renderer.
 - Prefer stable ids and manifest-like constants over hard-coded asset paths scattered through the codebase.
 
@@ -53,6 +54,7 @@
 - Keep creator generation photo/reference-centered. Do not add prompt-only or free-text prompt creator flows unless explicitly requested.
 - Keep saved character import in the creator/editor flow so imported fighters load as editable drafts before saving.
 - Keep creator image acquisition separate from cutout processing: captured, per-action imported, and spritesheet-split source images should be saveable as normalized frames, with processing as an optional per-action or all-action step.
+- Keep generated animation sprites visual-only. Do not use walk/idle/punch windup texture frames as source-of-truth combat state or hit detection.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
 - Keep provider-specific controls near the provider implementation and pass them through the shared `SegmentationProvider` options shape.

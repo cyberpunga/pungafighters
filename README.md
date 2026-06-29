@@ -44,7 +44,7 @@ Open the local Vite URL shown in the terminal.
 
 Use the fight setup roster to edit or export fighters. Editing opens the fighter in the creator; saved custom fighters update in place, while default fighters load as editable copies. Export creates a `.pungafighter.json` file containing the fighter manifest, pose images, and recorded voice clips as data URLs so it can be imported into another local browser profile without a backend.
 
-Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Use the top-level fighter import for `.pungafighter.json` files, the strip import for a PNG, JPEG, or WebP spritesheet, or each action card's import button for one pose at a time. Spritesheets are five equal cells in pose order: `idle`, `punch`, `kick`, `hit`, `victory`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom.
+Imports live in the creator view and load as an editable draft; nothing is added to the roster until you press `Save fighter`. Use the top-level fighter import for `.pungafighter.json` files, the strip import for a PNG, JPEG, or WebP spritesheet, or each action card's import button for one pose at a time. Spritesheets may be five equal gameplay-pose cells in order `idle`, `punch`, `kick`, `hit`, `victory`, or thirteen equal animation cells in order `idle1`, `idle2`, `walk1`, `walk2`, `walk3`, `walk4`, `punchWindup`, `punchStrike`, `kickWindup`, `kickStrike`, `hit`, `victory1`, `victory2`. Wider sheets are read left-to-right; taller sheets are read top-to-bottom.
 
 Captured, single-image, and spritesheet sources are saveable immediately as normalized frames. Use `Process` on an action, or `Process all`, to run the selected browser-side cutout engine and replace those frames with transparent cutouts.
 
@@ -106,7 +106,7 @@ Set `ALLOWED_ORIGINS` in `workers/turn/wrangler.toml` to the deployed game origi
 
 ### Character Generation Worker
 
-This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a five-pose spritesheet; use `"pose"` with a `pose` value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
+This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a thirteen-cell animation spritesheet; use `"pose"` with a pose value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
 
 ```json
 {
