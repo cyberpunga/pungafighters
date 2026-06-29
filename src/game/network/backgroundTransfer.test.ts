@@ -49,6 +49,7 @@ describe("background network transfer", () => {
 
     expect(transfer.manifest.layers).toHaveLength(3);
     expect(transfer.manifest.layers?.[0]?.assetId).toBe(`${NETWORK_BACKGROUND_LAYER_ASSET_ID_PREFIX}:far`);
+    expect(transfer.manifest.layers?.[0]?.source).toBe("depth-bands-v2");
     expect(transfer.assets).toHaveLength(4);
     expect(transfer.totalBytes).toBe(transfer.assets.reduce((total, asset) => total + asset.byteLength, 0));
 
@@ -138,6 +139,7 @@ function createBackground(options: { withLayers?: boolean } = {}): RuntimeBattle
       ? [
           {
             id: "far",
+            source: "depth-bands-v2",
             imageUrl: FAR_LAYER_DATA_URL,
             mimeType: "image/png",
             size: 9,
@@ -149,6 +151,7 @@ function createBackground(options: { withLayers?: boolean } = {}): RuntimeBattle
           },
           {
             id: "mid",
+            source: "depth-bands-v2",
             imageUrl: MID_LAYER_DATA_URL,
             mimeType: "image/png",
             size: 9,
@@ -160,6 +163,7 @@ function createBackground(options: { withLayers?: boolean } = {}): RuntimeBattle
           },
           {
             id: "near",
+            source: "depth-bands-v2",
             imageUrl: NEAR_LAYER_DATA_URL,
             mimeType: "image/png",
             size: 9,

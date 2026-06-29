@@ -167,6 +167,7 @@ export interface RuntimeBattleBackground {
 
 export interface BattleBackgroundLayerBase {
   id: BattleBackgroundDepthLayerId;
+  source: "depth-bands-v2";
   imageUrl: string;
   mimeType: string;
   size: number;

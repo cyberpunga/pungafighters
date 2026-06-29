@@ -18,7 +18,11 @@ import {
   normalizeBattlePostEffectSettings,
 } from "../game/render/postEffectSettings";
 import { createFrameCollisionMetadataFromBlob } from "../creator/collisionMetadata";
-import { createBattleBackgroundDepthLayersFromBlob, type GeneratedBattleBackgroundLayer } from "../creator/backgroundDepthLayers";
+import {
+  BACKGROUND_DEPTH_LAYER_SOURCE,
+  createBattleBackgroundDepthLayersFromBlob,
+  type GeneratedBattleBackgroundLayer,
+} from "../creator/backgroundDepthLayers";
 import { getDefaultFighters } from "../game/content/defaultFighters";
 import { AppError, missingPoseImageError } from "../i18n/errors";
 
@@ -38,6 +42,7 @@ const BATTLE_BACKGROUND_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/
 
 interface BattleBackgroundLayerRecord {
   id: BattleBackgroundDepthLayerId;
+  source?: "depth-bands-v2";
   blobId: string;
   mimeType: string;
   size: number;
@@ -290,8 +295,12 @@ export async function getLoadedBattleBackground(): Promise<LoadedBattleBackgroun
   if (!blob) {
     return undefined;
   }
-  const layerBlobs = await loadBattleBackgroundLayerBlobs(record);
-  return loadBattleBackground(record, blob, layerBlobs);
+  const migrated = hasCurrentBattleBackgroundLayers(record)
+    ? undefined
+    : await migrateBattleBackgroundDepthLayers(record, blob);
+  const loadedRecord = migrated?.record ?? record;
+  const layerBlobs = migrated?.layerBlobs ?? (await loadBattleBackgroundLayerBlobs(loadedRecord));
+  return loadBattleBackground(loadedRecord, blob, layerBlobs);
 }
 
 export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattleBackground> {
@@ -312,19 +321,7 @@ export async function saveBattleBackgroundImage(file: File): Promise<LoadedBattl
     mimeType: file.type || getImageMimeTypeFromName(file.name) || "image/png",
     size: file.size,
     updatedAt: now,
-    layers: layers.length
-      ? layers.map((layer) => ({
-          id: layer.id,
-          blobId: getBattleBackgroundLayerBlobId(layer.id),
-          mimeType: layer.mimeType,
-          size: layer.size,
-          depth: layer.depth,
-          scale: layer.scale,
-          offsetX: layer.offsetX,
-          offsetY: layer.offsetY,
-          opacity: layer.opacity,
-        }))
-      : undefined,
+    layers: layers.length ? createBattleBackgroundLayerRecords(layers) : undefined,
   };
   const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
   const imageWrites: Promise<unknown>[] = [
@@ -454,6 +451,7 @@ function loadBattleBackground(
   layerBlobs: Map<string, Blob> = new Map(),
 ): LoadedBattleBackground {
   const layers = record.layers
+    ?.filter((layer) => layer.source === BACKGROUND_DEPTH_LAYER_SOURCE)
     ?.map((layer): LoadedBattleBackgroundLayer | undefined => {
       const layerBlob = layerBlobs.get(layer.blobId);
       if (!layerBlob) {
@@ -461,6 +459,7 @@ function loadBattleBackground(
       }
       return {
         ...layer,
+        source: BACKGROUND_DEPTH_LAYER_SOURCE,
         imageUrl: URL.createObjectURL(layerBlob),
       };
     })
@@ -481,6 +480,32 @@ async function loadBattleBackgroundLayerBlobs(record: BattleBackgroundRecord) {
     }),
   );
   return new Map(pairs.filter((pair): pair is readonly [string, Blob] => Boolean(pair)));
+}
+
+async function migrateBattleBackgroundDepthLayers(record: BattleBackgroundRecord, blob: Blob) {
+  const layers = await createBackgroundDepthLayers(blob);
+  if (!layers.length) {
+    return undefined;
+  }
+
+  const layerRecords = createBattleBackgroundLayerRecords(layers);
+  const db = await getDb();
+  const staleLayerBlobIds = new Set([
+    ...BATTLE_BACKGROUND_DEPTH_LAYERS.map((id) => getBattleBackgroundLayerBlobId(id)),
+    ...(record.layers?.map((layer) => layer.blobId) ?? []),
+  ]);
+  const tx = db.transaction(["imageBlobs", "settings"], "readwrite");
+  await Promise.all([
+    ...[...staleLayerBlobIds].map((blobId) => tx.objectStore("imageBlobs").delete(blobId)),
+    ...layers.map((layer) => tx.objectStore("imageBlobs").put(layer.blob, getBattleBackgroundLayerBlobId(layer.id))),
+    tx.objectStore("settings").put({ ...record, layers: layerRecords }, BATTLE_BACKGROUND_SETTING_KEY),
+  ]);
+  await tx.done;
+
+  return {
+    record: { ...record, layers: layerRecords },
+    layerBlobs: new Map(layers.map((layer) => [getBattleBackgroundLayerBlobId(layer.id), layer.blob])),
+  };
 }
 
 function isSupportedBattleBackgroundFile(file: File) {
@@ -514,12 +539,31 @@ function cleanBackgroundName(filename: string) {
   return cleaned ? cleaned.slice(0, 48) : "Custom Background";
 }
 
-async function createBackgroundDepthLayers(file: File): Promise<GeneratedBattleBackgroundLayer[]> {
+async function createBackgroundDepthLayers(file: Blob): Promise<GeneratedBattleBackgroundLayer[]> {
   try {
     return await createBattleBackgroundDepthLayersFromBlob(file);
   } catch {
     return [];
   }
+}
+
+function createBattleBackgroundLayerRecords(layers: GeneratedBattleBackgroundLayer[]): BattleBackgroundLayerRecord[] {
+  return layers.map((layer) => ({
+    id: layer.id,
+    source: layer.source,
+    blobId: getBattleBackgroundLayerBlobId(layer.id),
+    mimeType: layer.mimeType,
+    size: layer.size,
+    depth: layer.depth,
+    scale: layer.scale,
+    offsetX: layer.offsetX,
+    offsetY: layer.offsetY,
+    opacity: layer.opacity,
+  }));
+}
+
+function hasCurrentBattleBackgroundLayers(record: BattleBackgroundRecord) {
+  return Boolean(record.layers?.length && record.layers.every((layer) => layer.source === BACKGROUND_DEPTH_LAYER_SOURCE));
 }
 
 function getBattleBackgroundLayerBlobId(id: BattleBackgroundDepthLayerId) {
@@ -573,6 +617,7 @@ function isBattleBackgroundLayerRecord(value: unknown): value is BattleBackgroun
   return (
     typeof layer.id === "string" &&
     BATTLE_BACKGROUND_DEPTH_LAYERS.includes(layer.id as BattleBackgroundDepthLayerId) &&
+    (layer.source === undefined || layer.source === BACKGROUND_DEPTH_LAYER_SOURCE) &&
     typeof layer.blobId === "string" &&
     typeof layer.mimeType === "string" &&
     typeof layer.size === "number" &&

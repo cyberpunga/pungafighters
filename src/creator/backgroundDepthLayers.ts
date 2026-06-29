@@ -5,6 +5,7 @@ import { canvasToPngBlob, decodeImageBlob } from "./imageProcessing";
 const MAX_LAYER_WIDTH = 1024;
 const MAX_LAYER_HEIGHT = 576;
 const MIN_VISIBLE_ALPHA = 4;
+export const BACKGROUND_DEPTH_LAYER_SOURCE = "depth-bands-v2" as const;
 
 type LayerMaskMap = Record<BattleBackgroundDepthLayerId, Uint8ClampedArray>;
 
@@ -19,9 +20,9 @@ export interface GeneratedBattleBackgroundLayer extends Omit<RuntimeBattleBackgr
 }
 
 const LAYER_RENDERING: Record<BattleBackgroundDepthLayerId, Pick<RuntimeBattleBackgroundLayer, "depth" | "scale" | "offsetX" | "offsetY" | "opacity">> = {
-  far: { depth: 0.16, scale: 1.01, offsetX: 0, offsetY: 0.04, opacity: 1 },
-  mid: { depth: 0.5, scale: 1.045, offsetX: 0, offsetY: 0, opacity: 1 },
-  near: { depth: 0.86, scale: 1.09, offsetX: 0, offsetY: -0.05, opacity: 0.94 },
+  far: { depth: 0.06, scale: 1.0, offsetX: 0, offsetY: 0.05, opacity: 1 },
+  mid: { depth: 0.48, scale: 1.05, offsetX: 0, offsetY: 0, opacity: 1 },
+  near: { depth: 0.94, scale: 1.13, offsetX: 0, offsetY: -0.07, opacity: 1 },
 };
 
 export async function createBattleBackgroundDepthLayersFromBlob(blob: Blob): Promise<GeneratedBattleBackgroundLayer[]> {
@@ -81,6 +82,7 @@ export async function createBattleBackgroundDepthLayersFromBlob(blob: Blob): Pro
         const layerBlob = await canvasToPngBlob(layerCanvas);
         return {
           id,
+          source: BACKGROUND_DEPTH_LAYER_SOURCE,
           blob: layerBlob,
           mimeType: "image/png",
           size: layerBlob.size,
@@ -120,34 +122,22 @@ export function createBackgroundDepthLayerMasks(imageData: BackgroundDepthImageD
       const luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
       const saturation = max === 0 ? 0 : (max - min) / max;
       const depthScore = clamp01(yRatio * 0.82 + (1 - luma) * 0.1 + saturation * 0.08);
-      const weights = getLayerWeights(depthScore);
-
-      masks.far[pixel] = Math.round(weights.far * 255);
-      masks.mid[pixel] = Math.round(weights.mid * 255);
-      masks.near[pixel] = Math.round(weights.near * 255);
+      const layerId = getDominantLayer(depthScore);
+      masks[layerId][pixel] = 255;
     }
   }
 
   return masks;
 }
 
-function getLayerWeights(depthScore: number): Record<BattleBackgroundDepthLayerId, number> {
-  const far = softBand(depthScore, 0.16, 0.39);
-  const mid = softBand(depthScore, 0.5, 0.36);
-  const near = softBand(depthScore, 0.86, 0.39);
-  const total = far + mid + near;
-  if (total <= 0) {
-    return { far: 0, mid: 1, near: 0 };
+function getDominantLayer(depthScore: number): BattleBackgroundDepthLayerId {
+  if (depthScore < 0.36) {
+    return "far";
   }
-  return {
-    far: far / total,
-    mid: mid / total,
-    near: near / total,
-  };
-}
-
-function softBand(value: number, center: number, radius: number) {
-  return clamp01(1 - Math.abs(value - center) / radius);
+  if (depthScore < 0.68) {
+    return "mid";
+  }
+  return "near";
 }
 
 function clamp01(value: number) {

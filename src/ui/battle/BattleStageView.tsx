@@ -431,8 +431,8 @@ function TheaterSet(props: { background?: RuntimeBattleBackground }) {
 const BACKDROP_WIDTH = 6.85;
 const BACKDROP_HEIGHT = 3.2;
 const BACKDROP_Y = 2.38;
-const BACKDROP_BASE_Z = -2.44;
-const BACKDROP_DEPTH_RANGE = 0.3;
+const BACKDROP_BASE_Z = -2.72;
+const BACKDROP_DEPTH_RANGE = 0.86;
 
 function CustomStageBackdrop(props: { background: RuntimeBattleBackground }) {
   const layers = props.background.layers ?? [];
@@ -442,7 +442,6 @@ function CustomStageBackdrop(props: { background: RuntimeBattleBackground }) {
 
   return (
     <group>
-      <StageBackdropPlane imageUrl={props.background.imageUrl} opacity={0.32} z={BACKDROP_BASE_Z - 0.02} />
       {layers.map((layer) => (
         <StageBackdropPlane
           key={layer.id}

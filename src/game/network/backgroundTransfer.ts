@@ -1,6 +1,7 @@
 import type { BattleBackgroundDepthLayerId, RuntimeBattleBackground } from "../../types/game";
 import { BATTLE_BACKGROUND_DEPTH_LAYERS } from "../../types/game";
 import { AppError } from "../../i18n/errors";
+import { BACKGROUND_DEPTH_LAYER_SOURCE } from "../../creator/backgroundDepthLayers";
 import type { NetworkAssetChunkHeader, NetworkBattleBackgroundLayerAsset, NetworkBattleBackgroundManifest } from "./protocol";
 
 export const NETWORK_BACKGROUND_ASSET_ID = "stage:background";
@@ -76,6 +77,7 @@ export async function serializeBattleBackgroundForNetwork(background?: RuntimeBa
             mimeType: asset.mimeType,
             byteLength: asset.byteLength,
             layerId: layer.id,
+            source: layer.source,
             depth: layer.depth,
             scale: layer.scale,
             offsetX: layer.offsetX,
@@ -146,6 +148,7 @@ export class NetworkBackgroundAssetReceiver {
         urls.push(layerUrl);
         return {
           id: layer.layerId,
+          source: layer.source,
           imageUrl: layerUrl,
           mimeType: layer.mimeType,
           size: layer.byteLength,
@@ -282,6 +285,7 @@ function isLayerManifestAsset(value: unknown): value is NetworkBattleBackgroundL
   return (
     typeof asset.layerId === "string" &&
     BATTLE_BACKGROUND_DEPTH_LAYERS.includes(asset.layerId as BattleBackgroundDepthLayerId) &&
+    asset.source === BACKGROUND_DEPTH_LAYER_SOURCE &&
     asset.assetId === getLayerAssetId(asset.layerId as BattleBackgroundDepthLayerId) &&
     typeof asset.depth === "number" &&
     typeof asset.scale === "number" &&
@@ -317,6 +321,9 @@ function createTransferAsset(assetId: string, blob: Blob, fallbackMimeType: stri
 async function prepareLayerTransfers(background: RuntimeBattleBackground) {
   const transfers = await Promise.all(
     (background.layers ?? []).map(async (layer) => {
+      if (layer.source !== BACKGROUND_DEPTH_LAYER_SOURCE) {
+        return undefined;
+      }
       try {
         const blob = await urlToBlob(layer.imageUrl);
         const asset = createTransferAsset(getLayerAssetId(layer.id), blob, blob.type || layer.mimeType);

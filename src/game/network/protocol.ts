@@ -59,6 +59,7 @@ export interface NetworkBattleBackgroundAsset {
 
 export interface NetworkBattleBackgroundLayerAsset extends NetworkBattleBackgroundAsset {
   layerId: BattleBackgroundDepthLayerId;
+  source: "depth-bands-v2";
   depth: number;
   scale: number;
   offsetX: number;
