@@ -170,62 +170,61 @@ async function saveFighterAssets(input: {
   const existing = input.id ? await db.get("fighters", input.id) : undefined;
   const id = existing?.id ?? crypto.randomUUID();
   const now = new Date().toISOString();
-  const tx = db.transaction(["fighters", "imageBlobs", "audioBlobs"], "readwrite");
 
-  const frames = Object.fromEntries(
-    await Promise.all(
-      FIGHTER_POSES.map(async (pose) => {
-        const blob = input.frameBlobs[pose];
-        const blobId = `${id}:frame:${pose}`;
-        const collision = input.frameCollisions?.[pose] ?? (await createFrameCollisionMetadataFromBlob(blob, pose));
-        await tx.objectStore("imageBlobs").put(blob, blobId);
-        return [
+  const frameEntries = await Promise.all(
+    FIGHTER_POSES.map(async (pose) => {
+      const blob = input.frameBlobs[pose];
+      const blobId = `${id}:frame:${pose}`;
+      const collision = input.frameCollisions?.[pose] ?? (await createFrameCollisionMetadataFromBlob(blob, pose));
+      return [
+        pose,
+        blob,
+        {
           pose,
-          {
-            pose,
-            blobId,
-            anchor: { x: 0.5, y: 0.9 },
-            width: 384,
-            height: 384,
-            collision,
-          },
-        ];
-      }),
-    ),
-  ) as FighterProfile["frames"];
+          blobId,
+          anchor: { x: 0.5, y: 0.9 },
+          width: 384,
+          height: 384,
+          collision,
+        },
+      ] as const;
+    }),
+  );
+  const frames = Object.fromEntries(frameEntries.map(([pose, , frame]) => [pose, frame])) as FighterProfile["frames"];
 
-  const spriteFrames = input.spriteFrameBlobs
-    ? (Object.fromEntries(
-        await Promise.all(
-          FIGHTER_SPRITES.flatMap((spriteId) => {
-            const blob = input.spriteFrameBlobs?.[spriteId];
-            if (!blob) {
-              return [];
-            }
-            const pose = getPoseForSprite(spriteId);
-            const blobId = `${id}:sprite:${spriteId}`;
-            return [
-              (async () => {
-                await tx.objectStore("imageBlobs").put(blob, blobId);
-                return [
-                  spriteId,
-                  {
-                    pose,
-                    spriteId,
-                    blobId,
-                    anchor: { x: 0.5, y: 0.9 },
-                    width: 384,
-                    height: 384,
-                  },
-                ] as const;
-              })(),
-            ];
-          }),
-        ),
-      ) as FighterProfile["spriteFrames"])
+  const spriteEntries = input.spriteFrameBlobs
+    ? FIGHTER_SPRITES.flatMap((spriteId) => {
+        const blob = input.spriteFrameBlobs?.[spriteId];
+        if (!blob) {
+          return [];
+        }
+        const pose = getPoseForSprite(spriteId);
+        const blobId = `${id}:sprite:${spriteId}`;
+        return [
+          [
+            spriteId,
+            blob,
+            {
+              pose,
+              spriteId,
+              blobId,
+              anchor: { x: 0.5, y: 0.9 },
+              width: 384,
+              height: 384,
+            },
+          ] as const,
+        ];
+      })
+    : [];
+  const spriteFrames = spriteEntries.length
+    ? (Object.fromEntries(spriteEntries.map(([spriteId, , frame]) => [spriteId, frame])) as FighterProfile["spriteFrames"])
     : undefined;
 
   const voiceClips: FighterProfile["voiceClips"] = {};
+  const tx = db.transaction(["fighters", "imageBlobs", "audioBlobs"], "readwrite");
+
+  await Promise.all(frameEntries.map(([, blob, frame]) => tx.objectStore("imageBlobs").put(blob, frame.blobId)));
+  await Promise.all(spriteEntries.map(([, blob, frame]) => tx.objectStore("imageBlobs").put(blob, frame.blobId)));
   await Promise.all(
     Object.entries(input.voiceBlobs).map(async ([clip, blob]) => {
       if (!blob) {
