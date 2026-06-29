@@ -13,7 +13,7 @@ describe("app routes", () => {
     expect(appRouteFromPathname("/remote/host/fighter", "/")).toBe("remoteHostFighter");
     expect(appRouteFromPathname("/remote/host/background", "/")).toBe("remoteHostFighter");
     expect(appRouteFromPathname("/remote/join/fighter", "/")).toBe("remoteJoinFighter");
-    expect(appRouteFromPathname("/settings", "/")).toBe("settings");
+    expect(appRouteFromPathname("/settings", "/")).toBe("menu");
     expect(appRouteFromPathname("/online/host", "/")).toBe("onlineHost");
     expect(appRouteFromPathname("/online/join", "/")).toBe("onlineGuest");
     expect(appRouteFromPathname("/battle", "/")).toBe("battle");
@@ -22,7 +22,6 @@ describe("app routes", () => {
   it("resolves paths under the GitHub Pages base", () => {
     expect(appRouteFromPathname("/pungafighters/local/background", "/pungafighters/")).toBe("localFighters");
     expect(appRouteFromPathname("/pungafighters/online/join", "/pungafighters/")).toBe("onlineGuest");
-    expect(appRouteToHref("settings", "/pungafighters/")).toBe("/pungafighters/settings");
     expect(appRouteToHref("localFighters", "/pungafighters/")).toBe("/pungafighters/local/fighters");
     expect(creatorEditRouteToHref("custom-fighter", "/pungafighters/")).toBe("/pungafighters/creator/edit/custom-fighter");
     expect(creatorEditFighterIdFromPathname("/pungafighters/creator/edit/custom-fighter", "/pungafighters/")).toBe("custom-fighter");

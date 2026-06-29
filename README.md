@@ -24,7 +24,7 @@ Open the local Vite URL shown in the terminal.
 
 ## MVP Features
 
-- Route-backed React shell for menus, fighter creator, staged fight setup, settings, online invites, and battle mounts.
+- Route-backed React shell for menus, fighter creator, staged fight setup, online invites, and battle mounts.
 - React Three Fiber 2.5D battle runtime for local and invite-code online photo standee fights in a physical arena.
 - React Three Rapier visual physics for impact debris and arena juice; deterministic combat hit detection remains in the simulation.
 - Local standee battle with deterministic health, timer, rounds, hitboxes, CPU input synthesis, and keyboard controls.
@@ -35,8 +35,8 @@ Open the local Vite URL shown in the terminal.
 - Creator-side sound controls for recording, previewing, and removing attack, hit, and win voice clips that play during battle.
 - Character editing and export for local fighters, with creator-side imports for `.pungafighter.json` files, simple spritesheet images, and single action images.
 - Custom battle background image import for local fights and host-selected online arenas.
-- Reorderable Pixel, CRT, Bad TV, Static, and Lens battle display effect stacks stored in local settings.
-- English and neutral Latin American Spanish localization with browser-language detection and a persisted language override in Settings.
+- Leva-hosted language and battle display effect settings stored locally.
+- English and neutral Latin American Spanish localization with browser-language detection and a persisted language override in the Leva settings panel.
 - Local-only persistence in IndexedDB.
 - Default placeholder fighters so battle works before creating a custom fighter.
 

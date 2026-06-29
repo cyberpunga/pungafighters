@@ -13,8 +13,8 @@ import { getDefaultFighters } from "../game/content/defaultFighters";
 import { AppError, missingPoseImageError } from "../i18n/errors";
 
 export const BATTLE_BACKGROUND_IMPORT_ACCEPT = "image/png,image/jpeg,image/webp";
-export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "crt-soft";
-export const DEFAULT_BATTLE_POST_EFFECTS: BattlePostEffect[] = [DEFAULT_BATTLE_DISPLAY_EFFECT];
+export const DEFAULT_BATTLE_DISPLAY_EFFECT: BattleDisplayEffect = "clean";
+export const DEFAULT_BATTLE_POST_EFFECTS: BattlePostEffect[] = [];
 
 const BATTLE_BACKGROUND_SETTING_KEY = "battle-background";
 const BATTLE_DISPLAY_EFFECT_SETTING_KEY = "battle-display-effect";

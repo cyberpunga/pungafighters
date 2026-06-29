@@ -17,13 +17,14 @@ export function BattlePostProcessing(props: { state: BattleState; displayEffects
   if (props.displayEffects.length === 0 && lowHealthStrength <= 0) {
     return null;
   }
+  const composerKey = props.displayEffects.join("|") || "clean";
   const passes: ReactElement[] = props.displayEffects.map((effect) => <BattleEffectPass key={effect} effect={effect} state={props.state} />);
   if (lowHealthStrength > 0) {
     passes.push(<LowHealth key="low-health" strength={0.34 + lowHealthStrength * 0.5} />);
   }
 
   return (
-    <EffectComposer enableNormalPass={false} multisampling={0}>
+    <EffectComposer key={composerKey} enableNormalPass={false} multisampling={0}>
       {passes}
     </EffectComposer>
   );

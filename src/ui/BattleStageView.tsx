@@ -78,7 +78,12 @@ export function BattleStageView(props: {
   const pressedCodesRef = useRef(new Set<string>());
   const checksumHistoryRef = useRef(new Map<number, string>());
   const pendingRemoteChecksumsRef = useRef(new Map<number, string>());
-  const fighters = useMemo(() => selectStageFighters(props.fighters, props.selectedFighterIds), [props.fighters, props.selectedFighterIds]);
+  const selectedP1Id = props.selectedFighterIds.p1;
+  const selectedP2Id = props.selectedFighterIds.p2;
+  const fighters = useMemo(
+    () => selectStageFighters(props.fighters, props.selectedFighterIds),
+    [props.fighters, selectedP1Id, selectedP2Id],
+  );
   const createInitialState = useCallback(
     () => (fighters ? createBattleState(props.config, { p1: fighters.p1, p2: fighters.p2 }) : undefined),
     [fighters, props.config],

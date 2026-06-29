@@ -1,4 +1,4 @@
-import { Camera, Gamepad2, Settings } from "lucide-react";
+import { Camera, Gamepad2 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { BattleConfig, BattlePostEffect, LoadedBattleBackground, LoadedFighter, PlayerSlot, RuntimeBattleBackground } from "../types/game";
@@ -23,6 +23,7 @@ import {
 } from "./FighterSelectView";
 import { MenuView } from "./MenuView";
 import { OnlineMatchView } from "./OnlineMatchView";
+import { AppSettingsPanel } from "./AppSettingsPanel";
 import { DEFAULT_LOCAL_BATTLE_MODE, getLocalPlayerControls } from "./localBattleMode";
 import { selectOnlineLocalFighter } from "./onlineSelection";
 import {
@@ -34,7 +35,6 @@ import {
   type AppRoute,
   type View,
 } from "./routes";
-import { SettingsView } from "./SettingsView";
 import { useI18n } from "../i18n/react";
 import { localizeError } from "../i18n/errors";
 
@@ -198,6 +198,11 @@ export function App() {
     const p2 = fighters.find((fighter) => fighter.id === localSelection.p2);
     return p1 && p2 ? { p1, p2 } : undefined;
   }, [fighters, localSelection]);
+  const localBattleFighterList = useMemo(() => (battleFighters ? [battleFighters.p1, battleFighters.p2] : []), [battleFighters]);
+  const localBattleSelectedFighterIds = useMemo(
+    () => (battleFighters ? { p1: battleFighters.p1.id, p2: battleFighters.p2.id } : undefined),
+    [battleFighters],
+  );
   const localBattleConfig = useMemo(
     () => ({
       ...DEFAULT_BATTLE_CONFIG,
@@ -208,6 +213,14 @@ export function App() {
     [localSelection.mode, localSelection.p1, localSelection.p2],
   );
   const onlineLocalFighter = useMemo(() => selectOnlineLocalFighter(fighters, onlineSelectedFighterId), [fighters, onlineSelectedFighterId]);
+  const onlineBattleFighterList = useMemo(
+    () => (onlineBattle ? [onlineBattle.fighters.p1, onlineBattle.fighters.p2] : []),
+    [onlineBattle],
+  );
+  const onlineBattleSelectedFighterIds = useMemo(
+    () => (onlineBattle ? { p1: onlineBattle.fighters.p1.id, p2: onlineBattle.fighters.p2.id } : undefined),
+    [onlineBattle],
+  );
   const exitLocalBattle = useCallback(() => navigate("menu", { replace: true }), [navigate]);
   const exitOnlineBattle = useCallback(() => {
     setOnlineBattle(undefined);
@@ -216,6 +229,7 @@ export function App() {
 
   return (
     <main className="app-shell">
+      <AppSettingsPanel battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (
@@ -305,12 +319,11 @@ export function App() {
           }}
         />
       )}
-      {view === "settings" && <SettingsView battlePostEffects={battlePostEffects} onBattlePostEffectsChange={updateBattlePostEffects} />}
-      {view === "battle" && onlineBattle && (
+      {view === "battle" && onlineBattle && onlineBattleSelectedFighterIds && (
         <Suspense fallback={<div className="battle-stage-loading">{t("common.loading")}</div>}>
           <BattleStageView
-            fighters={[onlineBattle.fighters.p1, onlineBattle.fighters.p2]}
-            selectedFighterIds={{ p1: onlineBattle.fighters.p1.id, p2: onlineBattle.fighters.p2.id }}
+            fighters={onlineBattleFighterList}
+            selectedFighterIds={onlineBattleSelectedFighterIds}
             mode="online"
             localSlot={onlineBattle.localSlot}
             networkController={onlineBattle.controller}
@@ -322,11 +335,11 @@ export function App() {
           />
         </Suspense>
       )}
-      {view === "battle" && !onlineBattle && battleFighters && (
+      {view === "battle" && !onlineBattle && battleFighters && localBattleSelectedFighterIds && (
         <Suspense fallback={<div className="battle-stage-loading">{t("common.loading")}</div>}>
           <BattleStageView
-            fighters={[battleFighters.p1, battleFighters.p2]}
-            selectedFighterIds={{ p1: battleFighters.p1.id, p2: battleFighters.p2.id }}
+            fighters={localBattleFighterList}
+            selectedFighterIds={localBattleSelectedFighterIds}
             config={localBattleConfig}
             background={battleBackground}
             displayEffects={battlePostEffects}
@@ -377,16 +390,6 @@ function Topbar(props: { view: View; onNavigate: (route: AppRoute) => void }) {
           title={t("nav.fightOptions")}
         >
           <Gamepad2 size={19} />
-        </a>
-        <a
-          className={props.view === "settings" ? "icon-button active" : "icon-button"}
-          href={appRouteToHref("settings")}
-          onClick={(event) => onRouteClick(event, "settings")}
-          aria-current={props.view === "settings" ? "page" : undefined}
-          aria-label={t("nav.settings")}
-          title={t("nav.settings")}
-        >
-          <Settings size={19} />
         </a>
       </nav>
     </header>

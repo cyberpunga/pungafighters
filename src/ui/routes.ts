@@ -1,4 +1,4 @@
-export type View = "menu" | "creator" | "fighterSelect" | "settings" | "online" | "battle";
+export type View = "menu" | "creator" | "fighterSelect" | "online" | "battle";
 
 export type AppRoute =
   | "menu"
@@ -6,7 +6,6 @@ export type AppRoute =
   | "localFighters"
   | "remoteHostFighter"
   | "remoteJoinFighter"
-  | "settings"
   | "onlineHost"
   | "onlineGuest"
   | "battle";
@@ -17,7 +16,6 @@ const ROUTE_PATHS: Record<AppRoute, string> = {
   localFighters: "/local/fighters",
   remoteHostFighter: "/remote/host/fighter",
   remoteJoinFighter: "/remote/join/fighter",
-  settings: "/settings",
   onlineHost: "/online/host",
   onlineGuest: "/online/join",
   battle: "/battle",
@@ -89,8 +87,6 @@ export function appRouteFromPathname(pathname: string, basePath = getAppBasePath
     case "/remote/join/fighter":
     case "/fight/remote/join/fighter":
       return "remoteJoinFighter";
-    case "/settings":
-      return "settings";
     case "/online/host":
       return "onlineHost";
     case "/online/join":
