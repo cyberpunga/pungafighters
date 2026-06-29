@@ -1,9 +1,18 @@
+import type { CSSProperties } from "react";
 import { SUPER_HITS_REQUIRED, type BattleState } from "../../game/simulation/battle";
 import type { LoadedFighter, PlayerSlot } from "../../types/game";
 import { useI18n } from "../../i18n/react";
 import { formatBattleMessage } from "./stageInput";
 
-export function BattleHudLayer(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; controlsHint: string; statusMessage?: string }) {
+export type BattleHudTheme = "dojo";
+
+export function BattleHudLayer(props: {
+  fighters: { p1: LoadedFighter; p2: LoadedFighter };
+  state: BattleState;
+  controlsHint: string;
+  statusMessage?: string;
+  theme?: BattleHudTheme;
+}) {
   const { t } = useI18n();
   const p1Runtime = props.state.fighters.p1;
   const p2Runtime = props.state.fighters.p2;
@@ -12,9 +21,9 @@ export function BattleHudLayer(props: { fighters: { p1: LoadedFighter; p2: Loade
   const seconds = Math.ceil(props.state.timer);
 
   return (
-    <div className="battle-hud-layer" aria-hidden="true">
+    <div className="battle-hud-layer" data-hud-theme={props.theme ?? "dojo"} aria-hidden="true">
       <FighterHudPanel
-        accent="p1"
+        accent="primary"
         health={clampRatio(p1Runtime.health / 100)}
         name={props.fighters.p1.name}
         roundsWon={p1Runtime.roundsWon}
@@ -29,7 +38,7 @@ export function BattleHudLayer(props: { fighters: { p1: LoadedFighter; p2: Loade
         <small>{hint}</small>
       </div>
       <FighterHudPanel
-        accent="p2"
+        accent="secondary"
         health={clampRatio(p2Runtime.health / 100)}
         name={props.fighters.p2.name}
         roundsWon={p2Runtime.roundsWon}
@@ -43,7 +52,7 @@ export function BattleHudLayer(props: { fighters: { p1: LoadedFighter; p2: Loade
 }
 
 function FighterHudPanel(props: {
-  accent: "p1" | "p2";
+  accent: BattleHudAccent;
   health: number;
   maxLabel: string;
   name: string;
@@ -53,7 +62,7 @@ function FighterHudPanel(props: {
   superReady: boolean;
 }) {
   return (
-    <div className={`battle-hud-fighter ${props.slot}`}>
+    <div className="battle-hud-fighter" data-slot={props.slot}>
       <div className="battle-hud-slot">
         <span>{props.slot.toUpperCase()}</span>
         <strong>{props.roundsWon}</strong>
@@ -70,10 +79,12 @@ function FighterHudPanel(props: {
   );
 }
 
-function ProgressBar(props: { accent: "p1" | "p2" | "super"; compact?: boolean; ratio: number }) {
+type BattleHudAccent = "primary" | "secondary" | "super";
+
+function ProgressBar(props: { accent: BattleHudAccent; compact?: boolean; ratio: number }) {
   return (
-    <div className={props.compact ? "battle-hud-progress compact" : "battle-hud-progress"}>
-      <div className={`battle-hud-progress-fill ${props.accent}`} style={{ width: `${Math.round(clampRatio(props.ratio) * 100)}%` }} />
+    <div className={props.compact ? "battle-hud-progress compact" : "battle-hud-progress"} data-accent={props.accent}>
+      <div className="battle-hud-progress-fill" style={{ "--battle-hud-fill-ratio": `${Math.round(clampRatio(props.ratio) * 100)}%` } as CSSProperties} />
     </div>
   );
 }

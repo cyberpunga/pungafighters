@@ -16,6 +16,20 @@
 }
 
 .battle-hud-layer {
+  --battle-hud-text: #f8f4df;
+  --battle-hud-muted: #b8b3a0;
+  --battle-hud-panel-bg: rgba(17, 16, 24, 0.42);
+  --battle-hud-panel-border: rgba(127, 103, 68, 0.58);
+  --battle-hud-panel-shadow: rgba(0, 0, 0, 0.28);
+  --battle-hud-slot-border: rgba(127, 103, 68, 0.78);
+  --battle-hud-track: #24222a;
+  --battle-hud-primary: #2ec4b6;
+  --battle-hud-secondary: #f45b69;
+  --battle-hud-super: #f7b267;
+  --battle-hud-message: var(--battle-hud-super);
+  --battle-hud-radius: 8px;
+  --battle-hud-progress-radius: 4px;
+
   position: absolute;
   top: 42px;
   left: 26px;
@@ -27,17 +41,30 @@
   justify-content: space-between;
   gap: 16px;
   pointer-events: none;
-  color: #f8f4df;
+  color: var(--battle-hud-text);
   font-weight: 900;
   letter-spacing: 0;
 }
 
+.battle-hud-layer[data-hud-theme="dojo"] {
+  --battle-hud-text: #f8f4df;
+  --battle-hud-muted: #b8b3a0;
+  --battle-hud-panel-bg: rgba(17, 16, 24, 0.42);
+  --battle-hud-panel-border: rgba(127, 103, 68, 0.58);
+  --battle-hud-panel-shadow: rgba(0, 0, 0, 0.28);
+  --battle-hud-slot-border: rgba(127, 103, 68, 0.78);
+  --battle-hud-track: #24222a;
+  --battle-hud-primary: #2ec4b6;
+  --battle-hud-secondary: #f45b69;
+  --battle-hud-super: #f7b267;
+}
+
 .battle-hud-fighter,
 .battle-hud-center {
-  border: 2px solid rgba(127, 103, 68, 0.58);
-  border-radius: 8px;
-  background: rgba(17, 16, 24, 0.42);
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+  border: 2px solid var(--battle-hud-panel-border);
+  border-radius: var(--battle-hud-radius);
+  background: var(--battle-hud-panel-bg);
+  box-shadow: 0 10px 34px var(--battle-hud-panel-shadow);
 }
 
 .battle-hud-fighter {
@@ -50,15 +77,15 @@
   padding: 14px 16px;
 }
 
-.battle-hud-fighter.p2 {
+.battle-hud-fighter[data-slot="p2"] {
   grid-template-columns: minmax(0, 1fr) 58px;
 }
 
-.battle-hud-fighter.p2 .battle-hud-slot {
+.battle-hud-fighter[data-slot="p2"] .battle-hud-slot {
   order: 2;
 }
 
-.battle-hud-fighter.p2 .battle-hud-bars {
+.battle-hud-fighter[data-slot="p2"] .battle-hud-bars {
   align-items: flex-end;
   text-align: right;
 }
@@ -68,18 +95,18 @@
   place-items: center;
   width: 58px;
   height: 58px;
-  border: 1px solid rgba(127, 103, 68, 0.78);
-  border-radius: 8px;
+  border: 1px solid var(--battle-hud-slot-border);
+  border-radius: var(--battle-hud-radius);
 }
 
 .battle-hud-slot span {
-  color: #f7b267;
+  color: var(--battle-hud-super);
   font-size: 14px;
   line-height: 16px;
 }
 
 .battle-hud-slot strong {
-  color: #f8f4df;
+  color: var(--battle-hud-text);
   font-size: 22px;
   line-height: 24px;
 }
@@ -105,8 +132,8 @@
   width: 100%;
   height: 22px;
   overflow: hidden;
-  border-radius: 4px;
-  background: #24222a;
+  border-radius: var(--battle-hud-progress-radius);
+  background: var(--battle-hud-track);
 }
 
 .battle-hud-progress.compact {
@@ -115,19 +142,20 @@
 }
 
 .battle-hud-progress-fill {
+  width: var(--battle-hud-fill-ratio, 0%);
   height: 100%;
 }
 
-.battle-hud-progress-fill.p1 {
-  background: #2ec4b6;
+.battle-hud-progress[data-accent="primary"] .battle-hud-progress-fill {
+  background: var(--battle-hud-primary);
 }
 
-.battle-hud-progress-fill.p2 {
-  background: #f45b69;
+.battle-hud-progress[data-accent="secondary"] .battle-hud-progress-fill {
+  background: var(--battle-hud-secondary);
 }
 
-.battle-hud-progress-fill.super {
-  background: #f7b267;
+.battle-hud-progress[data-accent="super"] .battle-hud-progress-fill {
+  background: var(--battle-hud-super);
 }
 
 .battle-hud-super-row {
@@ -137,12 +165,12 @@
   width: 100%;
 }
 
-.battle-hud-fighter.p2 .battle-hud-super-row {
+.battle-hud-fighter[data-slot="p2"] .battle-hud-super-row {
   justify-content: flex-end;
 }
 
 .battle-hud-super-row span {
-  color: #f7b267;
+  color: var(--battle-hud-super);
   font-size: 15px;
   line-height: 18px;
 }
@@ -157,7 +185,7 @@
 }
 
 .battle-hud-center strong {
-  color: #f8f4df;
+  color: var(--battle-hud-text);
   font-size: 58px;
   line-height: 60px;
 }
@@ -165,7 +193,7 @@
 .battle-hud-center span {
   overflow: hidden;
   max-width: 100%;
-  color: #f7b267;
+  color: var(--battle-hud-message);
   font-size: 17px;
   line-height: 19px;
   text-overflow: ellipsis;
@@ -176,7 +204,7 @@
   display: -webkit-box;
   overflow: hidden;
   max-width: 100%;
-  color: #b8b3a0;
+  color: var(--battle-hud-muted);
   font-size: 10px;
   line-height: 12px;
   -webkit-box-orient: vertical;
@@ -223,7 +251,7 @@
     padding: 6px;
   }
 
-  .battle-hud-fighter.p2 {
+  .battle-hud-fighter[data-slot="p2"] {
     grid-template-columns: minmax(0, 1fr) 34px;
   }
 
