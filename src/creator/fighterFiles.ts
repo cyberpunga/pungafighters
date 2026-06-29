@@ -10,11 +10,7 @@ export const SPRITESHEET_IMPORT_ACCEPT = FIGHTER_IMAGE_IMPORT_ACCEPT;
 
 const CHARACTER_FILE_FORMAT = "punga-fighters.character";
 const CHARACTER_FILE_VERSION = 2;
-const SPRITESHEET_ALPHA_THRESHOLD = 12;
-const SPRITESHEET_COMPONENT_MIN_PIXELS = 80;
-const SPRITESHEET_COMPONENT_MIN_AREA_RATIO = 0.00025;
-const SPRITESHEET_COMPONENT_PADDING_RATIO = 0.08;
-const SPRITESHEET_EXPECTED_COMPONENTS = FIGHTER_SPRITES.length;
+const SPRITESHEET_ASPECT_TOLERANCE = 0.08;
 
 interface CharacterFileFrame {
   pose: FighterPose;
@@ -182,33 +178,19 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
   }
   const image = await decodeImageBlob(file, new AppError("error.spritesheetRead"));
   try {
-    const keyedSheetCanvas = chromaKeyGreenCanvas(image.source);
-    const componentCanvases = extractSpritesheetComponentCanvases(keyedSheetCanvas);
-    if (componentCanvases.length >= FIGHTER_SPRITES.length) {
-      const pairs = await Promise.all(
-        FIGHTER_SPRITES.map(async (spriteId, index) => {
-          const sourceCanvas = componentCanvases[index];
-          const sourceBlob = await canvasToPngBlob(sourceCanvas);
-          const normalized = normalizeCanvas(sourceCanvas, { paddingScale: 1, anchorY: 0.9 });
-          return [spriteId, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
-        }),
-      );
-      return buildSpritesheetAssets(file, pairs);
+    if (!isHorizontalFullSpritesheet(image.width, image.height)) {
+      throw new AppError("error.spritesheetLayout");
     }
 
-    const horizontal = image.width >= image.height;
-    const inferredCells = getSpritesheetCellIds(image.width, image.height, horizontal);
-    const columns = horizontal ? inferredCells.length : 1;
-    const rows = horizontal ? 1 : inferredCells.length;
-    const cellWidth = image.width / columns;
-    const cellHeight = image.height / rows;
+    const cellWidth = image.width / FIGHTER_SPRITES.length;
+    const cellHeight = image.height;
 
-    if (cellWidth < 8 || cellHeight < 8) {
+    if (cellWidth < 8 || cellHeight < 8 || Math.abs(cellWidth - cellHeight) > Math.max(2, cellHeight * SPRITESHEET_ASPECT_TOLERANCE)) {
       throw new AppError("error.spritesheetSmall");
     }
 
     const pairs = await Promise.all(
-      inferredCells.map(async (cellId, index) => {
+      FIGHTER_SPRITES.map(async (spriteId, index) => {
         const cellCanvas = document.createElement("canvas");
         cellCanvas.width = Math.round(cellWidth);
         cellCanvas.height = Math.round(cellHeight);
@@ -216,14 +198,14 @@ export async function readSpritesheetDraftFile(file: File): Promise<ImportedSpri
         if (!ctx) {
           throw new AppError("error.spritesheetRead");
         }
-        const sx = (index % columns) * cellWidth;
-        const sy = Math.floor(index / columns) * cellHeight;
+        const sx = index * cellWidth;
+        const sy = 0;
         ctx.drawImage(image.source, sx, sy, cellWidth, cellHeight, 0, 0, cellCanvas.width, cellCanvas.height);
 
         const keyedCanvas = chromaKeyGreenCanvas(cellCanvas);
         const sourceBlob = await canvasToPngBlob(keyedCanvas);
         const normalized = normalizeCanvas(keyedCanvas, { paddingScale: 1, anchorY: 0.9 });
-        return [cellId, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
+        return [spriteId, { sourceBlob, frameBlob: await canvasToPngBlob(normalized) }] as const;
       }),
     );
 
@@ -265,164 +247,10 @@ function buildSpritesheetAssets(
   };
 }
 
-function extractSpritesheetComponentCanvases(canvas: HTMLCanvasElement): HTMLCanvasElement[] {
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) {
-    return [];
-  }
-
-  let imageData: ImageData;
-  try {
-    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  } catch {
-    return [];
-  }
-
-  const boxes = sortBoxesByReadingOrder(mergeNearbyComponents(findForegroundComponents(imageData), SPRITESHEET_EXPECTED_COMPONENTS));
-  return boxes.slice(0, FIGHTER_SPRITES.length).map((box) => cropCanvasToBox(canvas, box));
-}
-
-function findForegroundComponents(imageData: ImageData) {
-  const { width, height, data } = imageData;
-  const visited = new Uint8Array(width * height);
-  const minPixels = Math.max(SPRITESHEET_COMPONENT_MIN_PIXELS, Math.floor(width * height * SPRITESHEET_COMPONENT_MIN_AREA_RATIO));
-  const boxes: Array<{ left: number; right: number; top: number; bottom: number; pixels: number }> = [];
-
-  for (let start = 0; start < visited.length; start += 1) {
-    if (visited[start] || data[start * 4 + 3] <= SPRITESHEET_ALPHA_THRESHOLD) {
-      continue;
-    }
-
-    const stack = [start];
-    visited[start] = 1;
-    let left = width;
-    let right = -1;
-    let top = height;
-    let bottom = -1;
-    let pixels = 0;
-
-    while (stack.length) {
-      const pixel = stack.pop()!;
-      const x = pixel % width;
-      const y = Math.floor(pixel / width);
-      left = Math.min(left, x);
-      right = Math.max(right, x);
-      top = Math.min(top, y);
-      bottom = Math.max(bottom, y);
-      pixels += 1;
-
-      visitNeighbor(pixel - 1, x > 0);
-      visitNeighbor(pixel + 1, x < width - 1);
-      visitNeighbor(pixel - width, y > 0);
-      visitNeighbor(pixel + width, y < height - 1);
-    }
-
-    if (pixels >= minPixels) {
-      boxes.push({ left, right, top, bottom, pixels });
-    }
-
-    function visitNeighbor(next: number, inBounds: boolean) {
-      if (!inBounds || visited[next] || data[next * 4 + 3] <= SPRITESHEET_ALPHA_THRESHOLD) {
-        return;
-      }
-      visited[next] = 1;
-      stack.push(next);
-    }
-  }
-
-  return boxes;
-}
-
-function mergeNearbyComponents(
-  boxes: Array<{ left: number; right: number; top: number; bottom: number; pixels: number }>,
-  targetCount: number,
-) {
-  const merged = boxes.map((box) => ({ ...box }));
-  while (merged.length > targetCount) {
-    let bestPair: [number, number] | undefined;
-    let bestDistance = Infinity;
-    for (let a = 0; a < merged.length; a += 1) {
-      for (let b = a + 1; b < merged.length; b += 1) {
-        const distance = boxGapDistance(merged[a], merged[b]);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestPair = [a, b];
-        }
-      }
-    }
-    if (!bestPair) {
-      break;
-    }
-    const [a, b] = bestPair;
-    merged[a] = unionBoxes(merged[a], merged[b]);
-    merged.splice(b, 1);
-  }
-  return merged;
-}
-
-function boxGapDistance(
-  a: { left: number; right: number; top: number; bottom: number },
-  b: { left: number; right: number; top: number; bottom: number },
-) {
-  const gapX = Math.max(0, Math.max(a.left, b.left) - Math.min(a.right, b.right));
-  const gapY = Math.max(0, Math.max(a.top, b.top) - Math.min(a.bottom, b.bottom));
-  return Math.hypot(gapX, gapY);
-}
-
-function unionBoxes(
-  a: { left: number; right: number; top: number; bottom: number; pixels: number },
-  b: { left: number; right: number; top: number; bottom: number; pixels: number },
-) {
-  return {
-    left: Math.min(a.left, b.left),
-    right: Math.max(a.right, b.right),
-    top: Math.min(a.top, b.top),
-    bottom: Math.max(a.bottom, b.bottom),
-    pixels: a.pixels + b.pixels,
-  };
-}
-
-function sortBoxesByReadingOrder(boxes: Array<{ left: number; right: number; top: number; bottom: number }>) {
-  const sorted = [...boxes].sort((a, b) => a.top - b.top);
-  const rows: Array<Array<{ left: number; right: number; top: number; bottom: number }>> = [];
-
-  sorted.forEach((box) => {
-    const centerY = (box.top + box.bottom) / 2;
-    const height = box.bottom - box.top + 1;
-    const row = rows.find((candidate) => {
-      const rowTop = Math.min(...candidate.map((item) => item.top));
-      const rowBottom = Math.max(...candidate.map((item) => item.bottom));
-      const rowCenterY = (rowTop + rowBottom) / 2;
-      const rowHeight = rowBottom - rowTop + 1;
-      return Math.abs(centerY - rowCenterY) <= Math.max(18, Math.min(height, rowHeight) * 0.7);
-    });
-    if (row) {
-      row.push(box);
-    } else {
-      rows.push([box]);
-    }
-  });
-
-  return rows.flatMap((row) => row.sort((a, b) => a.left - b.left));
-}
-
-function cropCanvasToBox(
-  source: HTMLCanvasElement,
-  box: { left: number; right: number; top: number; bottom: number },
-): HTMLCanvasElement {
-  const boxWidth = box.right - box.left + 1;
-  const boxHeight = box.bottom - box.top + 1;
-  const padding = Math.round(Math.max(boxWidth, boxHeight) * SPRITESHEET_COMPONENT_PADDING_RATIO);
-  const left = Math.max(0, box.left - padding);
-  const top = Math.max(0, box.top - padding);
-  const right = Math.min(source.width, box.right + 1 + padding);
-  const bottom = Math.min(source.height, box.bottom + 1 + padding);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, right - left);
-  canvas.height = Math.max(1, bottom - top);
-  const ctx = canvas.getContext("2d");
-  ctx?.drawImage(source, left, top, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-  return canvas;
+function isHorizontalFullSpritesheet(width: number, height: number) {
+  const expectedRatio = FIGHTER_SPRITES.length;
+  const ratio = width / Math.max(1, height);
+  return width > height && Math.abs(ratio - expectedRatio) <= expectedRatio * SPRITESHEET_ASPECT_TOLERANCE;
 }
 
 function getFighterExportFilename(fighter: LoadedFighter) {
@@ -498,13 +326,6 @@ function getCharacterPayload(value: unknown): CharacterFilePayload | undefined {
   }
 
   return isCharacterPayload(value) ? value : undefined;
-}
-
-function getSpritesheetCellIds(width: number, height: number, horizontal: boolean): readonly (FighterPose | FighterSpriteId)[] {
-  const major = horizontal ? width : height;
-  const minor = horizontal ? height : width;
-  const ratio = major / Math.max(1, minor);
-  return ratio > 8 ? FIGHTER_SPRITES : FIGHTER_POSES;
 }
 
 function isFullSpriteSheet(cells: readonly (FighterPose | FighterSpriteId)[]): cells is readonly FighterSpriteId[] {

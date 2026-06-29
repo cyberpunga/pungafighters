@@ -9,6 +9,7 @@ export interface Env {
 
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
+const DEFAULT_STRIP_ASPECT_RATIO = "13:1";
 const MAX_REFERENCE_IMAGES = 14;
 const MAX_REFERENCE_IMAGE_BYTES = 12 * 1024 * 1024;
 const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
@@ -265,13 +266,13 @@ function buildCharacterSpritesheetPrompt(userPrompt: unknown, referenceImageCoun
     ? "Character: use the same character from the provided reference image(s)."
     : "Character: create an original fighter.";
 
-  return `Create a single 13-cell spritesheet for a fighting-game character.
+  return `Create a single horizontal 13-cell spritesheet for a fighting-game character.
 
-Canvas: PNG. Prefer a 13:1 horizontal strip. If you cannot make a horizontal strip, use a compact row-major grid instead. Use a fully opaque solid chroma key green background (#00ff00) across the whole image and as clear gutters between cells. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background. Each cell is an equal square frame.
+Canvas: PNG, exactly 13:1 aspect ratio. The image must be one row of 13 equal square cells, no second row, no grid layout, no collage layout, no extra cells. Use a fully opaque solid chroma key green background (#00ff00) across the whole image and as clear gutters between cells. Do not use transparency, alpha, white, gradients, shadows, scenery, props, labels, text, borders, or grid lines in the background.
 
 ${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Keep the exact same character identity, design, outfit, colors, scale, medium, rendering style, lighting, and camera angle in every cell. Center the character in each cell with feet aligned near the bottom and leave safe padding around the body.
 ${userDirection}${referenceDirection}
-Pose order in reading order, left-to-right within each row and top-to-bottom across rows:
+Pose order by fixed horizontal cell index from left to right:
 
 1. idle stance, frame A
 2. idle stance, frame B with a subtle breathing/weight-shift variation
@@ -287,7 +288,7 @@ Pose order in reading order, left-to-right within each row and top-to-bottom acr
 12. victory pose, frame A
 13. victory pose, frame B with a subtle celebratory variation
 
-Format compatibility: include exactly ${FIGHTER_SPRITES.length} separate full-body character cutouts, one per cell, in the pose order above. Keep the cells separated by visible chroma green gutters so each cutout can be detected as its own isolated foreground object. Keep every limb, prop, and effect inside its own cell. Keep the feet on a consistent baseline within each row. The walk frames must loop cleanly and keep the body centered enough that the character does not drift inside the cell.
+Format compatibility: include exactly ${FIGHTER_SPRITES.length} separate full-body character cutouts, one per square cell, in the pose order above. The app will crop the result into 13 equal vertical slices, so each slice must contain exactly one complete character pose. Keep every limb, prop, and effect inside its own cell. Keep the feet on one shared baseline across the strip. The walk frames must loop cleanly and keep the body centered enough that the character does not drift inside the cell.
 
 Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }
@@ -397,7 +398,9 @@ function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env, mode
     responseModalities: ["Image"],
   };
 
-  const aspectRatio = getOptionalString(payload.aspectRatio) || (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim());
+  const aspectRatio =
+    getOptionalString(payload.aspectRatio) ||
+    (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim() || DEFAULT_STRIP_ASPECT_RATIO);
   const imageSize = getOptionalString(payload.imageSize) || env.GEMINI_IMAGE_SIZE?.trim();
   if (aspectRatio || imageSize) {
     generationConfig.responseFormat = {

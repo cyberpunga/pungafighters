@@ -54,6 +54,7 @@
 - Keep creator generation photo/reference-centered. Do not add prompt-only or free-text prompt creator flows unless explicitly requested.
 - Keep saved character import in the creator/editor flow so imported fighters load as editable drafts before saving.
 - Keep creator image acquisition separate from cutout processing: captured, per-action imported, and spritesheet-split source images should be saveable as normalized frames, with processing as an optional per-action or all-action step.
+- Keep spritesheet imports deterministic: generated/imported animation sheets must be a single horizontal 13-cell strip in `FIGHTER_SPRITES` order. Do not infer arbitrary grids or component-detected layouts for gameplay/animation mapping.
 - Keep generated animation sprites visual-only. Do not use walk/idle/punch windup texture frames as source-of-truth combat state or hit detection.
 - Keep segmentation browser-side unless the user explicitly chooses a cloud/provider architecture.
 - Add future cutout engines through the provider registry instead of wiring model-specific code into React views.
