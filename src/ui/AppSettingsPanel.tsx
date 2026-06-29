@@ -85,12 +85,14 @@ const EFFECT_CONTROL_KEYS = {
 } as const;
 
 export function AppSettingsPanel(props: {
+  battleActive?: boolean;
   battlePostEffectSettings: BattlePostEffectSettings;
   onBattlePostEffectSettingsChange: (settings: BattlePostEffectSettings) => void;
 }) {
   const { preference, setPreference, t } = useI18n();
   const settingsStore = useCreateStore();
   const [settingsCollapsed, setSettingsCollapsed] = useState(true);
+  const [compactViewport, setCompactViewport] = useState(() => (typeof window === "undefined" ? false : window.matchMedia("(max-width: 640px)").matches));
   const settingsRef = useRef(props.battlePostEffectSettings);
   const syncingLevaRef = useRef(false);
   const settings = props.battlePostEffectSettings;
@@ -98,6 +100,14 @@ export function AppSettingsPanel(props: {
   useEffect(() => {
     settingsRef.current = props.battlePostEffectSettings;
   }, [props.battlePostEffectSettings]);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 640px)");
+    const update = () => setCompactViewport(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
 
   const updateSettings = (next: BattlePostEffectSettings) => {
     settingsRef.current = next;
@@ -257,7 +267,7 @@ export function AppSettingsPanel(props: {
       hideCopyButton
       oneLineLabels
       store={settingsStore}
-      titleBar={{ title: t("settings.title"), filter: false }}
+      titleBar={{ title: t("settings.title"), filter: false, position: props.battleActive && compactViewport ? { x: 0, y: 90 } : undefined }}
     />
   );
 }

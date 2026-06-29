@@ -15,6 +15,174 @@
   display: block;
 }
 
+.battle-hud-layer {
+  position: absolute;
+  top: 42px;
+  left: 26px;
+  right: 26px;
+  z-index: 12;
+  display: grid;
+  grid-template-columns: minmax(260px, 430px) 160px minmax(260px, 430px);
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+  color: #f8f4df;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.battle-hud-fighter,
+.battle-hud-center {
+  border: 2px solid rgba(127, 103, 68, 0.58);
+  border-radius: 8px;
+  background: rgba(17, 16, 24, 0.42);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.28);
+}
+
+.battle-hud-fighter {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  height: 118px;
+  padding: 14px 16px;
+}
+
+.battle-hud-fighter.p2 {
+  grid-template-columns: minmax(0, 1fr) 58px;
+}
+
+.battle-hud-fighter.p2 .battle-hud-slot {
+  order: 2;
+}
+
+.battle-hud-fighter.p2 .battle-hud-bars {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.battle-hud-slot {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border: 1px solid rgba(127, 103, 68, 0.78);
+  border-radius: 8px;
+}
+
+.battle-hud-slot span {
+  color: #f7b267;
+  font-size: 14px;
+  line-height: 16px;
+}
+
+.battle-hud-slot strong {
+  color: #f8f4df;
+  font-size: 22px;
+  line-height: 24px;
+}
+
+.battle-hud-bars {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.battle-hud-name {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 24px;
+  line-height: 28px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-hud-progress {
+  width: 100%;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #24222a;
+}
+
+.battle-hud-progress.compact {
+  width: 72%;
+  height: 12px;
+}
+
+.battle-hud-progress-fill {
+  height: 100%;
+}
+
+.battle-hud-progress-fill.p1 {
+  background: #2ec4b6;
+}
+
+.battle-hud-progress-fill.p2 {
+  background: #f45b69;
+}
+
+.battle-hud-progress-fill.super {
+  background: #f7b267;
+}
+
+.battle-hud-super-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.battle-hud-fighter.p2 .battle-hud-super-row {
+  justify-content: flex-end;
+}
+
+.battle-hud-super-row span {
+  color: #f7b267;
+  font-size: 15px;
+  line-height: 18px;
+}
+
+.battle-hud-center {
+  display: grid;
+  justify-items: center;
+  width: 160px;
+  height: 132px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.battle-hud-center strong {
+  color: #f8f4df;
+  font-size: 58px;
+  line-height: 60px;
+}
+
+.battle-hud-center span {
+  overflow: hidden;
+  max-width: 100%;
+  color: #f7b267;
+  font-size: 17px;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-hud-center small {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  color: #b8b3a0;
+  font-size: 10px;
+  line-height: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .battle-stage-loading {
   height: 100%;
   display: grid;
@@ -37,4 +205,76 @@
 
 .battle-canvas-host canvas {
   display: block;
+}
+
+@media (max-width: 640px) {
+  .battle-hud-layer {
+    top: 22px;
+    left: 8px;
+    right: 8px;
+    grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .battle-hud-fighter {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 6px;
+    height: 74px;
+    padding: 6px;
+  }
+
+  .battle-hud-fighter.p2 {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .battle-hud-slot {
+    width: 34px;
+    height: 34px;
+  }
+
+  .battle-hud-slot span {
+    display: none;
+  }
+
+  .battle-hud-slot strong {
+    display: none;
+  }
+
+  .battle-hud-name {
+    display: none;
+  }
+
+  .battle-hud-bars {
+    gap: 8px;
+    padding-top: 0;
+  }
+
+  .battle-hud-progress {
+    height: 9px;
+  }
+
+  .battle-hud-progress.compact {
+    width: 72%;
+    height: 5px;
+  }
+
+  .battle-hud-super-row span {
+    display: none;
+  }
+
+  .battle-hud-center {
+    width: 74px;
+    height: 64px;
+    padding: 5px;
+  }
+
+  .battle-hud-center strong {
+    font-size: 24px;
+    line-height: 26px;
+  }
+
+  .battle-hud-center span,
+  .battle-hud-center small {
+    display: none;
+  }
 }

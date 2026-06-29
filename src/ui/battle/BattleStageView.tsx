@@ -181,7 +181,6 @@ export function BattleStageView(props: {
                   syncError: t("battle.syncError"),
                   syncingFrame: (frame) => t("battle.syncingFrame", { frame }),
                 }}
-                controlsHint={controlsHint}
                 onRemoteRestart={() => restartBattle(false)}
               />
             </Suspense>
@@ -190,6 +189,7 @@ export function BattleStageView(props: {
           <div className="battle-stage-loading">{props.loading ? t("common.loading") : t("battleStage.noFighters")}</div>
         )}
       </div>
+      {fighters && battleState && <BattleHudLayer fighters={fighters} state={battleState} controlsHint={controlsHint} statusMessage={haltedMessage ?? onlineStatus} />}
 
       <div className="sr-only">
         <p className="eyebrow">{t("battleStage.eyebrow")}</p>
@@ -223,7 +223,6 @@ function PlayableStage(props: {
     syncError: string;
     syncingFrame: (frame: number) => string;
   };
-  controlsHint: string;
   onRemoteRestart: () => void;
 }) {
   const accumulatorRef = useRef(0);
@@ -354,7 +353,6 @@ function PlayableStage(props: {
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
       <HitSplashLayer splashes={hitSplashes} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
-      <BattleHudLayer fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <CameraRig state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
       <ContactShadows position={[0, 0.025, STAGE_Z]} opacity={0.38} blur={2.4} scale={7} far={4} resolution={1024} />
