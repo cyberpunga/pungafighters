@@ -363,7 +363,7 @@ function PlayableStage(props: {
       {props.collisionDebug && <CollisionDebugOverlay state={props.battleState} />}
       <HitSplashLayer splashes={hitSplashes} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
-      <CameraRig lensSettings={props.displayEffectSettings.effects.lens} state={props.battleState} />
+      <CameraRig lensSettings={props.displayEffectSettings.effects.lens} localSlot={props.localSlot} state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
       <ContactShadows position={[0, 0.025, STAGE_Z]} opacity={0.38} blur={2.4} scale={7} far={4} resolution={1024} />
     </>
@@ -956,7 +956,7 @@ function SuperStageMoment(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
   );
 }
 
-function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; state: BattleState }) {
+function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; localSlot: PlayerSlot; state: BattleState }) {
   const { camera } = useThree();
   const cameraBaseRef = useRef({ x: 0, y: 2.35, z: 6.4, fov: 39, lookX: 0, lookY: 1.05, lookZ: 0 });
   const shakeRef = useRef(0);
@@ -982,13 +982,17 @@ function CameraRig(props: { lensSettings: BattlePostEffectConfigMap["lens"]; sta
     const p2X = mapBattleX(props.state.fighters.p2.x, props.state.arenaWidth);
     const p1Z = mapBattleZ(props.state.fighters.p1.z, props.state.arenaDepth);
     const p2Z = mapBattleZ(props.state.fighters.p2.z, props.state.arenaDepth);
+    const localX = props.localSlot === "p1" ? p1X : p2X;
+    const localZ = props.localSlot === "p1" ? p1Z : p2Z;
     const midpointX = (p1X + p2X) / 2;
     const midpointZ = (p1Z + p2Z) / 2;
     const distance = Math.abs(p2X - p1X);
     const spread = clamp((distance - CAMERA_CLOSE_DISTANCE) / (CAMERA_FAR_DISTANCE - CAMERA_CLOSE_DISTANCE), 0, 1);
-    const targetX = clamp(midpointX * 0.42, -0.72, 0.72);
-    const targetLookX = clamp(midpointX * 0.32, -0.58, 0.58);
-    const targetLookZ = clamp(midpointZ * 0.22, -0.28, 0.28);
+    const followX = localX * 0.58 + midpointX * 0.24;
+    const followZ = localZ * 0.48 + midpointZ * 0.18;
+    const targetX = clamp(followX, -2.15, 2.15);
+    const targetLookX = clamp(followX * 0.82, -1.65, 1.65);
+    const targetLookZ = clamp(followZ, -0.42, 0.42);
     const targetY = 2.22 + spread * 0.34;
     const targetLookY = 1.08 + spread * 0.08;
     const targetZ = CAMERA_NEAR_Z + (CAMERA_FAR_Z - CAMERA_NEAR_Z) * spread;
