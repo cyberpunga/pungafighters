@@ -225,7 +225,9 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <AppSettingsPanel battlePostEffectSettings={battlePostEffectSettings} onBattlePostEffectSettingsChange={updateBattlePostEffectSettings} />
+      {view !== "battle" && (
+        <AppSettingsPanel battlePostEffectSettings={battlePostEffectSettings} onBattlePostEffectSettingsChange={updateBattlePostEffectSettings} />
+      )}
       {view !== "battle" && <Topbar view={view} onNavigate={navigate} />}
 
       {view === "menu" && (

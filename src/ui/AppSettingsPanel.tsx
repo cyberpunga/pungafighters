@@ -90,7 +90,7 @@ export function AppSettingsPanel(props: {
 }) {
   const { preference, setPreference, t } = useI18n();
   const settingsStore = useCreateStore();
-  const [settingsCollapsed, setSettingsCollapsed] = useState(false);
+  const [settingsCollapsed, setSettingsCollapsed] = useState(true);
   const settingsRef = useRef(props.battlePostEffectSettings);
   const syncingLevaRef = useRef(false);
   const settings = props.battlePostEffectSettings;

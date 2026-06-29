@@ -26,6 +26,9 @@ importers:
       '@react-three/rapier':
         specifier: ^1.5.0
         version: 1.5.0(@react-three/fiber@8.18.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.184.0))(react@18.3.1)(three@0.184.0)
+      '@react-three/uikit':
+        specifier: ^1.0.74
+        version: 1.0.74(@react-three/fiber@8.18.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.184.0))(@types/react@18.3.28)(react@18.3.1)(three@0.184.0)(use-sync-external-store@1.6.0(react@18.3.1))
       idb:
         specifier: ^8.0.2
         version: 8.0.3
@@ -513,6 +516,23 @@ packages:
     peerDependencies:
       three: '>= 0.159.0'
 
+  '@pmndrs/msdfonts@1.0.74':
+    resolution: {integrity: sha512-cRMUq0RhvszDe4JfEZ8O8ZnZfZc0PsuiiMvwSb7CvFAQ156riCr1AueBvf4NEvLXHvBO7ZEMmgdODLSdEgg/HA==}
+
+  '@pmndrs/pointer-events@6.6.30':
+    resolution: {integrity: sha512-YD2jWdgEqqAWJNOOZ1WZMunUby8jwuQyOMk8zbeqC39R4nkZnGvu1Pa5EMGbV1zd2vZTxXDxYcAVxtQuhVwf3g==}
+
+  '@pmndrs/uikit-pub-sub@1.0.74':
+    resolution: {integrity: sha512-piiYQX/hjuXzTwBAjGbWqycEZsMFlsCKxoczs6G7M7kPWWmfLuFf9woOXHLtW5x6cnJJ19YrNuaQDtzG3SXj3Q==}
+
+  '@pmndrs/uikit@1.0.74':
+    resolution: {integrity: sha512-GF7Uwqile6UnbXQPXpbB9hkDSXJA2d0P3Vv33kLom4Q57JqCPoGGsjy4CzjsZlZwXb1riIUpu5CN5xnBtpPkmQ==}
+    peerDependencies:
+      three: '>=0.162'
+
+  '@preact/signals-core@1.14.3':
+    resolution: {integrity: sha512-m0K3vnbSLC5rHs2ZVfeAMvBtT1zIyq4mxx5OlNncSgMj5Iz6W5Rn3kPrDxAC+iIKmiVe0lSl6U37t5ZkEWoVAw==}
+
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
 
@@ -830,6 +850,12 @@ packages:
       react: '>=18.0.0'
       three: '>=0.139.0'
 
+  '@react-three/uikit@1.0.74':
+    resolution: {integrity: sha512-OCprhz7S+Io2CV7iotxLA1vpU9OeJeOy5kxOXZ/G9pmWYo7FfMoy/9BRWUaMR0mhcXbi1IOkyPRF5Ndae6Yywg==}
+    peerDependencies:
+      '@react-three/fiber': '>=8'
+      react: '>=18'
+
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
 
@@ -1070,6 +1096,10 @@ packages:
   '@vitest/utils@4.1.6':
     resolution: {integrity: sha512-FxIY+U81R3LGKCxaHHFRQ5+g6/iRgGLmeHWdp2Amj4ljQRrEIWHmZyDfDYBRZlpyqA7qKxtS9DD1dhk8RnRIVQ==}
 
+  '@zappar/msdf-generator@1.2.4':
+    resolution: {integrity: sha512-6S/MCk0Ky0ipewZJw4xFEzH/2aYfWmPXEkTdBtNyDDfkbicrNwgJgtxZ4SnTDyNe9XHMqDA4sL9srRsgDLRMqA==}
+    engines: {node: '>=18'}
+
   adm-zip@0.5.17:
     resolution: {integrity: sha512-+Ut8d9LLqwEvHHJl1+PIHqoyDxFgVN847JTVM3Izi3xHDWPE4UtzzXysMZQs64DMcrJfBeS/uoEP4AD3HQHnQQ==}
     engines: {node: '>=12.0'}
@@ -1123,6 +1153,9 @@ packages:
 
   colord@2.9.3:
     resolution: {integrity: sha512-jeC1axXpnb0/2nn/Y1LPuLdgXBLH7aDcHu4KEKfqw3CUhX7ZpfBSlPKyqXE6btIgEzfWtrX3/tyBCaCvXvMkOw==}
+
+  comlink@4.4.2:
+    resolution: {integrity: sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g==}
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
@@ -1783,6 +1816,12 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yoga-layout@3.2.1:
+    resolution: {integrity: sha512-0LPOt3AxKqMdFBZA3HBAt/t/8vIKq7VaQYbuA8WxCgung+p9TVyKRYdpvCb80HcdTN2NkbIKbhNwKUfm3tQywQ==}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
   zustand@3.7.2:
     resolution: {integrity: sha512-PIJDIZKtokhof+9+60cpockVOq05sJzHCriyvaLBmEJixseQ1a5Kdov6fWZfWOu5SK9c+FhH1jU0tntLxRJYMA==}
     engines: {node: '>=12.7.0'}
@@ -2181,6 +2220,26 @@ snapshots:
       promise-worker-transferable: 1.0.4
       three: 0.184.0
 
+  '@pmndrs/msdfonts@1.0.74': {}
+
+  '@pmndrs/pointer-events@6.6.30': {}
+
+  '@pmndrs/uikit-pub-sub@1.0.74':
+    dependencies:
+      '@preact/signals-core': 1.14.3
+
+  '@pmndrs/uikit@1.0.74(three@0.184.0)':
+    dependencies:
+      '@pmndrs/msdfonts': 1.0.74
+      '@pmndrs/uikit-pub-sub': 1.0.74
+      '@preact/signals-core': 1.14.3
+      '@zappar/msdf-generator': 1.2.4
+      three: 0.184.0
+      yoga-layout: 3.2.1
+      zod: 4.4.3
+
+  '@preact/signals-core@1.14.3': {}
+
   '@protobufjs/aspromise@1.1.2': {}
 
   '@protobufjs/base64@1.1.2': {}
@@ -2489,6 +2548,21 @@ snapshots:
       three: 0.184.0
       three-stdlib: 2.36.1(three@0.184.0)
 
+  '@react-three/uikit@1.0.74(@react-three/fiber@8.18.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.184.0))(@types/react@18.3.28)(react@18.3.1)(three@0.184.0)(use-sync-external-store@1.6.0(react@18.3.1))':
+    dependencies:
+      '@pmndrs/pointer-events': 6.6.30
+      '@pmndrs/uikit': 1.0.74(three@0.184.0)
+      '@preact/signals-core': 1.14.3
+      '@react-three/fiber': 8.18.0(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(three@0.184.0)
+      react: 18.3.1
+      suspend-react: 0.1.3(react@18.3.1)
+      zustand: 5.0.14(@types/react@18.3.28)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - three
+      - use-sync-external-store
+
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
   '@rollup/rollup-android-arm-eabi@4.60.3':
@@ -2704,6 +2778,10 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@zappar/msdf-generator@1.2.4':
+    dependencies:
+      comlink: 4.4.2
+
   adm-zip@0.5.17: {}
 
   assertion-error@2.0.1: {}
@@ -2744,6 +2822,8 @@ snapshots:
   chai@6.2.2: {}
 
   colord@2.9.3: {}
+
+  comlink@4.4.2: {}
 
   convert-source-map@2.0.0: {}
 
@@ -3384,6 +3464,10 @@ snapshots:
       stackback: 0.0.2
 
   yallist@3.1.1: {}
+
+  yoga-layout@3.2.1: {}
+
+  zod@4.4.3: {}
 
   zustand@3.7.2(react@18.3.1):
     optionalDependencies:
