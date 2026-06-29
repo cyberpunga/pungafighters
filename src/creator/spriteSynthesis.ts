@@ -1,6 +1,6 @@
 import type { FighterPose, FighterSpriteId } from "../types/game";
 import { FIGHTER_POSES, FIGHTER_SPRITES } from "../types/game";
-import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE } from "./imageProcessing";
+import { canvasToPngBlob, decodeImageBlob, NORMALIZED_FRAME_SIZE, type DecodedImage } from "./imageProcessing";
 
 type PoseBlobRecord = Record<FighterPose, Blob>;
 type SpriteBlobRecord = Partial<Record<FighterSpriteId, Blob>>;
@@ -45,7 +45,7 @@ export async function synthesizeMissingSpriteBlobs(
     const generatedPairs = await Promise.all(
       missingSprites.map(async (spriteId) => {
         const transform = SPRITE_TRANSFORMS[spriteId];
-        const canvas = drawSpriteVariant(sources[transform.pose], transform);
+        const canvas = drawSpriteVariant(sources[transform.pose].source, transform);
         return [spriteId, await canvasToPngBlob(canvas)] as const;
       }),
     );
@@ -62,7 +62,7 @@ async function loadPoseSources(frameBlobs: PoseBlobRecord) {
       return [pose, decoded] as const;
     }),
   );
-  return Object.fromEntries(entries) as Record<FighterPose, Awaited<ReturnType<typeof decodeImageBlob>>>;
+  return Object.fromEntries(entries) as Record<FighterPose, DecodedImage>;
 }
 
 function drawSpriteVariant(source: CanvasImageSource, transform: SpriteTransform) {
