@@ -9,7 +9,6 @@ export interface Env {
 
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
-const DEFAULT_STRIP_ASPECT_RATIO = "13:1";
 const MAX_REFERENCE_IMAGES = 14;
 const MAX_REFERENCE_IMAGE_BYTES = 12 * 1024 * 1024;
 const FIGHTER_POSES = ["idle", "punch", "kick", "hit", "victory"] as const;
@@ -398,9 +397,7 @@ function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env, mode
     responseModalities: ["Image"],
   };
 
-  const aspectRatio =
-    getOptionalString(payload.aspectRatio) ||
-    (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim() || DEFAULT_STRIP_ASPECT_RATIO);
+  const aspectRatio = getOptionalString(payload.aspectRatio) || (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim());
   const imageSize = getOptionalString(payload.imageSize) || env.GEMINI_IMAGE_SIZE?.trim();
   if (aspectRatio || imageSize) {
     generationConfig.responseFormat = {

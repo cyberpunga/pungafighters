@@ -106,7 +106,7 @@ Set `ALLOWED_ORIGINS` in `workers/turn/wrangler.toml` to the deployed game origi
 
 ### Character Generation Worker
 
-This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a horizontal 13:1 thirteen-cell animation spritesheet; strip mode requests `13:1` by default and the creator rejects non-horizontal strip layouts. Use `"pose"` with a pose value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
+This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a horizontal 13:1 thirteen-cell animation spritesheet; the prompt asks for a 13:1 strip and the creator rejects non-horizontal strip layouts. Use `"pose"` with a pose value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
 
 ```json
 {
