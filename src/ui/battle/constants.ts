@@ -3,7 +3,6 @@ import type { PlayerSlot } from "../../types/game";
 export const STAGE_X_RANGE = 5.1;
 export const STAGE_Z = 0.1;
 export const STAGE_JUMP_SCALE = 150;
-export const MAX_DEBRIS_PIECES = 48;
 export const CAMERA_CLOSE_DISTANCE = 0.65;
 export const CAMERA_FAR_DISTANCE = 4.05;
 export const CAMERA_NEAR_Z = 5.45;

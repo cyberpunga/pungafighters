@@ -1,6 +1,5 @@
 import { ContactShadows, Text, useTexture } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { CuboidCollider, Physics, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { NetworkInputController } from "../../game/network/networkInputController";
@@ -31,12 +30,11 @@ import {
   CAMERA_FAR_Z,
   CAMERA_NEAR_FOV,
   CAMERA_NEAR_Z,
-  MAX_DEBRIS_PIECES,
   STAGE_JUMP_SCALE,
   STAGE_Z,
   SUPER_MOMENT_SECONDS,
 } from "./constants";
-import { createImpactDebris, createSuperDebris, type DebrisPiece } from "./debris";
+import { createHitSplash, type HitSplashBurst } from "./hitSplash";
 import { addSmoothExp, clamp, easeOutBack, getFighterBillboardGeometry, getSlotAccent, mapBattleX } from "./math";
 import { unlockStageAudio, useStageBattleAudio } from "./stageAudio";
 import { formatBattleMessage, formatStageControls, isEditableTarget, isStageControlCode, readStageInputs, selectStageFighters } from "./stageInput";
@@ -232,17 +230,16 @@ function PlayableStage(props: {
   const battleStateRef = useRef(props.battleState);
   const onlineStatusRef = useRef<string | undefined>(props.onlineStatus);
   const haltedMessageRef = useRef<string | undefined>(props.haltedMessage);
-  const lastDebrisHitAtRef = useRef(-1);
-  const lastSuperDebrisAtRef = useRef(-1);
-  const debrisCleanupTimeoutsRef = useRef<number[]>([]);
-  const [debrisPieces, setDebrisPieces] = useState<DebrisPiece[]>([]);
+  const lastSplashHitAtRef = useRef(-1);
+  const splashCleanupTimeoutsRef = useRef<number[]>([]);
+  const [hitSplashes, setHitSplashes] = useState<HitSplashBurst[]>([]);
 
   useEffect(() => {
     battleStateRef.current = props.battleState;
     if (props.battleState.frame === 0) {
       accumulatorRef.current = 0;
-      lastDebrisHitAtRef.current = -1;
-      lastSuperDebrisAtRef.current = -1;
+      lastSplashHitAtRef.current = -1;
+      setHitSplashes([]);
     }
   }, [props.battleState]);
 
@@ -256,8 +253,8 @@ function PlayableStage(props: {
 
   useEffect(
     () => () => {
-      debrisCleanupTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
-      debrisCleanupTimeoutsRef.current = [];
+      splashCleanupTimeoutsRef.current.forEach((timeout) => window.clearTimeout(timeout));
+      splashCleanupTimeoutsRef.current = [];
     },
     [],
   );
@@ -319,25 +316,17 @@ function PlayableStage(props: {
     }
 
     const hit = next.lastHit;
-    if (hit && hit.at !== lastDebrisHitAtRef.current) {
-      lastDebrisHitAtRef.current = hit.at;
-      const pieces = createImpactDebris(next);
-      setDebrisPieces((current) => [...current, ...pieces].slice(-MAX_DEBRIS_PIECES));
+    if (hit && hit.at !== lastSplashHitAtRef.current) {
+      lastSplashHitAtRef.current = hit.at;
+      const splash = createHitSplash(next);
+      if (!splash) {
+        return;
+      }
+      setHitSplashes((current) => [...current, splash].slice(-5));
       const timeout = window.setTimeout(() => {
-        setDebrisPieces((current) => current.filter((piece) => !pieces.some((nextPiece) => nextPiece.id === piece.id)));
-      }, 1800);
-      debrisCleanupTimeoutsRef.current.push(timeout);
-    }
-
-    const superEvent = next.lastSuper;
-    if (superEvent && superEvent.at !== lastSuperDebrisAtRef.current) {
-      lastSuperDebrisAtRef.current = superEvent.at;
-      const pieces = createSuperDebris(next);
-      setDebrisPieces((current) => [...current, ...pieces].slice(-MAX_DEBRIS_PIECES));
-      const timeout = window.setTimeout(() => {
-        setDebrisPieces((current) => current.filter((piece) => !pieces.some((nextPiece) => nextPiece.id === piece.id)));
-      }, 2000);
-      debrisCleanupTimeoutsRef.current.push(timeout);
+        setHitSplashes((current) => current.filter((currentSplash) => currentSplash.id !== splash.id));
+      }, 1250);
+      splashCleanupTimeoutsRef.current.push(timeout);
     }
   });
 
@@ -363,15 +352,11 @@ function PlayableStage(props: {
       <TheaterSet background={props.background} />
       <FightingStandee fighter={props.fighters.p1} runtime={props.battleState.fighters.p1} battleState={props.battleState} />
       <FightingStandee fighter={props.fighters.p2} runtime={props.battleState.fighters.p2} battleState={props.battleState} />
-      <HitSpark state={props.battleState} />
+      <HitSplashLayer splashes={hitSplashes} />
       <SuperStageMoment fighters={props.fighters} state={props.battleState} superLabel={props.superLabel} />
       <BattleHudLayer fighters={props.fighters} state={props.battleState} controlsHint={props.controlsHint} statusMessage={props.haltedMessage ?? props.onlineStatus} />
       <CameraRig state={props.battleState} />
       <BattlePostProcessing state={props.battleState} displayEffectSettings={props.displayEffectSettings} localSlot={props.localSlot} />
-      <Physics gravity={[0, -8.5, 0]}>
-        <StagePhysicsColliders />
-        <ImpactDebris pieces={debrisPieces} />
-      </Physics>
       <ContactShadows position={[0, 0.025, STAGE_Z]} opacity={0.38} blur={2.4} scale={7} far={4} resolution={1024} />
     </>
   );
@@ -497,46 +482,218 @@ function FightingStandee(props: { fighter: LoadedFighter; runtime: FighterRuntim
   );
 }
 
-function HitSpark(props: { state: BattleState }) {
-  const sparkRef = useRef<THREE.Group>(null);
-  const visibleUntilRef = useRef(-1);
-  const lastHitAtRef = useRef(-1);
+function HitSplashLayer(props: { splashes: HitSplashBurst[] }) {
+  return (
+    <>
+      {props.splashes.map((splash) => (
+        <HitSplash key={splash.id} splash={splash} />
+      ))}
+    </>
+  );
+}
 
-  useFrame(() => {
-    if (!sparkRef.current) {
-      return;
+function HitSplash(props: { splash: HitSplashBurst }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const dropletRefs = useRef<THREE.Mesh[]>([]);
+  const elapsedRef = useRef(0);
+  const textures = useInkSplashTextures();
+
+  useEffect(() => {
+    elapsedRef.current = 0;
+  }, [props.splash.id]);
+
+  useFrame((_, deltaSeconds) => {
+    elapsedRef.current += deltaSeconds;
+    const elapsed = elapsedRef.current;
+    const baseFade = clamp(1 - elapsed / 1.05, 0, 1);
+    if (groupRef.current) {
+      groupRef.current.visible = baseFade > 0;
     }
-    const hit = props.state.lastHit;
-    if (hit && hit.at !== lastHitAtRef.current) {
-      lastHitAtRef.current = hit.at;
-      visibleUntilRef.current = props.state.frame + 10;
-      const defender = props.state.fighters[hit.defender];
-      sparkRef.current.position.set(mapBattleX(defender.x, props.state.arenaWidth), 1.18, STAGE_Z + 0.04);
-    }
-    const visible = props.state.frame <= visibleUntilRef.current;
-    sparkRef.current.visible = visible;
-    if (visible) {
-      const pulse = Math.sin(props.state.frame * 0.6) * 0.12;
-      sparkRef.current.scale.setScalar(0.8 + pulse);
-    }
+
+    props.splash.droplets.forEach((droplet, index) => {
+      const mesh = dropletRefs.current[index];
+      if (!mesh) {
+        return;
+      }
+      const localTime = Math.max(0, elapsed - droplet.delay);
+      const progress = clamp(localTime / 0.78, 0, 1);
+      const gravity = 2.6 * localTime * localTime;
+      const drag = 1 - progress * 0.28;
+      mesh.visible = elapsed >= droplet.delay && progress < 1;
+      mesh.position.set(
+        props.splash.origin[0] + droplet.velocity[0] * localTime * drag,
+        props.splash.origin[1] + droplet.velocity[1] * localTime - gravity,
+        props.splash.origin[2] + droplet.velocity[2] * localTime,
+      );
+      mesh.rotation.set(0, 0, droplet.angle);
+      const tail = 1 + droplet.stretch * (1 - progress);
+      const width = droplet.radius * (0.72 + progress * 0.5);
+      mesh.scale.set(width * tail, droplet.radius * (1 - progress * 0.35), 1);
+      const material = mesh.material;
+      if (material instanceof THREE.MeshBasicMaterial) {
+        material.opacity = 0.8 * (1 - progress);
+      }
+    });
   });
 
   return (
-    <group ref={sparkRef} visible={false}>
-      <mesh>
-        <sphereGeometry args={[0.16, 12, 8]} />
-        <meshBasicMaterial color="#f8f4df" transparent opacity={0.86} />
-      </mesh>
-      <mesh rotation={[0, 0, Math.PI / 4]}>
-        <planeGeometry args={[0.56, 0.08]} />
-        <meshBasicMaterial color="#f7b267" transparent opacity={0.78} side={THREE.DoubleSide} />
-      </mesh>
-      <mesh>
-        <planeGeometry args={[0.08, 0.56]} />
-        <meshBasicMaterial color="#f45b69" transparent opacity={0.78} side={THREE.DoubleSide} />
-      </mesh>
+    <group ref={groupRef}>
+      {props.splash.droplets.map((droplet, index) => (
+        <mesh
+          key={`drop-${index}`}
+          ref={(mesh) => {
+            if (mesh) {
+              dropletRefs.current[index] = mesh;
+            }
+          }}
+          renderOrder={30 + index}
+        >
+          <planeGeometry args={[1, 1]} />
+          <meshBasicMaterial
+            alphaTest={0.04}
+            color={droplet.color}
+            depthWrite={false}
+            map={index % 4 === 0 ? textures.fleck : textures.streak}
+            transparent
+            opacity={0}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
     </group>
   );
+}
+
+function useInkSplashTextures() {
+  const textures = useMemo(
+    () => ({
+      fleck: createInkTexture("fleck"),
+      streak: createInkTexture("streak"),
+    }),
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      textures.fleck.dispose();
+      textures.streak.dispose();
+    },
+    [textures],
+  );
+
+  return textures;
+}
+
+function createInkTexture(kind: "fleck" | "streak") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return new THREE.Texture();
+  }
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.translate(64, 64);
+  if (kind === "streak") {
+    drawInkStreak(context);
+  } else {
+    drawInkBlot(context, 11, 20);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function drawInkBlot(context: CanvasRenderingContext2D, seedBase: number, baseRadius: number) {
+  context.fillStyle = "rgba(255,255,255,0.96)";
+  context.beginPath();
+  const points = 34;
+  for (let index = 0; index <= points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const wobble =
+      0.72 +
+      inkUnit(seedBase + index * 3) * 0.45 +
+      Math.sin(angle * 3 + seedBase) * 0.12 +
+      Math.sin(angle * 7 + seedBase * 0.7) * 0.08;
+    const radius = baseRadius * wobble;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius * (0.78 + inkUnit(seedBase + 1) * 0.3);
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  }
+  context.closePath();
+  context.fill();
+
+  context.globalCompositeOperation = "destination-out";
+  for (let index = 0; index < 7; index += 1) {
+    const angle = inkUnit(seedBase + index * 11) * Math.PI * 2;
+    const radius = baseRadius * (0.15 + inkUnit(seedBase + index * 13) * 0.45);
+    const x = Math.cos(angle) * baseRadius * inkUnit(seedBase + index * 17) * 0.7;
+    const y = Math.sin(angle) * baseRadius * inkUnit(seedBase + index * 19) * 0.7;
+    context.beginPath();
+    context.arc(x, y, radius * 0.28, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  context.globalCompositeOperation = "source-over";
+  context.fillStyle = "rgba(255,255,255,0.62)";
+  for (let index = 0; index < 8; index += 1) {
+    const angle = inkUnit(seedBase + index * 23) * Math.PI * 2;
+    const spread = baseRadius * (0.55 + inkUnit(seedBase + index * 29) * 0.72);
+    context.beginPath();
+    context.arc(
+      Math.cos(angle) * spread,
+      Math.sin(angle) * spread,
+      baseRadius * (0.07 + inkUnit(seedBase + index * 31) * 0.11),
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
+  }
+}
+
+function drawInkStreak(context: CanvasRenderingContext2D) {
+  const gradient = context.createLinearGradient(-52, 0, 52, 0);
+  gradient.addColorStop(0, "rgba(255,255,255,0)");
+  gradient.addColorStop(0.18, "rgba(255,255,255,0.78)");
+  gradient.addColorStop(0.62, "rgba(255,255,255,0.95)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = gradient;
+
+  context.beginPath();
+  context.moveTo(-54, -5);
+  context.bezierCurveTo(-26, -18, 22, -16, 53, -3);
+  context.bezierCurveTo(26, 9, -26, 16, -54, 5);
+  context.closePath();
+  context.fill();
+
+  context.globalCompositeOperation = "destination-out";
+  for (let index = 0; index < 5; index += 1) {
+    context.beginPath();
+    context.ellipse(
+      -28 + index * 15,
+      -2 + Math.sin(index * 2.1) * 6,
+      3 + index,
+      1.8 + index * 0.4,
+      index * 0.7,
+      0,
+      Math.PI * 2,
+    );
+    context.fill();
+  }
+}
+
+function inkUnit(seed: number) {
+  const value = Math.sin(seed * 17.371) * 43758.5453;
+  return value - Math.floor(value);
 }
 
 function SuperStageMoment(props: { fighters: { p1: LoadedFighter; p2: LoadedFighter }; state: BattleState; superLabel: string }) {
@@ -711,58 +868,6 @@ function SuperStageMoment(props: { fighters: { p1: LoadedFighter; p2: LoadedFigh
         </mesh>
       </group>
     </group>
-  );
-}
-
-function StagePhysicsColliders() {
-  return (
-    <RigidBody type="fixed" colliders={false}>
-      <CuboidCollider args={[4.2, 0.04, 2.7]} position={[0, -0.04, 0]} />
-      <CuboidCollider args={[4.2, 2.25, 0.04]} position={[0, 2.25, -2.36]} />
-      <CuboidCollider args={[0.04, 1.2, 2.2]} position={[-3.85, 1.2, 0]} />
-      <CuboidCollider args={[0.04, 1.2, 2.2]} position={[3.85, 1.2, 0]} />
-    </RigidBody>
-  );
-}
-
-function ImpactDebris(props: { pieces: DebrisPiece[] }) {
-  return (
-    <>
-      {props.pieces.map((piece) => (
-        <DebrisBody key={piece.id} piece={piece} />
-      ))}
-    </>
-  );
-}
-
-function DebrisBody(props: { piece: DebrisPiece }) {
-  const bodyRef = useRef<RapierRigidBody>(null);
-
-  useEffect(() => {
-    const body = bodyRef.current;
-    if (!body) {
-      return;
-    }
-    body.applyImpulse({ x: props.piece.impulse[0], y: props.piece.impulse[1], z: props.piece.impulse[2] }, true);
-    body.applyTorqueImpulse({ x: props.piece.torque[0], y: props.piece.torque[1], z: props.piece.torque[2] }, true);
-  }, [props.piece]);
-
-  return (
-    <RigidBody
-      ref={bodyRef}
-      colliders="cuboid"
-      linearDamping={1.5}
-      angularDamping={1.1}
-      position={props.piece.position}
-      rotation={props.piece.rotation}
-      restitution={0.28}
-      friction={0.82}
-    >
-      <mesh castShadow>
-        <boxGeometry args={props.piece.size} />
-        <meshStandardMaterial color={props.piece.color} roughness={0.86} />
-      </mesh>
-    </RigidBody>
   );
 }
 
