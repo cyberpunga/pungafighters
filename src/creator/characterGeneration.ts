@@ -1,5 +1,5 @@
 import { AppError } from "../i18n/errors";
-import type { FighterPose } from "../types/game";
+import type { FighterPose, FighterSpriteId } from "../types/game";
 
 type Env = Record<string, string | boolean | undefined>;
 
@@ -16,7 +16,8 @@ interface GenerateCharacterBaseInput {
 
 export type GenerateCharacterInput =
   | (GenerateCharacterBaseInput & { mode?: "strip" })
-  | (GenerateCharacterBaseInput & { mode: "pose"; pose: FighterPose });
+  | (GenerateCharacterBaseInput & { mode: "pose"; pose: FighterPose })
+  | (GenerateCharacterBaseInput & { mode: "sprite"; spriteId: FighterSpriteId });
 
 export interface GeneratedCharacterImage {
   model: string;
@@ -51,6 +52,7 @@ export async function generateCharacterImage(input: GenerateCharacterInput): Pro
       ...(input.model ? { model: input.model } : {}),
       ...(input.images?.length ? { images: input.images } : {}),
       ...(input.mode === "pose" ? { pose: input.pose } : {}),
+      ...(input.mode === "sprite" ? { spriteId: input.spriteId } : {}),
     }),
   });
 

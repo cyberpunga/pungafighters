@@ -23,6 +23,7 @@ import {
 } from "../../creator/fighterFiles";
 import {
   canvasToPngBlob,
+  chromaKeyGreenCanvas,
   decodeImageBlob,
   imageSourceToCanvas,
   normalizeCanvas,
@@ -45,8 +46,8 @@ import type {
   TransformersModelId,
 } from "../../creator/segmentation/types";
 import { loadEditableFighterDraft, saveFighterDraft, getSetting, setSetting } from "../../storage/db";
-import type { FighterPose, VoiceClipType } from "../../types/game";
-import { FIGHTER_POSES } from "../../types/game";
+import type { FighterPose, FighterSpriteId, VoiceClipType } from "../../types/game";
+import { FIGHTER_POSE_PRIMARY_SPRITES, FIGHTER_POSES, FIGHTER_SPRITES } from "../../types/game";
 import { localizeError } from "../../i18n/errors";
 import { poseLabel, voiceClipLabel } from "../../i18n";
 import type { Translate } from "../../i18n";
@@ -113,8 +114,8 @@ const GENERATION_MODEL_OPTIONS = [
     valueLabelKey: "creator.customModelValue",
   },
 ] as const;
-const REFERENCE_STRIP_PROMPT =
-  "Create a thirteen-cell local fighting game sprite set from the provided photo reference. Preserve the photographed subject as the fighter identity.";
+const REFERENCE_FIGHTER_PROMPT =
+  "Create a local fighting game fighter from the provided photo reference. Preserve the photographed subject as the fighter identity.";
 const REFERENCE_POSE_PROMPT =
   "Create the requested fighting game pose from the provided photo reference. Preserve the photographed subject as the fighter identity.";
 const POSE_FRAME_HISTORY_LIMIT = 12;
@@ -872,22 +873,47 @@ export function CreatorView(props: { editFighterId?: string; onSaved: () => Prom
     try {
       setCameraStatus(t("creator.generatingStripStatus"));
       const referenceImage = await fileToReferenceImage(generationReferenceFile);
-      const result = await generateCharacterImage({
-        mode: "strip",
-        prompt: REFERENCE_STRIP_PROMPT,
-        model: getSelectedGenerationModel(generationModel, generationCustomModel),
-        images: [referenceImage],
-      });
-      const file = dataUrlToFile(result.image.dataUrl, "generated-fighter-strip.png");
-      const imported = await readSpritesheetDraftFile(file);
-      replaceDrafts(createDraftsFromSourceAndFrameBlobs(imported.sourceBlobs, imported.frameBlobs, false));
-      replaceSpriteDrafts(createSpriteDrafts(imported.spriteFrameBlobs));
+      const model = getSelectedGenerationModel(generationModel, generationCustomModel);
+      const spritePairs = {} as Record<FighterSpriteId, { sourceBlob: Blob; frameBlob: Blob }>;
+      let generatedModel = model;
+
+      for (const [index, spriteId] of FIGHTER_SPRITES.entries()) {
+        setCameraStatus(
+          t("creator.generatingSpriteStatus", {
+            current: String(index + 1),
+            total: String(FIGHTER_SPRITES.length),
+            sprite: spriteId,
+          }),
+        );
+        const result = await generateCharacterImage({
+          mode: "sprite",
+          spriteId,
+          prompt: REFERENCE_FIGHTER_PROMPT,
+          model,
+          images: [referenceImage],
+        });
+        generatedModel = result.model;
+        spritePairs[spriteId] = await createGeneratedSpriteBlobs(result.image.dataUrl, spriteId, t);
+      }
+
+      const sourceBlobs = Object.fromEntries(
+        FIGHTER_POSES.map((pose) => [pose, spritePairs[FIGHTER_POSE_PRIMARY_SPRITES[pose]].sourceBlob]),
+      ) as Record<FighterPose, Blob>;
+      const frameBlobs = Object.fromEntries(
+        FIGHTER_POSES.map((pose) => [pose, spritePairs[FIGHTER_POSE_PRIMARY_SPRITES[pose]].frameBlob]),
+      ) as Record<FighterPose, Blob>;
+      const spriteFrameBlobs = Object.fromEntries(
+        FIGHTER_SPRITES.map((spriteId) => [spriteId, spritePairs[spriteId].frameBlob]),
+      ) as Partial<Record<FighterSpriteId, Blob>>;
+
+      replaceDrafts(createDraftsFromSourceAndFrameBlobs(sourceBlobs, frameBlobs, false));
+      replaceSpriteDrafts(createSpriteDrafts(spriteFrameBlobs));
       setPreviewPose(undefined);
       replaceVoiceDrafts({});
       setName(t("creator.generatedFighterName"));
       setEditingFighterId(undefined);
       setActiveCreationPanel(undefined);
-      setCameraStatus(t("creator.generatedStripLoaded", { model: result.model }));
+      setCameraStatus(t("creator.generatedStripLoaded", { model: generatedModel ?? "" }));
     } catch (error) {
       setCameraStatus(localizeError(error, t, "creator.generateFailed"));
     } finally {
@@ -1689,6 +1715,21 @@ function getSelectedGenerationModel(model: GenerationModelOption, customModel: s
     return customModel.trim() || undefined;
   }
   return model || undefined;
+}
+
+async function createGeneratedSpriteBlobs(dataUrl: string, spriteId: FighterSpriteId, t: Translate) {
+  const file = dataUrlToFile(dataUrl, `generated-${spriteId}.png`);
+  const image = await decodeImageBlob(file, t("creator.actionImageReadFailed"));
+  try {
+    const sourceCanvas = chromaKeyGreenCanvas(image.source);
+    const frameCanvas = normalizeCanvas(sourceCanvas, { paddingScale: 1, anchorY: 0.9 });
+    return {
+      sourceBlob: await canvasToPngBlob(sourceCanvas),
+      frameBlob: await canvasToPngBlob(frameCanvas),
+    };
+  } finally {
+    image.close();
+  }
 }
 
 function getGeneratedPoseSourceCanvas(

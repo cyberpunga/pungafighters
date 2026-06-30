@@ -106,18 +106,19 @@ Set `ALLOWED_ORIGINS` in `workers/turn/wrangler.toml` to the deployed game origi
 
 ### Character Generation Worker
 
-This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a horizontal 13:1 thirteen-cell animation spritesheet; the prompt asks for a 13:1 strip and the creator rejects non-horizontal strip layouts. Use `"pose"` with a pose value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
+This repo includes a separate Cloudflare Worker in `workers/generation/` for server-side Gemini spritesheet, sprite-cell, and single-pose generation. Configure `GEMINI_API_KEY` as a Worker secret; optionally set `GEMINI_IMAGE_MODEL`, `GEMINI_IMAGE_ASPECT_RATIO`, or `GEMINI_IMAGE_SIZE` to change defaults without editing code. Request bodies accept `mode`, `prompt`, `model`, and optional reference `image` or `images` entries. Omit `mode` or use `"strip"` for a horizontal 13:1 thirteen-cell animation spritesheet; the prompt asks for a 13:1 strip and the creator rejects non-horizontal strip layouts. The creator's full-fighter generator prefers `"sprite"` requests for each `FIGHTER_SPRITES` id so model layout mistakes cannot swap punch/kick/idle cells. Use `"pose"` with a pose value of `idle`, `punch`, `kick`, `hit`, or `victory` for one square action frame:
 
 ```json
 {
-  "mode": "strip",
+  "mode": "sprite",
+  "spriteId": "kickStrike",
   "prompt": "a homemade cardboard robot boxer with red gloves",
   "model": "nano-banana-pro",
   "images": [{ "mimeType": "image/png", "data": "<base64-or-data-url>" }]
 }
 ```
 
-Supported model aliases are `nano-banana`, `nano-banana-2`, and `nano-banana-pro`; direct `gemini-*` image model ids are also accepted for testing. The response includes the generated image as base64 and a `dataUrl`, ready to feed into the creator spritesheet import or per-action replacement flow.
+Supported model aliases are `nano-banana`, `nano-banana-2`, and `nano-banana-pro`; direct `gemini-*` image model ids are also accepted for testing. The response includes the generated image as base64 and a `dataUrl`, ready to feed into the creator spritesheet import, per-sprite generation, or per-action replacement flow.
 
 ```bash
 cd workers/generation

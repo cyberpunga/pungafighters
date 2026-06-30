@@ -37,6 +37,7 @@ const MODEL_ALIASES: Record<string, string> = {
 interface GenerateCharacterRequest {
   mode?: unknown;
   pose?: unknown;
+  spriteId?: unknown;
   prompt?: unknown;
   model?: unknown;
   images?: unknown;
@@ -55,8 +56,9 @@ interface NormalizedReferenceImage {
   data: string;
 }
 
-type GenerationMode = "strip" | "pose";
+type GenerationMode = "strip" | "pose" | "sprite";
 type FighterPose = (typeof FIGHTER_POSES)[number];
+type FighterSpriteId = (typeof FIGHTER_SPRITES)[number];
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -111,16 +113,22 @@ async function generateCharacterSpritesheet(request: Request, env: Env, corsHead
 
   const mode = normalizeGenerationMode(payload.value.mode);
   if (!mode) {
-    return json({ error: "Generation mode must be strip or pose." }, 400, corsHeaders);
+    return json({ error: "Generation mode must be strip, pose, or sprite." }, 400, corsHeaders);
   }
   const pose = mode === "pose" ? normalizeFighterPose(payload.value.pose) : undefined;
   if (mode === "pose" && !pose) {
     return json({ error: "Pose generation requires pose to be idle, punch, kick, hit, or victory." }, 400, corsHeaders);
   }
+  const spriteId = mode === "sprite" ? normalizeFighterSpriteId(payload.value.spriteId) : undefined;
+  if (mode === "sprite" && !spriteId) {
+    return json({ error: "Sprite generation requires a valid fighter sprite id." }, 400, corsHeaders);
+  }
 
   const prompt =
     mode === "pose" && pose
       ? buildCharacterPosePrompt(payload.value.prompt, images.value.length, pose)
+      : mode === "sprite" && spriteId
+        ? buildCharacterSpritePrompt(payload.value.prompt, images.value.length, spriteId)
       : buildCharacterSpritesheetPrompt(payload.value.prompt, images.value.length);
   const requestBody = {
     contents: [
@@ -153,7 +161,7 @@ async function generateCharacterSpritesheet(request: Request, env: Env, corsHead
   if (!response.ok) {
     return json(
       {
-        error: "Could not generate character spritesheet",
+        error: "Could not generate character image",
         status: response.status,
         details: getGeminiErrorMessage(body),
       },
@@ -322,6 +330,37 @@ Format compatibility: keep every limb, prop, and effect inside the square frame.
 Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
 }
 
+function buildCharacterSpritePrompt(userPrompt: unknown, referenceImageCount: number, spriteId: FighterSpriteId) {
+  const cleanedUserPrompt = typeof userPrompt === "string" ? userPrompt.trim() : "";
+  const hasReferenceImages = referenceImageCount > 0;
+  const userDirection = cleanedUserPrompt
+    ? `\nUser instructions:\n${cleanedUserPrompt}\n`
+    : hasReferenceImages
+      ? "\nUser instructions: keep the same character from the provided reference image(s).\n"
+      : "\nUser instructions: invent an original fighter.\n";
+
+  const referenceDirection = hasReferenceImages
+    ? `\nReference image rule: the provided image${referenceImageCount === 1 ? " is" : "s are"} the character identity source of truth. Preserve the character's apparent identity, body type, face, hairstyle, skin tone, outfit, colors, proportions, medium, rendering style, texture, and lighting unless the user instructions explicitly request a change. If the reference is photographic, keep the output photographic like a re-posed cutout photo of the same person; do not draw, paint, cartoonify, render, illustrate, or convert the person into game art. Generate only the requested sprite pose.\n`
+    : "";
+
+  const characterDirection = hasReferenceImages
+    ? "Character: use the same character from the provided reference image(s)."
+    : "Character: create an original fighter.";
+
+  return `Create one square sprite cell for a browser fighting-game character.
+
+Canvas: 1:1 aspect ratio, PNG. Use a fully opaque solid chroma key green background (#00ff00). Do not use transparency, alpha, white, gradients, scenery, labels, text, borders, or grid lines in the background.
+
+${characterDirection} Full body visible, readable silhouette, suitable for a 2D browser fighting game. Follow the user's requested visual style and medium without replacing it with a default house style. Center the character with feet aligned near the bottom and leave safe padding around the body.
+${userDirection}${referenceDirection}
+Sprite id: ${spriteId}.
+Sprite pose: ${getSpritePromptDescription(spriteId)}
+
+Format compatibility: return exactly one complete character cutout pose in this square image. Keep every limb, prop, and effect inside the square frame. Avoid motion blur or effects that make the cutout hard to read.
+
+Safety: keep the character original unless the user provided their own reference image. Do not include copyrighted characters, Nintendo references, Photo Dojo references, logos, brand marks, or readable text.`;
+}
+
 function getPosePromptDescription(pose: FighterPose) {
   switch (pose) {
     case "idle":
@@ -334,6 +373,37 @@ function getPosePromptDescription(pose: FighterPose) {
       return "getting hit / recoil pose";
     case "victory":
       return "victory pose";
+  }
+}
+
+function getSpritePromptDescription(spriteId: FighterSpriteId) {
+  switch (spriteId) {
+    case "idle1":
+      return "idle stance, frame A.";
+    case "idle2":
+      return "idle stance, frame B with a subtle breathing or weight-shift variation.";
+    case "walk1":
+      return "walk cycle frame 1, left foot forward.";
+    case "walk2":
+      return "walk cycle frame 2, passing step.";
+    case "walk3":
+      return "walk cycle frame 3, right foot forward.";
+    case "walk4":
+      return "walk cycle frame 4, passing step.";
+    case "punchWindup":
+      return "punch windup pose, fist pulled back before striking.";
+    case "punchStrike":
+      return "punch strike pose, forward fist clearly extended.";
+    case "kickWindup":
+      return "kick windup pose, leg chambered before striking.";
+    case "kickStrike":
+      return "kick strike pose, forward leg clearly extended.";
+    case "hit":
+      return "getting hit or recoil pose.";
+    case "victory1":
+      return "victory pose, frame A.";
+    case "victory2":
+      return "victory pose, frame B with a subtle celebratory variation.";
   }
 }
 
@@ -397,7 +467,9 @@ function buildGenerationConfig(payload: GenerateCharacterRequest, env: Env, mode
     responseModalities: ["Image"],
   };
 
-  const aspectRatio = getOptionalString(payload.aspectRatio) || (mode === "pose" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim());
+  const aspectRatio =
+    getOptionalString(payload.aspectRatio) ||
+    (mode === "pose" || mode === "sprite" ? "1:1" : env.GEMINI_IMAGE_ASPECT_RATIO?.trim());
   const imageSize = getOptionalString(payload.imageSize) || env.GEMINI_IMAGE_SIZE?.trim();
   if (aspectRatio || imageSize) {
     generationConfig.responseFormat = {
@@ -415,11 +487,15 @@ function normalizeGenerationMode(value: unknown): GenerationMode | "" {
   if (value === undefined || value === null || value === "") {
     return "strip";
   }
-  return value === "strip" || value === "pose" ? value : "";
+  return value === "strip" || value === "pose" || value === "sprite" ? value : "";
 }
 
 function normalizeFighterPose(value: unknown): FighterPose | "" {
   return typeof value === "string" && FIGHTER_POSES.includes(value as FighterPose) ? (value as FighterPose) : "";
+}
+
+function normalizeFighterSpriteId(value: unknown): FighterSpriteId | "" {
+  return typeof value === "string" && FIGHTER_SPRITES.includes(value as FighterSpriteId) ? (value as FighterSpriteId) : "";
 }
 
 function getOptionalString(value: unknown) {
